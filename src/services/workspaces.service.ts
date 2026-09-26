@@ -92,3 +92,17 @@ export async function deleteWorkspace(id: string): Promise<void> {
   });
   await delay(null, 120);
 }
+
+export async function updateWorkspace(
+  id: string,
+  patch: { name?: string; description?: string | null },
+): Promise<void> {
+  writeDb((db) => {
+    const ws = db.workspaces.find((w) => w.id === id);
+    if (!ws) return;
+    if (patch.name !== undefined) ws.name = patch.name.trim();
+    if (patch.description !== undefined) ws.description = patch.description?.trim() || null;
+    ws.updated_at = nowIso();
+  });
+  await delay(null, 120);
+}

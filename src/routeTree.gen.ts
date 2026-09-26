@@ -13,10 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ArchiveRouteImport } from './routes/archive'
 import { Route as FavoritesRouteImport } from './routes/favorites'
 import { Route as TemplatesRouteImport } from './routes/templates'
-import { Route as BoardsBoardIdRouteImport } from './routes/boards.$boardId'
-import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
 import { Route as WorkspacesIndexRouteImport } from './routes/workspaces.index'
-import { Route as WorkspacesWorkspaceIdRouteImport } from './routes/workspaces.$workspaceId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -38,24 +35,9 @@ const TemplatesRoute = TemplatesRouteImport.update({
   path: '/templates',
   getParentRoute: () => rootRouteImport,
 } as any)
-const BoardsBoardIdRoute = BoardsBoardIdRouteImport.update({
-  id: '/boards/$boardId',
-  path: '/boards/$boardId',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
-  id: '/projects/$projectId',
-  path: '/projects/$projectId',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const WorkspacesIndexRoute = WorkspacesIndexRouteImport.update({
   id: '/workspaces/',
   path: '/workspaces/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const WorkspacesWorkspaceIdRoute = WorkspacesWorkspaceIdRouteImport.update({
-  id: '/workspaces/$workspaceId',
-  path: '/workspaces/$workspaceId',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -64,9 +46,6 @@ export interface FileRoutesByFullPath {
   '/archive': typeof ArchiveRoute
   '/favorites': typeof FavoritesRoute
   '/templates': typeof TemplatesRoute
-  '/boards/$boardId': typeof BoardsBoardIdRoute
-  '/projects/$projectId': typeof ProjectsProjectIdRoute
-  '/workspaces/$workspaceId': typeof WorkspacesWorkspaceIdRoute
   '/workspaces/': typeof WorkspacesIndexRoute
 }
 export interface FileRoutesByTo {
@@ -74,9 +53,6 @@ export interface FileRoutesByTo {
   '/archive': typeof ArchiveRoute
   '/favorites': typeof FavoritesRoute
   '/templates': typeof TemplatesRoute
-  '/boards/$boardId': typeof BoardsBoardIdRoute
-  '/projects/$projectId': typeof ProjectsProjectIdRoute
-  '/workspaces/$workspaceId': typeof WorkspacesWorkspaceIdRoute
   '/workspaces': typeof WorkspacesIndexRoute
 }
 export interface FileRoutesById {
@@ -85,42 +61,15 @@ export interface FileRoutesById {
   '/archive': typeof ArchiveRoute
   '/favorites': typeof FavoritesRoute
   '/templates': typeof TemplatesRoute
-  '/boards/$boardId': typeof BoardsBoardIdRoute
-  '/projects/$projectId': typeof ProjectsProjectIdRoute
-  '/workspaces/$workspaceId': typeof WorkspacesWorkspaceIdRoute
   '/workspaces/': typeof WorkspacesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/archive'
-    | '/favorites'
-    | '/templates'
-    | '/boards/$boardId'
-    | '/projects/$projectId'
-    | '/workspaces/$workspaceId'
-    | '/workspaces/'
+  fullPaths: '/' | '/archive' | '/favorites' | '/templates' | '/workspaces/'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/archive'
-    | '/favorites'
-    | '/templates'
-    | '/boards/$boardId'
-    | '/projects/$projectId'
-    | '/workspaces/$workspaceId'
-    | '/workspaces'
+  to: '/' | '/archive' | '/favorites' | '/templates' | '/workspaces'
   id:
-    | '__root__'
-    | '/'
-    | '/archive'
-    | '/favorites'
-    | '/templates'
-    | '/boards/$boardId'
-    | '/projects/$projectId'
-    | '/workspaces/$workspaceId'
-    | '/workspaces/'
+    '__root__' | '/' | '/archive' | '/favorites' | '/templates' | '/workspaces/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -128,9 +77,6 @@ export interface RootRouteChildren {
   ArchiveRoute: typeof ArchiveRoute
   FavoritesRoute: typeof FavoritesRoute
   TemplatesRoute: typeof TemplatesRoute
-  BoardsBoardIdRoute: typeof BoardsBoardIdRoute
-  ProjectsProjectIdRoute: typeof ProjectsProjectIdRoute
-  WorkspacesWorkspaceIdRoute: typeof WorkspacesWorkspaceIdRoute
   WorkspacesIndexRoute: typeof WorkspacesIndexRoute
 }
 
@@ -164,32 +110,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TemplatesRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/boards/$boardId': {
-      id: '/boards/$boardId'
-      path: '/boards/$boardId'
-      fullPath: '/boards/$boardId'
-      preLoaderRoute: typeof BoardsBoardIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/projects/$projectId': {
-      id: '/projects/$projectId'
-      path: '/projects/$projectId'
-      fullPath: '/projects/$projectId'
-      preLoaderRoute: typeof ProjectsProjectIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/workspaces/': {
       id: '/workspaces/'
       path: '/workspaces'
       fullPath: '/workspaces/'
       preLoaderRoute: typeof WorkspacesIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/workspaces/$workspaceId': {
-      id: '/workspaces/$workspaceId'
-      path: '/workspaces/$workspaceId'
-      fullPath: '/workspaces/$workspaceId'
-      preLoaderRoute: typeof WorkspacesWorkspaceIdRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -200,9 +125,6 @@ const rootRouteChildren: RootRouteChildren = {
   ArchiveRoute: ArchiveRoute,
   FavoritesRoute: FavoritesRoute,
   TemplatesRoute: TemplatesRoute,
-  BoardsBoardIdRoute: BoardsBoardIdRoute,
-  ProjectsProjectIdRoute: ProjectsProjectIdRoute,
-  WorkspacesWorkspaceIdRoute: WorkspacesWorkspaceIdRoute,
   WorkspacesIndexRoute: WorkspacesIndexRoute,
 }
 export const routeTree = rootRouteImport

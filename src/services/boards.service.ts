@@ -103,3 +103,17 @@ export async function deleteBoard(id: string): Promise<void> {
   });
   await delay(null, 120);
 }
+
+export async function updateBoard(
+  id: string,
+  patch: { name?: string; description?: string | null },
+): Promise<void> {
+  writeDb((db) => {
+    const board = db.boards.find((b) => b.id === id);
+    if (!board) return;
+    if (patch.name !== undefined) board.name = patch.name.trim();
+    if (patch.description !== undefined) board.description = patch.description?.trim() || null;
+    board.updated_at = nowIso();
+  });
+  await delay(null, 120);
+}
