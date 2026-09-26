@@ -39,7 +39,7 @@ function useTheme() {
   return [dark, () => setDark((d) => { localStorage.setItem("projectflow.theme", d ? "light" : "dark"); return !d; })] as const;
 }
 
-function NavItem({ to, label, icon: Icon, collapsed, onNavigate }: { to: string; label: string; icon: typeof Home; collapsed: boolean; onNavigate?: () => void }) {
+function NavItem({ to, label, icon: Icon, collapsed, onNavigate }: { to: string; label: string; icon: typeof Home; collapsed: boolean; onNavigate?: (() => void) | undefined }) {
   const link = (
     <Link to={to} onClick={onNavigate} activeOptions={{ exact: to === "/" }}
       className={cn("flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground", collapsed && "justify-center px-0")}
@@ -51,7 +51,7 @@ function NavItem({ to, label, icon: Icon, collapsed, onNavigate }: { to: string;
   return <Tooltip><TooltipTrigger asChild>{link}</TooltipTrigger><TooltipContent side="left">{label}</TooltipContent></Tooltip>;
 }
 
-function SidebarBody({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
+function SidebarBody({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: (() => void) | undefined }) {
   const { data: workspaces } = useWorkspaces();
   return (
     <div className="flex h-full flex-col p-3">
