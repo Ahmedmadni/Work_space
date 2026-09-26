@@ -10,6 +10,7 @@ import {
   listBoards,
   restoreBoard,
   toggleBoardFavorite,
+  updateBoard,
 } from "@/services/boards.service";
 import type { CreateBoardInput } from "@/types";
 
@@ -77,5 +78,18 @@ export function useDeleteBoard() {
       inv();
       toast.success("تم حذف اللوحة نهائيًا");
     },
+  });
+}
+
+export function useUpdateBoard() {
+  const inv = useInvalidate();
+  return useMutation({
+    mutationFn: ({ id, ...patch }: { id: string; name?: string; description?: string | null }) =>
+      updateBoard(id, patch),
+    onSuccess: () => {
+      inv();
+      toast.success("تم تحديث اللوحة");
+    },
+    onError: () => toast.error("تعذر تحديث اللوحة."),
   });
 }

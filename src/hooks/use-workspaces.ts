@@ -10,6 +10,7 @@ import {
   listWorkspaces,
   renameWorkspace,
   restoreWorkspace,
+  updateWorkspace,
 } from "@/services/workspaces.service";
 import type { CreateWorkspaceInput } from "@/types";
 
@@ -93,5 +94,18 @@ export function useDeleteWorkspace() {
       invalidate();
       toast.success("تم حذف المساحة وكل ما تحتويه");
     },
+  });
+}
+
+export function useUpdateWorkspace() {
+  const invalidate = useInvalidateAll();
+  return useMutation({
+    mutationFn: ({ id, ...patch }: { id: string; name?: string; description?: string | null }) =>
+      updateWorkspace(id, patch),
+    onSuccess: () => {
+      invalidate();
+      toast.success("تم تحديث المساحة");
+    },
+    onError: () => toast.error("تعذر تحديث المساحة."),
   });
 }
