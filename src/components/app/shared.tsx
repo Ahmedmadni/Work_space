@@ -275,7 +275,7 @@ export function WorkspaceCard({ workspace: w, view = "grid" }: { workspace: Work
       </div>
       <EditEntityDialog open={edit} onOpenChange={setEdit} title="تعديل المساحة" initialName={w.name} initialDescription={w.description} pending={update.isPending}
         onSave={(v, done) => update.mutate({ id: w.id, name: v.name, description: v.description }, { onSuccess: done })} />
-      <ConfirmDialog open={del} onOpenChange={setDel} title={`حذف «${w.name}»؟`} description="سيتم حذف المساحة وجميع مشاريعها ولوحاتها نهائيًا. لا يمكن التراجع." onConfirm={() => remove.mutate(w.id)} />
+      <ConfirmDialog open={del} onOpenChange={setDel} title={`حذف «${w.name}»؟`} description="سيتم حذف المشاريع واللوحات التابعة لهذه المساحة نهائيًا. لا يمكن التراجع." onConfirm={() => remove.mutate(w.id)} />
     </div>
   );
 }

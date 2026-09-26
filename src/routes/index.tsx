@@ -25,7 +25,7 @@ export const Route = createFileRoute("/")({
 function Dashboard() {
   const ws = useWorkspaces();
   const projects = useProjects();
-  const boards = useBoards({ limit: 6 });
+  const boards = useBoards({ limit: 6, sort: "opened" });
   const stats = [
     { label: "مساحات العمل", value: ws.data?.length ?? 0 },
     { label: "مشاريع نشطة", value: projects.data?.filter((p) => p.status === "active").length ?? 0 },

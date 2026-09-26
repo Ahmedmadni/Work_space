@@ -14,13 +14,22 @@ export async function listBoards(filter?: {
   projectId?: string;
   favoritesOnly?: boolean;
   limit?: number;
+  /** "opened": آخر فتح (ثم آخر تعديل)، الافتراضي: آخر تعديل. */
+  sort?: "updated" | "opened";
 }): Promise<BoardWithContext[]> {
   const db = readDb();
-  let rows = db.boards.filter((b) => !b.archived_at);
+  // اللوحات النشطة فقط: ليست مؤرشفة ولا يتبع مشروعًا أو مساحة مؤرشفة.
+  const activeProjects = new Set(
+    db.projects
+      .filter((p) => !p.archived_at && !db.workspaces.find((w) => w.id === p.workspace_id)?.archived_at)
+      .map((p) => p.id),
+  );
+  let rows = db.boards.filter((b) => !b.archived_at && activeProjects.has(b.project_id));
   if (filter?.workspaceId) rows = rows.filter((b) => b.workspace_id === filter.workspaceId);
   if (filter?.projectId) rows = rows.filter((b) => b.project_id === filter.projectId);
   if (filter?.favoritesOnly) rows = rows.filter((b) => b.is_favorite);
-  rows = rows.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  const key = (b: Board) => (filter?.sort === "opened" ? (b.last_opened_at ?? b.updated_at) : b.updated_at);
+  rows = rows.sort((a, b) => key(b).localeCompare(key(a)));
   if (filter?.limit) rows = rows.slice(0, filter.limit);
   return delay(rows.map((b) => withContext(b, db)));
 }
@@ -49,6 +58,7 @@ export async function createBoard(input: CreateBoardInput): Promise<Board> {
     updated_at: nowIso(),
     archived_at: null,
     is_favorite: false,
+    last_opened_at: null,
   };
 
   writeDb((db) => {
@@ -116,4 +126,13 @@ export async function updateBoard(
     board.updated_at = nowIso();
   });
   await delay(null, 120);
+}
+
+/** يسجّل فتح اللوحة لترتيب «آخر اللوحات» دون تغيير تاريخ التعديل. */
+export async function markBoardOpened(id: string): Promise<void> {
+  writeDb((db) => {
+    const board = db.boards.find((b) => b.id === id);
+    if (board) board.last_opened_at = nowIso();
+  });
+  await delay(null, 0);
 }

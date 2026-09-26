@@ -18,12 +18,13 @@ export const Route = createFileRoute("/recent")({
 });
 
 function Recent() {
-  const { data, isLoading } = useBoards();
+  const { data, isLoading } = useBoards({ sort: "opened" });
   const [q, setQ] = useState("");
-  const rows = (data ?? []).filter((b) => b.name.includes(q.trim()) || b.project_name.includes(q.trim()));
+  const term = q.trim().toLowerCase();
+  const rows = (data ?? []).filter((b) => !term || b.name.toLowerCase().includes(term) || b.project_name.toLowerCase().includes(term));
   return (
     <>
-      <PageHeader title="آخر اللوحات" description="مرتبة حسب آخر تعديل." />
+      <PageHeader title="آخر اللوحات" description="مرتبة حسب آخر فتح أو تعديل." />
       <div className="relative mb-6 max-w-xs">
         <Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="ابحث في اللوحات…" className="h-10 w-full rounded-xl border border-border bg-card ps-9 pe-3 text-sm outline-none focus:border-brand" />

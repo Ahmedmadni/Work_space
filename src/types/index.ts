@@ -68,6 +68,8 @@ export interface Board {
   updated_at: string;
   archived_at: string | null;
   is_favorite: boolean;
+  /** آخر مرة فُتحت فيها اللوحة (محليًا). */
+  last_opened_at: string | null;
 }
 
 export interface WorkspaceWithStats extends Workspace {

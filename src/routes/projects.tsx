@@ -22,7 +22,8 @@ function ProjectsPage() {
   const { data, isLoading } = useProjects();
   const boards = useBoards();
   const [q, setQ] = useState("");
-  const rows = (data ?? []).filter((p) => p.name.includes(q.trim()) || (p.description ?? "").includes(q.trim()));
+  const term = q.trim().toLowerCase();
+  const rows = (data ?? []).filter((p) => !term || p.name.toLowerCase().includes(term) || (p.description ?? "").toLowerCase().includes(term));
   return (
     <>
       <PageHeader title="المشاريع" description="كل مشاريعك عبر جميع مساحات العمل." />

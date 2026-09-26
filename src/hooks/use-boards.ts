@@ -8,6 +8,7 @@ import {
   getBoard,
   listArchivedBoards,
   listBoards,
+  markBoardOpened,
   restoreBoard,
   toggleBoardFavorite,
   updateBoard,
@@ -24,6 +25,15 @@ export function useArchivedBoards() {
 }
 export function useBoard(id: string) {
   return useQuery({ queryKey: ["boards", "detail", id], queryFn: () => getBoard(id) });
+}
+
+/** يسجّل فتح اللوحة ويحدّث قوائم «آخر اللوحات». */
+export function useMarkBoardOpened() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => markBoardOpened(id),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["boards"], exact: false, refetchType: "inactive" }),
+  });
 }
 
 function useInvalidate() {

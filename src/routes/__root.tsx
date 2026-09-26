@@ -7,7 +7,7 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { Component, useEffect, type ErrorInfo, type ReactNode } from "react";
 
 import { Toaster } from "@/components/ui/sonner";
 import { useRouterState } from "@tanstack/react-router";
@@ -75,6 +75,33 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   );
 }
 
+/** حاجز أخطاء عام: يمنع الشاشة الفارغة إذا انهار جزء خارج حدود المسارات (مثل الشريط الجانبي). */
+class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    reportLovableError(error, { boundary: "app_error_boundary", componentStack: info.componentStack ?? "" });
+  }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div role="alert" className="flex min-h-screen items-center justify-center bg-background px-4">
+        <div className="max-w-md text-center">
+          <h1 className="text-xl font-semibold text-foreground">حدث خطأ غير متوقع.</h1>
+          <p className="mt-2 text-sm text-muted-foreground">بياناتك المحفوظة لم تتأثر. أعد تحميل التطبيق أو عد للرئيسية.</p>
+          <div className="mt-6 flex flex-wrap justify-center gap-2">
+            <button onClick={() => window.location.reload()} className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">إعادة تحميل التطبيق</button>
+            <a href="/" className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground hover:bg-accent">العودة للرئيسية</a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+}
+
+// يطبّق الوضع الليلي قبل الرسم في كل الصفحات (بما فيها اللوحة التي لا تحتوي الشريط الجانبي)
+const THEME_SCRIPT = `try{if(localStorage.getItem("projectflow.theme")==="dark")document.documentElement.classList.add("dark")}catch(e){}`;
+
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
     meta: [
@@ -102,8 +129,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="ar" dir="rtl">
+    <html lang="ar" dir="rtl" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
         <HeadContent />
       </head>
       <body>
@@ -121,7 +149,9 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      {isBoard ? <Outlet /> : <AppShell><Outlet /></AppShell>}
+      <AppErrorBoundary>
+        {isBoard ? <Outlet /> : <AppShell><Outlet /></AppShell>}
+      </AppErrorBoundary>
       <Toaster position="bottom-left" richColors />
     </QueryClientProvider>
   );
