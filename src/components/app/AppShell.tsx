@@ -33,10 +33,16 @@ const FOOT = [
 ] as const;
 
 function useTheme() {
+  // الحالة الأولية يضبطها سكربت الجذر قبل الرسم؛ هنا نقرأها فقط ثم نحفظ التغييرات.
   const [dark, setDark] = useState(false);
-  useEffect(() => { setDark(localStorage.getItem("projectflow.theme") === "dark"); }, []);
-  useEffect(() => { document.documentElement.classList.toggle("dark", dark); }, [dark]);
-  return [dark, () => setDark((d) => { localStorage.setItem("projectflow.theme", d ? "light" : "dark"); return !d; })] as const;
+  useEffect(() => { setDark(document.documentElement.classList.contains("dark")); }, []);
+  const toggle = () => {
+    const next = !document.documentElement.classList.contains("dark");
+    document.documentElement.classList.toggle("dark", next);
+    try { localStorage.setItem("projectflow.theme", next ? "dark" : "light"); } catch { /* ignore */ }
+    setDark(next);
+  };
+  return [dark, toggle] as const;
 }
 
 function NavItem({ to, label, icon: Icon, collapsed, onNavigate }: { to: string; label: string; icon: typeof Home; collapsed: boolean; onNavigate?: (() => void) | undefined }) {
