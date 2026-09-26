@@ -134,6 +134,7 @@ function seed(): Database {
       updated_at: daysAgo(0, 3),
       archived_at: null,
       is_favorite: true,
+      last_opened_at: null,
     },
     {
       id: "bd-offices",
@@ -147,6 +148,7 @@ function seed(): Database {
       updated_at: daysAgo(1),
       archived_at: null,
       is_favorite: true,
+      last_opened_at: null,
     },
     {
       id: "bd-integration",
@@ -160,6 +162,7 @@ function seed(): Database {
       updated_at: daysAgo(5),
       archived_at: null,
       is_favorite: false,
+      last_opened_at: null,
     },
     {
       id: "bd-security",
@@ -173,6 +176,7 @@ function seed(): Database {
       updated_at: daysAgo(7),
       archived_at: null,
       is_favorite: false,
+      last_opened_at: null,
     },
     {
       id: "bd-lobby",
@@ -186,6 +190,7 @@ function seed(): Database {
       updated_at: daysAgo(6),
       archived_at: null,
       is_favorite: false,
+      last_opened_at: null,
     },
   ];
 
@@ -200,23 +205,98 @@ function seed(): Database {
   return { profile: CURRENT_USER, workspaces, workspace_members, projects, boards };
 }
 
+/** رقم نسخة بنية البيانات المحفوظة. ارفعه وأضف دالة ترحيل عند تغيير البنية. */
+export const SCHEMA_VERSION = 2;
+
+interface StoredEnvelope {
+  schemaVersion: number;
+  data: Database;
+}
+
+/** ترحيلات متسلسلة: المفتاح هو النسخة المصدر. */
+const MIGRATIONS: Record<number, (db: Database) => Database> = {
+  // v1 → v2: إضافة last_opened_at للوحات (يُطبَّع تلقائيًا في normalize).
+  1: (db) => db,
+};
+
+function warnDev(message: string, error?: unknown) {
+  if (import.meta.env.DEV) console.warn(`[local-db] ${message}`, error ?? "");
+}
+
+const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+const str = (v: unknown, fallback: string) => (typeof v === "string" && v.length ? v : fallback);
+const strOrNull = (v: unknown) => (typeof v === "string" ? v : null);
+function rows<T>(v: unknown, fix: (r: Record<string, unknown>) => T | null): T[] {
+  if (!Array.isArray(v)) return [];
+  return v.flatMap((r) => { if (!isObj(r) || typeof r.id !== "string") return []; const x = fix(r); return x ? [x] : []; });
+}
+
+/** يطبّع أي بيانات محفوظة (ناقصة أو قديمة) إلى بنية سليمة ويزيل العناصر اليتيمة. */
+export function normalize(raw: unknown): Database {
+  const src = isObj(raw) ? raw : {};
+  const now = nowIso();
+  const base = { created_by: CURRENT_USER.id };
+  const workspaces = rows<Workspace>(src.workspaces, (r) => ({
+    ...base, id: r.id as string, name: str(r.name, "مساحة بلا اسم"), description: strOrNull(r.description),
+    icon: str(r.icon, "م"), color: str(r.color, "brand") as Workspace["color"],
+    created_at: str(r.created_at, now), updated_at: str(r.updated_at, now), archived_at: strOrNull(r.archived_at),
+  }));
+  const wsIds = new Set(workspaces.map((w) => w.id));
+  const projects = rows<Project>(src.projects, (r) => wsIds.has(r.workspace_id as string) ? ({
+    ...base, id: r.id as string, workspace_id: r.workspace_id as string, name: str(r.name, "مشروع بلا اسم"),
+    description: strOrNull(r.description), status: str(r.status, "planning") as Project["status"],
+    icon: str(r.icon, "م"), color: str(r.color, "brand") as Project["color"],
+    created_at: str(r.created_at, now), updated_at: str(r.updated_at, now), archived_at: strOrNull(r.archived_at),
+  }) : null);
+  const prById = new Map(projects.map((p) => [p.id, p]));
+  const boards = rows<Board>(src.boards, (r) => {
+    const pr = prById.get(r.project_id as string);
+    if (!pr) return null; // لوحة يتيمة
+    return {
+      ...base, id: r.id as string, workspace_id: pr.workspace_id, project_id: pr.id, name: str(r.name, "لوحة بلا اسم"),
+      description: strOrNull(r.description), board_type: str(r.board_type, "blank") as Board["board_type"],
+      created_at: str(r.created_at, now), updated_at: str(r.updated_at, now), archived_at: strOrNull(r.archived_at),
+      is_favorite: r.is_favorite === true, last_opened_at: strOrNull(r.last_opened_at),
+    };
+  });
+  const workspace_members = rows<WorkspaceMember>(src.workspace_members, (r) => wsIds.has(r.workspace_id as string) ? ({
+    id: r.id as string, workspace_id: r.workspace_id as string, user_id: str(r.user_id, CURRENT_USER.id),
+    role: str(r.role, "owner") as WorkspaceMember["role"], created_at: str(r.created_at, now),
+  }) : null);
+  return { profile: CURRENT_USER, workspaces, workspace_members, projects, boards };
+}
+
+function load(raw: string): Database {
+  const parsed: unknown = JSON.parse(raw);
+  // النسخة 1 كانت تحفظ قاعدة البيانات مباشرة بدون غلاف.
+  let version = 1;
+  let data: unknown = parsed;
+  if (isObj(parsed) && typeof parsed.schemaVersion === "number" && "data" in parsed) {
+    version = parsed.schemaVersion;
+    data = parsed.data;
+  }
+  if (version > SCHEMA_VERSION) throw new Error(`unknown schema version ${version}`);
+  let db = normalize(data);
+  for (let v = version; v < SCHEMA_VERSION; v++) db = normalize((MIGRATIONS[v] ?? ((d) => d))(db));
+  return db;
+}
+
 let memory: Database | null = null;
 
 export function readDb(): Database {
+  if (typeof window === "undefined") return seed(); // على الخادم: بيانات مؤقتة لا تُحفظ
   if (memory) return memory;
-
-  if (typeof window !== "undefined") {
-    try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        memory = JSON.parse(raw) as Database;
-        return memory;
-      }
-    } catch {
-      /* التخزين غير متاح — نعود إلى بيانات البدء */
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      memory = load(raw);
+      persist(memory);
+      return memory;
     }
+  } catch (error) {
+    warnDev("تعذرت قراءة البيانات المحفوظة؛ تم الرجوع إلى بيانات البدء.", error);
+    try { window.localStorage.setItem(`${STORAGE_KEY}.corrupt`, window.localStorage.getItem(STORAGE_KEY) ?? ""); } catch { /* ignore */ }
   }
-
   memory = seed();
   persist(memory);
   return memory;
@@ -232,9 +312,10 @@ export function writeDb(mutate: (db: Database) => void): Database {
 function persist(db: Database) {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
-  } catch {
-    /* تجاهل امتلاء التخزين */
+    const envelope: StoredEnvelope = { schemaVersion: SCHEMA_VERSION, data: db };
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(envelope));
+  } catch (error) {
+    warnDev("تعذر حفظ البيانات.", error);
   }
 }
 
