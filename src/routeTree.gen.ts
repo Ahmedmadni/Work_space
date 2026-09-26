@@ -12,6 +12,10 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ArchiveRouteImport } from './routes/archive'
 import { Route as FavoritesRouteImport } from './routes/favorites'
+import { Route as HelpRouteImport } from './routes/help'
+import { Route as ProjectsRouteImport } from './routes/projects'
+import { Route as RecentRouteImport } from './routes/recent'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as TemplatesRouteImport } from './routes/templates'
 import { Route as WorkspacesIndexRouteImport } from './routes/workspaces.index'
 import { Route as WorkspaceWorkspaceIdIndexRouteImport } from './routes/workspace.$workspaceId.index'
@@ -31,6 +35,26 @@ const ArchiveRoute = ArchiveRouteImport.update({
 const FavoritesRoute = FavoritesRouteImport.update({
   id: '/favorites',
   path: '/favorites',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HelpRoute = HelpRouteImport.update({
+  id: '/help',
+  path: '/help',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProjectsRoute = ProjectsRouteImport.update({
+  id: '/projects',
+  path: '/projects',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RecentRoute = RecentRouteImport.update({
+  id: '/recent',
+  path: '/recent',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TemplatesRoute = TemplatesRouteImport.update({
@@ -66,6 +90,10 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/archive': typeof ArchiveRoute
   '/favorites': typeof FavoritesRoute
+  '/help': typeof HelpRoute
+  '/projects': typeof ProjectsRoute
+  '/recent': typeof RecentRoute
+  '/settings': typeof SettingsRoute
   '/templates': typeof TemplatesRoute
   '/workspaces/': typeof WorkspacesIndexRoute
   '/workspace/$workspaceId/': typeof WorkspaceWorkspaceIdIndexRoute
@@ -76,6 +104,10 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/archive': typeof ArchiveRoute
   '/favorites': typeof FavoritesRoute
+  '/help': typeof HelpRoute
+  '/projects': typeof ProjectsRoute
+  '/recent': typeof RecentRoute
+  '/settings': typeof SettingsRoute
   '/templates': typeof TemplatesRoute
   '/workspaces': typeof WorkspacesIndexRoute
   '/workspace/$workspaceId': typeof WorkspaceWorkspaceIdIndexRoute
@@ -87,6 +119,10 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/archive': typeof ArchiveRoute
   '/favorites': typeof FavoritesRoute
+  '/help': typeof HelpRoute
+  '/projects': typeof ProjectsRoute
+  '/recent': typeof RecentRoute
+  '/settings': typeof SettingsRoute
   '/templates': typeof TemplatesRoute
   '/workspaces/': typeof WorkspacesIndexRoute
   '/workspace/$workspaceId/': typeof WorkspaceWorkspaceIdIndexRoute
@@ -99,6 +135,10 @@ export interface FileRouteTypes {
     | '/'
     | '/archive'
     | '/favorites'
+    | '/help'
+    | '/projects'
+    | '/recent'
+    | '/settings'
     | '/templates'
     | '/workspaces/'
     | '/workspace/$workspaceId/'
@@ -109,6 +149,10 @@ export interface FileRouteTypes {
     | '/'
     | '/archive'
     | '/favorites'
+    | '/help'
+    | '/projects'
+    | '/recent'
+    | '/settings'
     | '/templates'
     | '/workspaces'
     | '/workspace/$workspaceId'
@@ -119,6 +163,10 @@ export interface FileRouteTypes {
     | '/'
     | '/archive'
     | '/favorites'
+    | '/help'
+    | '/projects'
+    | '/recent'
+    | '/settings'
     | '/templates'
     | '/workspaces/'
     | '/workspace/$workspaceId/'
@@ -130,6 +178,10 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ArchiveRoute: typeof ArchiveRoute
   FavoritesRoute: typeof FavoritesRoute
+  HelpRoute: typeof HelpRoute
+  ProjectsRoute: typeof ProjectsRoute
+  RecentRoute: typeof RecentRoute
+  SettingsRoute: typeof SettingsRoute
   TemplatesRoute: typeof TemplatesRoute
   WorkspacesIndexRoute: typeof WorkspacesIndexRoute
   WorkspaceWorkspaceIdIndexRoute: typeof WorkspaceWorkspaceIdIndexRoute
@@ -158,6 +210,34 @@ declare module '@tanstack/react-router' {
       path: '/favorites'
       fullPath: '/favorites'
       preLoaderRoute: typeof FavoritesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/help': {
+      id: '/help'
+      path: '/help'
+      fullPath: '/help'
+      preLoaderRoute: typeof HelpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/projects': {
+      id: '/projects'
+      path: '/projects'
+      fullPath: '/projects'
+      preLoaderRoute: typeof ProjectsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/recent': {
+      id: '/recent'
+      path: '/recent'
+      fullPath: '/recent'
+      preLoaderRoute: typeof RecentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/templates': {
@@ -202,6 +282,10 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ArchiveRoute: ArchiveRoute,
   FavoritesRoute: FavoritesRoute,
+  HelpRoute: HelpRoute,
+  ProjectsRoute: ProjectsRoute,
+  RecentRoute: RecentRoute,
+  SettingsRoute: SettingsRoute,
   TemplatesRoute: TemplatesRoute,
   WorkspacesIndexRoute: WorkspacesIndexRoute,
   WorkspaceWorkspaceIdIndexRoute: WorkspaceWorkspaceIdIndexRoute,
