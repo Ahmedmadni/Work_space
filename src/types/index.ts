@@ -49,7 +49,7 @@ export interface Project {
   description: string | null;
   status: ProjectStatus;
   /** الحالة قبل الأرشفة، تُستعاد عند الاستعادة */
-  previous_status?: Exclude<ProjectStatus, "archived"> | null;
+  previous_status?: Exclude<ProjectStatus, "archived"> | null | undefined;
   icon: string;
   color: AccentColor;
   created_by: string;
