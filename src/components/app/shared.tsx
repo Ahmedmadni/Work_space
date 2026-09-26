@@ -15,9 +15,9 @@ export function PageHeader({
   description,
   actions,
 }: {
-  eyebrow?: string;
+  eyebrow?: string | undefined;
   title: string;
-  description?: string;
+  description?: string | undefined;
   actions?: ReactNode;
 }) {
   return (
@@ -109,7 +109,7 @@ export function BoardCard({ board }: { board: BoardWithContext }) {
   );
 }
 
-export function ProjectCard({ project, boards }: { project: Project; boards?: number }) {
+export function ProjectCard({ project, boards }: { project: Project; boards?: number | undefined }) {
   return (
     <Link
       to="/projects/$projectId"
