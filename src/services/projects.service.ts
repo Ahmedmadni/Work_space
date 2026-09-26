@@ -5,6 +5,8 @@ export async function listProjects(workspaceId?: string): Promise<Project[]> {
   const db = readDb();
   const rows = db.projects
     .filter((p) => !p.archived_at && (!workspaceId || p.workspace_id === workspaceId))
+    // مشاريع المساحات المؤرشفة لا تظهر في القوائم النشطة
+    .filter((p) => !db.workspaces.find((w) => w.id === p.workspace_id)?.archived_at)
     .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
   return delay(rows);
 }
