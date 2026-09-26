@@ -77,12 +77,12 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 
 /** حاجز أخطاء عام: يمنع الشاشة الفارغة إذا انهار جزء خارج حدود المسارات (مثل الشريط الجانبي). */
 class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
-  state = { error: null as Error | null };
+  override state = { error: null as Error | null };
   static getDerivedStateFromError(error: Error) { return { error }; }
-  componentDidCatch(error: Error, info: ErrorInfo) {
+  override componentDidCatch(error: Error, info: ErrorInfo) {
     reportLovableError(error, { boundary: "app_error_boundary", componentStack: info.componentStack ?? "" });
   }
-  render() {
+  override render() {
     if (!this.state.error) return this.props.children;
     return (
       <div role="alert" className="flex min-h-screen items-center justify-center bg-background px-4">

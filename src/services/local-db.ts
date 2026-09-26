@@ -223,10 +223,12 @@ function warnDev(message: string, error?: unknown) {
   if (import.meta.env.DEV) console.warn(`[local-db] ${message}`, error ?? "");
 }
 
-const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+type RawKey = "id"|"name"|"description"|"icon"|"color"|"created_at"|"updated_at"|"archived_at"|"workspace_id"|"project_id"|"status"|"board_type"|"is_favorite"|"last_opened_at"|"user_id"|"role"|"workspaces"|"projects"|"boards"|"workspace_members"|"schemaVersion"|"data";
+type Raw = Partial<Record<RawKey, unknown>>;
+const isObj = (v: unknown): v is Raw => typeof v === "object" && v !== null && !Array.isArray(v);
 const str = (v: unknown, fallback: string) => (typeof v === "string" && v.length ? v : fallback);
 const strOrNull = (v: unknown) => (typeof v === "string" ? v : null);
-function rows<T>(v: unknown, fix: (r: Record<string, unknown>) => T | null): T[] {
+function rows<T>(v: unknown, fix: (r: Raw) => T | null): T[] {
   if (!Array.isArray(v)) return [];
   return v.flatMap((r) => { if (!isObj(r) || typeof r.id !== "string") return []; const x = fix(r); return x ? [x] : []; });
 }
