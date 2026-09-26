@@ -1,11 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { Button } from "@/components/ui/button";
-import { PageHeader } from "@/components/app/shared";
-import { CreateBoardDialog } from "@/components/app/dialogs";
-import { useProjects } from "@/hooks/use-projects";
-import { ACCENT_CHIP_CLASS, BOARD_TYPE_LABELS, TEMPLATES } from "@/lib/labels";
-import { cn } from "@/lib/utils";
+import { BoardPreview, PageHeader } from "@/components/app/shared";
+import { BOARD_TYPE_LABELS, TEMPLATES } from "@/lib/labels";
 
 export const Route = createFileRoute("/templates")({
   head: () => ({
@@ -20,22 +17,19 @@ export const Route = createFileRoute("/templates")({
 });
 
 function Templates() {
-  const { data: projects } = useProjects();
-  const target = projects?.[0];
   return (
     <>
-      <PageHeader title="القوالب" description={target ? `ستُنشأ اللوحة داخل مشروع «${target.name}».` : "أنشئ مشروعًا أولًا لاستخدام القوالب."} />
+      <PageHeader title="القوالب" description="نقاط انطلاق جاهزة لأشكال التخطيط الشائعة." />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {TEMPLATES.map((t) => (
           <div key={t.id} className="flex flex-col rounded-2xl border border-border bg-card p-5 shadow-[var(--shadow-frost)]">
-            <div className={cn("canvas-grid mb-4 h-24 rounded-xl", ACCENT_CHIP_CLASS[t.color])} />
+            <BoardPreview type={t.board_type} className="mb-4 h-24 rounded-xl" />
             <p className="text-xs text-muted-foreground">{BOARD_TYPE_LABELS[t.board_type]}</p>
             <h3 className="mt-1 font-semibold">{t.name}</h3>
             <p className="mt-1 flex-1 text-sm text-muted-foreground">{t.description}</p>
-            {target && (
-              <CreateBoardDialog workspaceId={target.workspace_id} projectId={target.id} defaultType={t.board_type}
-                trigger={<Button variant="outline" className="mt-4">استخدام القالب</Button>} />
-            )}
+            <span title="سيتم تفعيل إنشاء اللوحات من القوالب في مرحلة لاحقة." className="mt-4">
+              <Button variant="outline" disabled className="w-full">استخدام القالب (قريبًا)</Button>
+            </span>
           </div>
         ))}
       </div>

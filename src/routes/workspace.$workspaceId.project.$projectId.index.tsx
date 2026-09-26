@@ -29,7 +29,7 @@ function ProjectDetail() {
   const create = <CreateBoardDialog workspaceId={p.workspace_id} projectId={p.id} trigger={<Button><Plus className="h-4 w-4" />لوحة جديدة</Button>} />;
   return (
     <>
-      <Link to="/workspace/$workspaceId" params={{ workspaceId }} className="mb-4 inline-block text-sm text-muted-foreground hover:text-brand">← العودة لمساحة العمل</Link>
+      <Link to="/workspace/$workspaceId" params={{ workspaceId }} className="mb-4 inline-block text-sm text-muted-foreground hover:text-brand">→ العودة لمساحة العمل</Link>
       <PageHeader leading={<Glyph icon={p.icon} color={p.color} size="lg" />} title={p.name} description={p.description ?? undefined} actions={<><StatusBadge status={p.status} />{create}</>} />
       {boards.isLoading ? <CardGridSkeleton tall /> : !boards.data?.length ? (
         <EmptyState title="لا لوحات بعد" description="أنشئ أول لوحة تخطيط لهذا المشروع." action={create} />
