@@ -30,7 +30,7 @@ function WorkspacesPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {data.map((w) => (
-            <Link key={w.id} to="/workspaces/$workspaceId" params={{ workspaceId: w.id }}
+            <Link key={w.id} to="/workspace/$workspaceId" params={{ workspaceId: w.id }}
               className="rounded-2xl border border-border bg-card p-5 shadow-[var(--shadow-frost)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)]">
               <Glyph icon={w.icon} color={w.color} size="lg" />
               <h3 className="mt-4 text-lg font-semibold">{w.name}</h3>
