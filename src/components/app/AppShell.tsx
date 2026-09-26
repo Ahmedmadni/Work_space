@@ -45,7 +45,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
         <div className="mt-2 flex-1 space-y-1 overflow-y-auto">
           {workspaces?.map((w) => (
-            <Link key={w.id} to="/workspaces/$workspaceId" params={{ workspaceId: w.id }}
+            <Link key={w.id} to="/workspace/$workspaceId" params={{ workspaceId: w.id }}
               className="flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm text-foreground hover:bg-muted"
               activeProps={{ className: "bg-muted" }}>
               <Glyph icon={w.icon} color={w.color} size="sm" />

@@ -311,7 +311,7 @@ export function ProjectCard({ project: p, boards }: { project: Project; boards?:
         <ActionsMenu onOpen={() => void navigate({ to: "/workspace/$workspaceId/project/$projectId", params })} onEdit={() => setEdit(true)} onArchive={() => archive.mutate(p.id)} onDelete={() => setDel(true)} />
       </div>
       <EditEntityDialog open={edit} onOpenChange={setEdit} title="تعديل المشروع" initialName={p.name} initialDescription={p.description} initialStatus={p.status} pending={update.isPending}
-        onSave={(v, done) => update.mutate({ id: p.id, name: v.name, description: v.description, status: v.status }, { onSuccess: done })} />
+        onSave={(v, done) => update.mutate({ id: p.id, name: v.name, description: v.description, ...(v.status ? { status: v.status } : {}) }, { onSuccess: done })} />
       <ConfirmDialog open={del} onOpenChange={setDel} title={`حذف «${p.name}»؟`} description="سيتم حذف المشروع وجميع لوحاته نهائيًا." onConfirm={() => remove.mutate(p.id)} />
     </div>
   );

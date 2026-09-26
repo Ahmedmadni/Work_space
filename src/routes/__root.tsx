@@ -116,7 +116,7 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
-  const isBoard = useRouterState({ select: (s) => s.location.pathname.startsWith("/boards/") });
+  const isBoard = useRouterState({ select: (s) => s.location.pathname.includes("/board/") });
 
   return (
     <QueryClientProvider client={queryClient}>

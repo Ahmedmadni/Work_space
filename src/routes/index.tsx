@@ -71,7 +71,7 @@ function Dashboard() {
         <h2 className="mb-4 text-lg font-semibold">مساحات العمل</h2>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {ws.data?.map((w) => (
-            <Link key={w.id} to="/workspaces/$workspaceId" params={{ workspaceId: w.id }} className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 hover:border-brand">
+            <Link key={w.id} to="/workspace/$workspaceId" params={{ workspaceId: w.id }} className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 hover:border-brand">
               <Glyph icon={w.icon} color={w.color} />
               <div><p className="font-medium">{w.name}</p><p className="text-xs text-muted-foreground">{w.projects_count} مشاريع · {w.boards_count} لوحات</p></div>
             </Link>
