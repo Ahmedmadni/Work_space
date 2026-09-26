@@ -239,7 +239,7 @@ function persist(db: Database) {
 }
 
 export function newId(prefix: string): string {
-  return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
+  return `${prefix}-${crypto.randomUUID()}`;
 }
 
 export function nowIso(): string {
