@@ -223,7 +223,7 @@ function warnDev(message: string, error?: unknown) {
   if (import.meta.env.DEV) console.warn(`[local-db] ${message}`, error ?? "");
 }
 
-type RawKey = "id"|"name"|"description"|"icon"|"color"|"created_at"|"updated_at"|"archived_at"|"workspace_id"|"project_id"|"status"|"board_type"|"is_favorite"|"last_opened_at"|"user_id"|"role"|"workspaces"|"projects"|"boards"|"workspace_members"|"schemaVersion"|"data";
+type RawKey = "id"|"name"|"description"|"icon"|"color"|"created_at"|"updated_at"|"archived_at"|"workspace_id"|"project_id"|"status"|"previous_status"|"board_type"|"is_favorite"|"last_opened_at"|"user_id"|"role"|"workspaces"|"projects"|"boards"|"workspace_members"|"schemaVersion"|"data";
 type Raw = Partial<Record<RawKey, unknown>>;
 const isObj = (v: unknown): v is Raw => typeof v === "object" && v !== null && !Array.isArray(v);
 const str = (v: unknown, fallback: string) => (typeof v === "string" && v.length ? v : fallback);
@@ -247,6 +247,7 @@ export function normalize(raw: unknown): Database {
   const projects = rows<Project>(src.projects, (r) => wsIds.has(r.workspace_id as string) ? ({
     ...base, id: r.id as string, workspace_id: r.workspace_id as string, name: str(r.name, "مشروع بلا اسم"),
     description: strOrNull(r.description), status: str(r.status, "planning") as Project["status"],
+    previous_status: typeof r.previous_status === "string" && r.previous_status !== "archived" ? (r.previous_status as Project["previous_status"]) : null,
     icon: str(r.icon, "م"), color: str(r.color, "brand") as Project["color"],
     created_at: str(r.created_at, now), updated_at: str(r.updated_at, now), archived_at: strOrNull(r.archived_at),
   }) : null);
