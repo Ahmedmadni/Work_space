@@ -1,8 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ChevronRight, Hand, MousePointer2, Circle, Type, Square, Spline, Pencil, Image, Undo2, Redo2, Share2, ZoomIn, ZoomOut, Maximize, PanelLeft } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { useBoard } from "@/hooks/use-boards";
+import { useBoard, useMarkBoardOpened } from "@/hooks/use-boards";
 import { BOARD_TYPE_LABELS } from "@/lib/labels";
 import { NotFoundState } from "@/components/app/shared";
 import { cn } from "@/lib/utils";
@@ -33,14 +33,28 @@ function BoardPage() {
   const { boardId, workspaceId, projectId } = Route.useParams();
   const { data: board, isLoading } = useBoard(boardId);
   const [inspector, setInspector] = useState(true);
-  if (!isLoading && !board) return <div className="p-8"><NotFoundState /></div>;
+  const markOpened = useMarkBoardOpened();
+  const marked = useRef<string | null>(null);
+  // اللوحة يجب أن تتبع المساحة والمشروع الموجودين في الرابط
+  const valid = !!board && board.workspace_id === workspaceId && board.project_id === projectId;
+  useEffect(() => {
+    if (valid && marked.current !== boardId) { marked.current = boardId; markOpened.mutate(boardId); }
+  }, [valid, boardId, markOpened]);
+  if (!isLoading && !valid) return <div className="p-8"><NotFoundState /></div>;
   return (
     <div className="flex h-screen flex-col bg-background">
       <header className="frost hairline-b z-10 flex h-14 items-center gap-2 px-3">
         <Link to="/workspace/$workspaceId/project/$projectId" params={{ workspaceId, projectId }} className="grid h-9 w-9 place-items-center rounded-lg hover:bg-muted" aria-label="رجوع"><ChevronRight className="h-5 w-5" /></Link>
         <div className="min-w-0">
           <p className="truncate font-semibold">{board?.name ?? "…"}</p>
-          {board && <p className="truncate text-xs text-muted-foreground">{board.workspace_name} / {board.project_name} · {BOARD_TYPE_LABELS[board.board_type]}</p>}
+          {board && (
+            <nav aria-label="مسار التنقل" className="flex min-w-0 items-center gap-1 truncate text-xs text-muted-foreground">
+              <Link to="/" className="hover:text-foreground">الرئيسية</Link><span>/</span>
+              <Link to="/workspace/$workspaceId" params={{ workspaceId }} className="truncate hover:text-foreground">{board.workspace_name}</Link><span>/</span>
+              <Link to="/workspace/$workspaceId/project/$projectId" params={{ workspaceId, projectId }} className="truncate hover:text-foreground">{board.project_name}</Link>
+              <span className="hidden sm:inline">· {BOARD_TYPE_LABELS[board.board_type]}</span>
+            </nav>
+          )}
         </div>
         <span className="ms-3 hidden rounded-full bg-success/15 px-2.5 py-0.5 text-xs text-success sm:inline">تم الحفظ</span>
         <div className="ms-auto flex items-center">
