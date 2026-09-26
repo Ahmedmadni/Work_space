@@ -64,8 +64,11 @@ export async function archiveProject(id: string): Promise<void> {
   writeDb((db) => {
     const project = db.projects.find((p) => p.id === id);
     if (project) {
-      project.archived_at = nowIso();
-      project.status = "archived";
+      if (!project.archived_at) {
+        if (project.status !== "archived") project.previous_status = project.status;
+        project.archived_at = nowIso();
+        project.status = "archived";
+      }
     }
   });
   await delay(null, 120);
@@ -76,7 +79,8 @@ export async function restoreProject(id: string): Promise<void> {
     const project = db.projects.find((p) => p.id === id);
     if (project) {
       project.archived_at = null;
-      project.status = "planning";
+      project.status = project.previous_status ?? "planning";
+      project.previous_status = null;
     }
   });
   await delay(null, 120);

@@ -48,6 +48,8 @@ export interface Project {
   name: string;
   description: string | null;
   status: ProjectStatus;
+  /** الحالة قبل الأرشفة، تُستعاد عند الاستعادة */
+  previous_status?: Exclude<ProjectStatus, "archived"> | null | undefined;
   icon: string;
   color: AccentColor;
   created_by: string;
