@@ -14,6 +14,7 @@ import type {
   CanvasNodeExecutionUpdate,
   CanvasNodeStatus,
   CanvasPriority,
+  ProjectExecutionSummary,
 } from "@/types";
 
 export function useCanvasNodeWatchers(
@@ -100,6 +101,29 @@ export function useSetCanvasNodeAssignee(
               }
             : current,
       );
+      queryClient.setQueriesData<ProjectExecutionSummary>(
+        { queryKey: ["project-execution-summary"] },
+        (current) =>
+          current
+            ? {
+                ...current,
+                items: current.items.map((item) =>
+                  item.board_id === boardId && item.node.id === nodeId
+                    ? {
+                        ...item,
+                        node: {
+                          ...item.node,
+                          assignee_user_id: assignment.assignee_user_id,
+                          assignee_name: assignment.assignee_name,
+                          owner: assignment.assignee_name,
+                        },
+                        is_unassigned: !assignment.assignee_user_id,
+                      }
+                    : item,
+                ),
+              }
+            : current,
+      );
       void queryClient.invalidateQueries({
         queryKey: ["project-execution-summary"],
       });
@@ -169,6 +193,30 @@ export function useUpdateCanvasNodeExecution(
             : current,
       );
 
+      queryClient.setQueriesData<ProjectExecutionSummary>(
+        { queryKey: ["project-execution-summary"] },
+        (current) =>
+          current
+            ? {
+                ...current,
+                items: current.items.map((item) =>
+                  item.board_id === boardId && item.node.id === nodeId
+                    ? {
+                        ...item,
+                        node: {
+                          ...item.node,
+                          version: update.version,
+                          status: update.status,
+                          priority: update.priority,
+                          progress: update.progress,
+                          updated_at: update.updated_at,
+                        },
+                      }
+                    : item,
+                ),
+              }
+            : current,
+      );
       void queryClient.invalidateQueries({
         queryKey: ["project-execution-summary"],
       });
