@@ -110,6 +110,12 @@ export function NotificationCenterButton() {
     setOpen(false);
 
     if (notification.board_id) {
+      const nodeId =
+        notification.metadata.target_type === "node" &&
+        typeof notification.metadata.target_id === "string"
+          ? notification.metadata.target_id
+          : undefined;
+
       void navigate({
         to: "/project/$projectId/board/$boardId",
         params: {
@@ -117,6 +123,7 @@ export function NotificationCenterButton() {
           boardId: notification.board_id,
         },
         search: {
+          node: nodeId,
           doc: notification.document_id ?? undefined,
           page: notification.page_number ?? undefined,
           comment: notification.comment_id ?? undefined,
