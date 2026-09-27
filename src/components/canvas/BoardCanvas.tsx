@@ -1321,6 +1321,53 @@ function CanvasEdges({
   );
 }
 
+
+function CanvasImage({ assetId, alt }: { assetId: string; alt: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    let objectUrl: string | null = null;
+
+    void getCanvasAsset(assetId)
+      .then((asset) => {
+        if (!active || !asset) {
+          if (active) setFailed(true);
+          return;
+        }
+        objectUrl = URL.createObjectURL(asset.blob);
+        if (active) setUrl(objectUrl);
+      })
+      .catch(() => {
+        if (active) setFailed(true);
+      });
+
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [assetId]);
+
+  if (failed) {
+    return (
+      <div className="flex h-full w-full items-center justify-center p-4 text-center text-xs text-muted-foreground">
+        تعذر تحميل الصورة
+      </div>
+    );
+  }
+
+  if (!url) {
+    return (
+      <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
+        جارٍ تحميل الصورة…
+      </div>
+    );
+  }
+
+  return <img src={url} alt={alt} draggable={false} className="h-full w-full object-contain" />;
+}
+
 function CanvasNodeCard({
   node,
   selected,
@@ -1407,7 +1454,7 @@ function CanvasNodeCard({
       className={cn(
         "group select-none p-4 transition-shadow",
         !isText && !isShape && !isSticky && !isImage && "frost-strong rounded-2xl shadow-frost",
-        isImage && "rounded-2xl bg-muted shadow-frost",
+        isImage && "rounded-2xl bg-muted p-0 shadow-frost",
         isSticky && "rounded-xl shadow-frost",
         isShape && "flex flex-col justify-center",
         isText && "rounded-lg",
@@ -1415,7 +1462,7 @@ function CanvasNodeCard({
         connectorSource && "ring-2 ring-info",
       )}
     >
-      <span className={cn("mb-3 items-center gap-2 text-xs font-medium text-muted-foreground", isText ? "hidden" : "flex")}>
+      <span className={cn("mb-3 items-center gap-2 text-xs font-medium text-muted-foreground", isText || isImage ? "hidden" : "flex")}>
         {icon}
         {node.kind === "task"
           ? "مهمة"
@@ -1601,7 +1648,6 @@ function NodeInspector({
               ["text", "نص"],
               ["rectangle", "مستطيل"],
               ["ellipse", "بيضاوي"],
-              ["image", "صورة"],
             ] as const).map(([kind, label]) => (
               <button
                 key={kind}
@@ -1618,6 +1664,7 @@ function NodeInspector({
             ))}
           </div>
         </div>
+        {node.kind !== "image" && (
         <div className="space-y-3 rounded-2xl border border-border bg-muted/30 p-3">
           <div>
             <span className="mb-2 block text-xs text-muted-foreground">لون التعبئة</span>
@@ -1717,6 +1764,7 @@ function NodeInspector({
             </div>
           </div>
         </div>
+        )}
 
         <button
           onClick={onDuplicate}
