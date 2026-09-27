@@ -173,6 +173,7 @@ function formatLocalDate(value: string | null) {
     day: "numeric",
     month: "short",
     year: "numeric",
+    calendar: "gregory",
     timeZone: "UTC",
   }).format(new Date(Date.UTC(year!, month! - 1, day!)));
 }
@@ -1368,6 +1369,13 @@ function KanbanView({
                       </p>
                     )}
 
+                    {node.due_date && (
+                      <p className="mt-2 flex items-center gap-1 text-[10px] text-muted-foreground">
+                        <CalendarRange className="h-3 w-3" />
+                        الاستحقاق {formatLocalDate(node.due_date)}
+                      </p>
+                    )}
+
                     <div className="mt-3">
                       <div className="mb-1 flex items-center justify-between text-[10px] text-muted-foreground">
                         <span>الإنجاز</span>
@@ -1496,6 +1504,12 @@ function OutlineView({
                       {node.description}
                     </p>
                   )}
+                  {node.due_date && (
+                    <p className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
+                      <CalendarRange className="h-3 w-3" />
+                      {formatLocalDate(node.due_date)}
+                    </p>
+                  )}
                 </div>
 
                 <select
@@ -1576,6 +1590,7 @@ function RoadmapView({
     );
   }
 
+  const sortedPoints = [...points].sort();
   const minDay = points.length ? Math.min(...points.map(localDateToDay)) : 0;
   const maxDay = points.length ? Math.max(...points.map(localDateToDay)) : minDay + 13;
   const totalDays = Math.max(14, maxDay - minDay + 1);
@@ -1592,8 +1607,8 @@ function RoadmapView({
             <div className="grid grid-cols-[240px_minmax(580px,1fr)] border-b border-border bg-muted/30">
               <div className="border-e border-border px-4 py-3 text-xs font-semibold">العنصر</div>
               <div className="flex items-center justify-between px-4 py-3 text-[10px] text-muted-foreground">
-                <span>{formatLocalDate(points.sort()[0] ?? null)}</span>
-                <span>{formatLocalDate(points.sort().at(-1) ?? null)}</span>
+                <span>{formatLocalDate(sortedPoints[0] ?? null)}</span>
+                <span>{formatLocalDate(sortedPoints.at(-1) ?? null)}</span>
               </div>
             </div>
 
