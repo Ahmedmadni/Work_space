@@ -17,6 +17,24 @@ export type AccentColor = "brand" | "amber" | "sky" | "rose" | "violet" | "lime"
 
 export type CanvasNodeKind = "idea" | "task" | "milestone" | "note";
 export type CanvasEdgeKind = "relationship" | "dependency";
+export type CanvasStrokeTool = "pen" | "highlighter";
+
+export interface CanvasPoint {
+  x: number;
+  y: number;
+  /** Pointer Events pressure: 0..1. Mouse input falls back to 0.5. */
+  pressure: number;
+}
+
+export interface CanvasStroke {
+  id: string;
+  board_id: string;
+  tool: CanvasStrokeTool;
+  points: CanvasPoint[];
+  size: number;
+  created_at: string;
+  updated_at: string;
+}
 
 export interface Profile {
   id: string;
@@ -114,6 +132,7 @@ export interface BoardCanvasSnapshot {
   board_id: string;
   nodes: CanvasNode[];
   edges: CanvasEdge[];
+  strokes: CanvasStroke[];
   viewport: CanvasViewport;
   updated_at: string | null;
 }
