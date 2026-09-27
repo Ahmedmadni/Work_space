@@ -10,9 +10,11 @@ import {
 import {
   CheckCircle2,
   Circle,
+  Columns3,
   Copy,
   Hand,
   Link2,
+  ListTree,
   Maximize,
   Milestone,
   MousePointer2,
@@ -48,6 +50,8 @@ import type {
   CanvasStroke,
   CanvasViewport,
 } from "@/types";
+
+type ViewMode = "canvas" | "kanban" | "outline";
 
 type Tool =
   | "select"
@@ -169,6 +173,8 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
   const saveCanvas = useSaveBoardCanvas(boardId);
 
   const [snapshot, setSnapshot] = useState<BoardCanvasSnapshot | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>("canvas");
+  const [focusNodeId, setFocusNodeId] = useState<string | null>(null);
   const [tool, setTool] = useState<Tool>("select");
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
@@ -217,6 +223,30 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
       if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
     };
   }, [snapshot, boardId]);
+
+
+  useEffect(() => {
+    if (viewMode !== "canvas" || !focusNodeId || !snapshot || !canvasRef.current) return;
+    const node = snapshot.nodes.find((item) => item.id === focusNodeId);
+    if (!node) {
+      setFocusNodeId(null);
+      return;
+    }
+    const rect = canvasRef.current.getBoundingClientRect();
+    setSnapshot((current) =>
+      current
+        ? {
+            ...current,
+            viewport: {
+              ...current.viewport,
+              x: rect.width / 2 - (node.x + node.width / 2) * current.viewport.zoom,
+              y: rect.height / 2 - (node.y + node.height / 2) * current.viewport.zoom,
+            },
+          }
+        : current,
+    );
+    setFocusNodeId(null);
+  }, [viewMode, focusNodeId, snapshot?.nodes]);
 
   const selectedNodes = useMemo(
     () => snapshot?.nodes.filter((node) => selectedNodeIds.includes(node.id)) ?? [],
@@ -688,6 +718,9 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
 
   return (
     <div className="relative flex flex-1 overflow-hidden">
+      <ViewSwitcher value={viewMode} onChange={setViewMode} />
+
+      {viewMode === "canvas" && (
       <CanvasToolbar
         tool={tool}
         snapToGrid={snapToGrid}
@@ -701,8 +734,9 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
         }}
         onToggleSnap={() => setSnapToGrid((value) => !value)}
       />
+      )}
 
-      {(tool === "pen" || tool === "highlighter") && (
+      {viewMode === "canvas" && (tool === "pen" || tool === "highlighter") && (
         <DrawingControls
           tool={tool}
           size={tool === "highlighter" ? highlighterSize : penSize}
@@ -728,6 +762,7 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
         }}
       />
 
+      {viewMode === "canvas" ? (
       <div
         ref={canvasRef}
         className={cn(
@@ -1045,8 +1080,45 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
           onRedo={redo}
         />
       </div>
+      ) : viewMode === "kanban" ? (
+        <KanbanView
+          snapshot={snapshot}
+          onOpen={(nodeId) => {
+            setSelectedNodeIds([nodeId]);
+            setSelectedEdgeId(null);
+            setFocusNodeId(nodeId);
+            setViewMode("canvas");
+          }}
+          onStatusChange={(nodeId, status) => {
+            const node = snapshot.nodes.find((item) => item.id === nodeId);
+            if (!node || node.status === status) return;
+            updateNode(nodeId, {
+              status,
+              progress: status === "done" ? 100 : node.progress === 100 ? 0 : node.progress,
+            });
+          }}
+        />
+      ) : (
+        <OutlineView
+          snapshot={snapshot}
+          onOpen={(nodeId) => {
+            setSelectedNodeIds([nodeId]);
+            setSelectedEdgeId(null);
+            setFocusNodeId(nodeId);
+            setViewMode("canvas");
+          }}
+          onStatusChange={(nodeId, status) => {
+            const node = snapshot.nodes.find((item) => item.id === nodeId);
+            if (!node || node.status === status) return;
+            updateNode(nodeId, {
+              status,
+              progress: status === "done" ? 100 : node.progress === 100 ? 0 : node.progress,
+            });
+          }}
+        />
+      )}
 
-      {(selectedNodeIds.length > 0 || selectedEdgeId) && (
+      {viewMode === "canvas" && (selectedNodeIds.length > 0 || selectedEdgeId) && (
         <div className="frost-strong absolute end-3 top-3 z-30 flex items-center gap-1 rounded-xl p-1 lg:hidden">
           {selectedNodeIds.length > 0 && (
             <button
@@ -1069,6 +1141,7 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
         </div>
       )}
 
+      {viewMode === "canvas" && (
       <CanvasInspector
         selectedNode={selectedNode}
         selectedNodesCount={selectedNodes.length}
@@ -1080,8 +1153,9 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
         onDelete={deleteSelection}
         onDuplicate={duplicateSelection}
       />
+      )}
 
-      {contextMenu && (
+      {viewMode === "canvas" && contextMenu && (
         <CanvasContextMenu
           state={contextMenu}
           hasSelection={selectedNodeIds.length > 0 || !!selectedEdgeId}
@@ -1106,6 +1180,339 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
           }}
         />
       )}
+    </div>
+  );
+}
+
+
+function ViewSwitcher({
+  value,
+  onChange,
+}: {
+  value: ViewMode;
+  onChange: (mode: ViewMode) => void;
+}) {
+  const options: Array<{
+    value: ViewMode;
+    label: string;
+    icon: typeof MousePointer2;
+  }> = [
+    { value: "canvas", label: "اللوحة", icon: MousePointer2 },
+    { value: "kanban", label: "كانبان", icon: Columns3 },
+    { value: "outline", label: "المخطط", icon: ListTree },
+  ];
+
+  return (
+    <div
+      className="frost-strong absolute left-1/2 top-3 z-40 flex -translate-x-1/2 items-center gap-1 rounded-xl p-1 shadow-frost"
+      role="tablist"
+      aria-label="طريقة عرض اللوحة"
+    >
+      {options.map(({ value: mode, label, icon: Icon }) => (
+        <button
+          key={mode}
+          type="button"
+          role="tab"
+          aria-selected={value === mode}
+          onClick={() => onChange(mode)}
+          className={cn(
+            "flex h-9 items-center gap-2 rounded-lg px-2.5 text-xs font-medium transition sm:px-3",
+            value === mode
+              ? "bg-brand text-primary-foreground"
+              : "text-muted-foreground hover:bg-muted hover:text-foreground",
+          )}
+        >
+          <Icon className="h-4 w-4" />
+          <span className="hidden sm:inline">{label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function semanticKindLabel(node: CanvasNode) {
+  if (node.kind === "task") return "مهمة";
+  if (node.kind === "milestone") return "معلم";
+  if (node.kind === "sticky" || node.kind === "note") return "ملاحظة";
+  return "فكرة";
+}
+
+function KanbanView({
+  snapshot,
+  onOpen,
+  onStatusChange,
+}: {
+  snapshot: BoardCanvasSnapshot;
+  onOpen: (nodeId: string) => void;
+  onStatusChange: (nodeId: string, status: CanvasNodeStatus) => void;
+}) {
+  const nodes = snapshot.nodes.filter(isSemanticNode);
+
+  if (!nodes.length) {
+    return (
+      <div className="flex flex-1 items-center justify-center px-6 pt-16">
+        <div className="max-w-md rounded-2xl border border-dashed border-border bg-card p-8 text-center">
+          <Columns3 className="mx-auto h-8 w-8 text-brand" />
+          <h3 className="mt-3 font-semibold">لا توجد عناصر تنفيذية بعد</h3>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            أضف فكرة أو مهمة أو معلمًا من اللوحة، وستظهر هنا تلقائيًا حسب حالتها.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-1 flex-col overflow-hidden bg-background pt-16">
+      <div className="px-4 pb-3 text-xs text-muted-foreground sm:px-6">
+        يعرض كانبان العناصر التنفيذية فقط؛ النصوص والأشكال والصور والرسم الحر تبقى في عرض اللوحة.
+      </div>
+      <div className="flex flex-1 gap-3 overflow-x-auto px-4 pb-5 sm:px-6">
+        {NODE_STATUS_OPTIONS.map((status) => {
+          const columnNodes = nodes.filter((node) => node.status === status.value);
+          return (
+            <section
+              key={status.value}
+              className="flex w-[280px] min-w-[280px] flex-col rounded-2xl border border-border bg-card/60"
+              onDragOver={(event) => {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                const nodeId =
+                  event.dataTransfer.getData("application/x-projectflow-node") ||
+                  event.dataTransfer.getData("text/plain");
+                if (nodeId) onStatusChange(nodeId, status.value);
+              }}
+            >
+              <header className="flex items-center justify-between border-b border-border px-3 py-3">
+                <div className="flex items-center gap-2">
+                  <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", statusClass(status.value))}>
+                    {status.label}
+                  </span>
+                  <span className="text-xs text-muted-foreground">{columnNodes.length}</span>
+                </div>
+              </header>
+
+              <div className="flex-1 space-y-2 overflow-y-auto p-2.5">
+                {columnNodes.map((node) => (
+                  <article
+                    key={node.id}
+                    draggable
+                    onDragStart={(event) => {
+                      const target = event.target as HTMLElement;
+                      if (target.closest("select, button")) {
+                        event.preventDefault();
+                        return;
+                      }
+                      event.dataTransfer.effectAllowed = "move";
+                      event.dataTransfer.setData("application/x-projectflow-node", node.id);
+                      event.dataTransfer.setData("text/plain", node.id);
+                    }}
+                    className="rounded-xl border border-border bg-card p-3 shadow-[var(--shadow-frost)]"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-medium text-muted-foreground">
+                          {semanticKindLabel(node)}
+                        </p>
+                        <h4 className="mt-1 line-clamp-2 text-sm font-semibold text-foreground">
+                          {node.title}
+                        </h4>
+                      </div>
+                      {node.priority && (
+                        <span
+                          className={cn(
+                            "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium",
+                            priorityClass(node.priority),
+                          )}
+                        >
+                          {PRIORITY_OPTIONS.find((item) => item.value === node.priority)?.label}
+                        </span>
+                      )}
+                    </div>
+
+                    {node.description && (
+                      <p className="mt-2 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                        {node.description}
+                      </p>
+                    )}
+
+                    <div className="mt-3">
+                      <div className="mb-1 flex items-center justify-between text-[10px] text-muted-foreground">
+                        <span>الإنجاز</span>
+                        <span>{Math.round(node.progress)}%</span>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-brand transition-[width]"
+                          style={{ width: `${Math.max(0, Math.min(100, node.progress))}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex items-center gap-2">
+                      <select
+                        value={node.status}
+                        onChange={(event) =>
+                          onStatusChange(node.id, event.target.value as CanvasNodeStatus)
+                        }
+                        className="min-w-0 flex-1 rounded-lg border border-border bg-background px-2 py-1.5 text-xs"
+                        aria-label={`تغيير حالة ${node.title}`}
+                      >
+                        {NODE_STATUS_OPTIONS.map((item) => (
+                          <option key={item.value} value={item.value}>
+                            {item.label}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => onOpen(node.id)}
+                        className="rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
+                      >
+                        فتح
+                      </button>
+                    </div>
+                  </article>
+                ))}
+
+                {!columnNodes.length && (
+                  <div className="rounded-xl border border-dashed border-border px-3 py-8 text-center text-xs text-muted-foreground">
+                    اسحب عنصرًا إلى هنا
+                  </div>
+                )}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function OutlineView({
+  snapshot,
+  onOpen,
+  onStatusChange,
+}: {
+  snapshot: BoardCanvasSnapshot;
+  onOpen: (nodeId: string) => void;
+  onStatusChange: (nodeId: string, status: CanvasNodeStatus) => void;
+}) {
+  const order = new Map(
+    NODE_STATUS_OPTIONS.map((item, index) => [item.value, index] as const),
+  );
+  const nodes = snapshot.nodes
+    .filter(isSemanticNode)
+    .slice()
+    .sort((a, b) => {
+      const statusDiff = (order.get(a.status) ?? 0) - (order.get(b.status) ?? 0);
+      if (statusDiff !== 0) return statusDiff;
+      return a.title.localeCompare(b.title, "ar");
+    });
+
+  return (
+    <div className="flex flex-1 overflow-y-auto bg-background px-4 pb-8 pt-16 sm:px-6">
+      <div className="mx-auto w-full max-w-5xl">
+        <div className="mb-4 rounded-2xl border border-border bg-card/70 p-4">
+          <div className="flex items-center gap-2">
+            <ListTree className="h-5 w-5 text-brand" />
+            <div>
+              <h3 className="font-semibold">المخطط التنفيذي</h3>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                نفس عناصر اللوحة مرتبة حسب الحالة؛ أي تعديل هنا يُحفظ على العنصر نفسه.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {!nodes.length ? (
+          <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center">
+            <p className="font-medium">لا توجد عناصر تنفيذية بعد.</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              أضف فكرة أو مهمة أو معلمًا من عرض اللوحة.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-2xl border border-border bg-card">
+            {nodes.map((node, index) => (
+              <div
+                key={node.id}
+                className={cn(
+                  "grid gap-3 px-4 py-4 md:grid-cols-[minmax(0,1fr)_140px_110px_130px_auto] md:items-center",
+                  index > 0 && "border-t border-border",
+                )}
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[10px] font-medium text-muted-foreground">
+                      {semanticKindLabel(node)}
+                    </span>
+                    {node.priority && (
+                      <span
+                        className={cn(
+                          "rounded-full px-2 py-0.5 text-[10px] font-medium",
+                          priorityClass(node.priority),
+                        )}
+                      >
+                        {PRIORITY_OPTIONS.find((item) => item.value === node.priority)?.label}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 truncate text-sm font-semibold">{node.title}</p>
+                  {node.description && (
+                    <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
+                      {node.description}
+                    </p>
+                  )}
+                </div>
+
+                <select
+                  value={node.status}
+                  onChange={(event) =>
+                    onStatusChange(node.id, event.target.value as CanvasNodeStatus)
+                  }
+                  className="rounded-lg border border-border bg-background px-2 py-2 text-xs"
+                  aria-label={`تغيير حالة ${node.title}`}
+                >
+                  {NODE_STATUS_OPTIONS.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+
+                <span className={cn("w-fit rounded-full px-2 py-1 text-xs font-medium", statusClass(node.status))}>
+                  {NODE_STATUS_OPTIONS.find((item) => item.value === node.status)?.label}
+                </span>
+
+                <div>
+                  <div className="mb-1 flex justify-between text-[10px] text-muted-foreground">
+                    <span>الإنجاز</span>
+                    <span>{Math.round(node.progress)}%</span>
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-brand"
+                      style={{ width: `${Math.max(0, Math.min(100, node.progress))}%` }}
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => onOpen(node.id)}
+                  className="rounded-lg border border-border px-3 py-2 text-xs font-medium hover:bg-muted"
+                >
+                  فتح في اللوحة
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1745,7 +2152,12 @@ function NodeInspector({
                     onClick={() =>
                       onChange({
                         status: item.value,
-                        ...(item.value === "done" ? { progress: 100 } : {}),
+                        progress:
+                          item.value === "done"
+                            ? 100
+                            : node.progress === 100
+                              ? 0
+                              : node.progress,
                       })
                     }
                     className={cn(
@@ -1809,7 +2221,12 @@ function NodeInspector({
                   const progress = Number(event.target.value);
                   onChange({
                     progress,
-                    ...(progress === 100 ? { status: "done" as const } : {}),
+                    status:
+                      progress === 100
+                        ? "done"
+                        : node.status === "done"
+                          ? "in_progress"
+                          : node.status,
                   });
                 }}
                 className="w-full accent-[var(--brand)]"
