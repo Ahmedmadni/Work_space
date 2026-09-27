@@ -1,5 +1,6 @@
 import { isSupabaseBackend } from "@/lib/backend-config";
 import { supabaseRest } from "@/services/supabase-rest";
+import { refreshTaskDueNotifications } from "@/services/task-execution.service";
 import type {
   NotificationFilter,
   NotificationKind,
@@ -11,7 +12,10 @@ function normalizeKind(value: unknown): NotificationKind {
     value === "reply" ||
     value === "project_added" ||
     value === "role_changed" ||
-    value === "project_removed"
+    value === "project_removed" ||
+    value === "task_assigned" ||
+    value === "task_status" ||
+    value === "task_due"
     ? value
     : "mention";
 }
@@ -62,6 +66,11 @@ export async function listUserNotifications(
   limit = 60,
 ): Promise<UserNotification[]> {
   if (!isSupabaseBackend()) return [];
+  await refreshTaskDueNotifications().catch((error) => {
+    if (import.meta.env.DEV) {
+      console.warn("[notifications] تعذر تحديث تنبيهات الاستحقاق.", error);
+    }
+  });
   const rows = await supabaseRest<Record<string, unknown>[]>(
     "rpc/list_user_notifications",
     {
