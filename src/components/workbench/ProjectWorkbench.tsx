@@ -76,7 +76,11 @@ export function ProjectWorkbench({
   initialFocusNodeId?: string;
   canEdit?: boolean;
   onContextChange?: (
-    context: { type: "board" | "document"; id: string },
+    context: {
+      type: "board" | "document";
+      id: string;
+      pageNumber?: number;
+    },
   ) => void;
 }) {
   const documentsQuery = useProjectDocuments(projectId);
@@ -88,6 +92,7 @@ export function ProjectWorkbench({
     initial.openDocumentIds,
   );
   const [activeTab, setActiveTab] = useState(initial.activeTab);
+  const [activeDocumentPage, setActiveDocumentPage] = useState(1);
   const documents = documentsQuery.data ?? [];
 
   useEffect(() => {
@@ -160,10 +165,19 @@ export function ProjectWorkbench({
   useEffect(() => {
     onContextChange?.(
       activeDocument
-        ? { type: "document", id: activeDocument.id }
+        ? {
+            type: "document",
+            id: activeDocument.id,
+            pageNumber: activeDocumentPage,
+          }
         : { type: "board", id: boardId },
     );
-  }, [activeDocument, boardId, onContextChange]);
+  }, [
+    activeDocument,
+    activeDocumentPage,
+    boardId,
+    onContextChange,
+  ]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -359,6 +373,7 @@ export function ProjectWorkbench({
               projectId={projectId}
               document={activeDocument}
               readOnly={!canEdit}
+              onPageChange={setActiveDocumentPage}
             />
           </div>
         )}
