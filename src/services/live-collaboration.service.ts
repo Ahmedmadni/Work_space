@@ -219,6 +219,7 @@ export async function createProjectComment(
         p_page_number: input.pageNumber ?? null,
         p_parent_comment_id: input.parentCommentId ?? null,
         p_mention_user_ids: input.mentionUserIds ?? [],
+        p_origin_board_id: input.originBoardId ?? input.boardId ?? null,
       },
     });
   }
