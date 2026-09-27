@@ -2998,7 +2998,7 @@ function CanvasNodeCard({
           }
           aria-label="فتح مراجعات العنصر"
           className={cn(
-            "absolute -start-2.5 -top-2.5 z-20 inline-flex min-h-7 min-w-7 items-center justify-center gap-1 rounded-full border-2 border-background px-1.5 text-[9px] font-bold shadow-sm",
+            "pointer-events-auto absolute start-1 top-1 z-20 inline-flex min-h-7 min-w-7 items-center justify-center gap-1 rounded-full border border-background/70 px-1.5 text-[9px] font-bold shadow-sm",
             reviewOpenCount > 0
               ? "bg-brand text-primary-foreground"
               : "bg-muted text-muted-foreground",
