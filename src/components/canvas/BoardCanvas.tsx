@@ -258,7 +258,13 @@ const DRAWING_COLORS: Array<{ value: CanvasColor; label: string }> = [
   { value: "success", label: "أخضر" },
 ];
 
-export function BoardCanvas({ boardId }: { boardId: string }) {
+export function BoardCanvas({
+  boardId,
+  initialFocusNodeId,
+}: {
+  boardId: string;
+  initialFocusNodeId?: string;
+}) {
   const { data: loadedCanvas, isLoading } = useBoardCanvas(boardId);
   const saveCanvas = useSaveBoardCanvas(boardId);
 
@@ -297,12 +303,15 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
     if (!loadedCanvas || initializedBoard.current === boardId) return;
     initializedBoard.current = boardId;
     setSnapshot(cloneSnapshot(loadedCanvas));
-    setSelectedNodeIds([]);
+    const initialNodeExists =
+      !!initialFocusNodeId && loadedCanvas.nodes.some((node) => node.id === initialFocusNodeId);
+    setSelectedNodeIds(initialNodeExists ? [initialFocusNodeId!] : []);
     setSelectedEdgeId(null);
+    if (initialNodeExists) setFocusNodeId(initialFocusNodeId!);
     past.current = [];
     future.current = [];
     setHistoryVersion((v) => v + 1);
-  }, [loadedCanvas, boardId]);
+  }, [loadedCanvas, boardId, initialFocusNodeId]);
 
   useEffect(() => {
     if (!snapshot || initializedBoard.current !== boardId) return;
