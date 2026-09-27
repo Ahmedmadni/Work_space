@@ -453,6 +453,20 @@ export function BoardCanvas({
   const updateEdge = useCallback(
     (edgeId: string, patch: Partial<CanvasEdge>) => {
       if (!snapshot) return;
+      const currentEdge = snapshot.edges.find((edge) => edge.id === edgeId);
+      if (!currentEdge) return;
+      if (
+        patch.kind === "dependency" &&
+        currentEdge.kind !== "dependency" &&
+        wouldCreateDependencyCycle(
+          snapshot,
+          currentEdge.source_node_id,
+          currentEdge.target_node_id,
+        )
+      ) {
+        toast.error("لا يمكن تحويل هذا الرابط إلى اعتماد لأنه سيُنشئ دورة اعتماد مغلقة.");
+        return;
+      }
       const now = new Date().toISOString();
       commit({
         ...snapshot,
