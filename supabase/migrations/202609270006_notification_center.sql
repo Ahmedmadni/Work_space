@@ -107,6 +107,8 @@ revoke all on function public.enqueue_user_notification(
 
 -- Only triggers/functions in this migration call enqueue_user_notification.
 
+-- Trigger helpers are never client-callable entry points.
+
 create or replace function public.notify_project_member_change()
 returns trigger
 language plpgsql
@@ -231,6 +233,23 @@ begin
   where id = new.parent_comment_id;
 
   if v_parent_author is null or v_parent_author = new.created_by then
+    return new;
+  end if;
+
+  if not exists (
+    select 1
+    from public.projects p
+    where p.id = new.project_id
+      and (
+        p.created_by = v_parent_author
+        or exists (
+          select 1
+          from public.project_members pm
+          where pm.project_id = new.project_id
+            and pm.user_id = v_parent_author
+        )
+      )
+  ) then
     return new;
   end if;
 
@@ -599,4 +618,8 @@ revoke all on function public.mark_all_notifications_read() from public;
 grant execute on function public.list_user_notifications(text, integer) to authenticated;
 grant execute on function public.count_unread_notifications() to authenticated;
 grant execute on function public.mark_notification_read(uuid) to authenticated;
+revoke all on function public.notify_project_member_change() from public;
+revoke all on function public.notify_comment_reply() from public;
+revoke all on function public.notify_comment_mention() from public;
+
 grant execute on function public.mark_all_notifications_read() to authenticated;
