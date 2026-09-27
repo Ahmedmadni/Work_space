@@ -1,4 +1,5 @@
 import { isSupabaseBackend } from "@/lib/backend-config";
+import { deleteLocalDocumentAnnotations } from "@/services/document-annotations.service";
 import { CURRENT_USER } from "@/services/local-db";
 import {
   MAX_PROJECT_DOCUMENT_BYTES,
@@ -185,6 +186,7 @@ async function deleteLocalProjectDocument(id: string) {
   } finally {
     db.close();
   }
+  deleteLocalDocumentAnnotations(id);
 }
 
 export async function listProjectDocuments(
