@@ -258,3 +258,12 @@ export function createRectangleAnnotation(
     updated_at: now,
   };
 }
+
+
+export function deleteLocalDocumentAnnotations(documentId: string): void {
+  if (typeof window === "undefined") return;
+  const store = readStore();
+  if (!(documentId in store.documents)) return;
+  delete store.documents[documentId];
+  writeStore(store);
+}
