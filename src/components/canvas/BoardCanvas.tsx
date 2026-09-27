@@ -326,7 +326,7 @@ export function BoardCanvas({
     return () => {
       if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
     };
-  }, [snapshot, boardId]);
+  }, [snapshot, boardId, saveCanvas]);
 
 
   useEffect(() => {
@@ -350,7 +350,7 @@ export function BoardCanvas({
         : current,
     );
     setFocusNodeId(null);
-  }, [viewMode, focusNodeId, snapshot?.nodes]);
+  }, [viewMode, focusNodeId, snapshot]);
 
 
   const boardOwners = useMemo(
@@ -777,7 +777,7 @@ export function BoardCanvas({
 
       try {
         const asset = await saveCanvasImage(boardId, file);
-        let width = 320;
+        const width = 320;
         let height = 220;
 
         if (typeof createImageBitmap === "function") {
@@ -836,7 +836,8 @@ export function BoardCanvas({
 
       if (mod && key === "z") {
         event.preventDefault();
-        event.shiftKey ? redo() : undo();
+        if (event.shiftKey) redo();
+        else undo();
         return;
       }
       if (mod && key === "y") {
