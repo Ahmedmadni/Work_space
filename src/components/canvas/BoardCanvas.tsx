@@ -16,6 +16,9 @@ import {
   Maximize,
   Milestone,
   MousePointer2,
+  Pencil,
+  Highlighter,
+  Eraser,
   Plus,
   Redo2,
   Scissors,
@@ -29,9 +32,9 @@ import {
 import { useBoardCanvas, useSaveBoardCanvas } from "@/hooks/use-canvas";
 import { createCanvasEdge, createCanvasNode } from "@/services/canvas.service";
 import { cn } from "@/lib/utils";
-import type { BoardCanvasSnapshot, CanvasEdge, CanvasNode, CanvasViewport } from "@/types";
+import type { BoardCanvasSnapshot, CanvasEdge, CanvasNode, CanvasStroke, CanvasViewport } from "@/types";
 
-type Tool = "select" | "hand" | "node" | "connector";
+type Tool = "select" | "hand" | "node" | "connector" | "pen" | "highlighter" | "eraser";
 
 type DragState =
   | {
@@ -96,6 +99,7 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
 
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const drag = useRef<DragState>(null);
+  const drawing = useRef<{ strokeId: string; before: BoardCanvasSnapshot } | null>(null);
   const initializedBoard = useRef<string | null>(null);
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const past = useRef<BoardCanvasSnapshot[]>([]);
@@ -248,6 +252,7 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
           board_id: boardId,
           nodes: [node],
           edges: [],
+          strokes: [],
           viewport: snapshot.viewport,
           updated_at: null,
         }).nodes[0]!),
@@ -489,6 +494,9 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
       if (key === "h") setTool("hand");
       if (key === "n") setTool("node");
       if (key === "l") setTool("connector");
+      if (key === "p") setTool("pen");
+      if (key === "b") setTool("highlighter");
+      if (key === "e") setTool("eraser");
       if (key === "g") setSnapToGrid((v) => !v);
       if (key === "0") fitView();
       if (key === "=" || key === "+") setZoom((snapshot?.viewport.zoom ?? 1) * 1.1);
@@ -536,7 +544,7 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
           "canvas-grid relative flex flex-1 overflow-hidden touch-none",
           tool === "hand"
             ? "cursor-grab active:cursor-grabbing"
-            : tool === "node"
+            : tool === "node" || tool === "pen" || tool === "highlighter" || tool === "eraser"
               ? "cursor-crosshair"
               : "cursor-default",
         )}
@@ -567,6 +575,27 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
         }}
         onPointerDown={(event) => {
           setContextMenu(null);
+          if ((tool === "pen" || tool === "highlighter") && event.target === event.currentTarget) {
+            const world = screenToWorld(event.clientX, event.clientY);
+            if (!world) return;
+            event.currentTarget.setPointerCapture(event.pointerId);
+            const now = new Date().toISOString();
+            const pressure = event.pointerType === "mouse" ? 0.5 : Math.max(0.05, event.pressure || 0.5);
+            const stroke: CanvasStroke = {
+              id: `stroke-${crypto.randomUUID()}`,
+              board_id: boardId,
+              tool,
+              points: [{ x: world.x, y: world.y, pressure }],
+              size: tool === "highlighter" ? 18 : 3,
+              created_at: now,
+              updated_at: now,
+            };
+            drawing.current = { strokeId: stroke.id, before: cloneSnapshot(snapshot) };
+            setSnapshot({ ...snapshot, strokes: [...snapshot.strokes, stroke] });
+            setSelectedNodeIds([]);
+            setSelectedEdgeId(null);
+            return;
+          }
           if (event.target !== event.currentTarget) return;
           if (tool === "node") {
             addNodeAtScreen(event.clientX, event.clientY);
@@ -588,6 +617,24 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
           }
         }}
         onPointerMove={(event) => {
+          if (drawing.current) {
+            const world = screenToWorld(event.clientX, event.clientY);
+            if (!world) return;
+            const pressure = event.pointerType === "mouse" ? 0.5 : Math.max(0.05, event.pressure || 0.5);
+            setSnapshot((current) => current ? {
+              ...current,
+              strokes: current.strokes.map((stroke) =>
+                stroke.id === drawing.current?.strokeId
+                  ? {
+                      ...stroke,
+                      points: [...stroke.points, { x: world.x, y: world.y, pressure }],
+                      updated_at: new Date().toISOString(),
+                    }
+                  : stroke,
+              ),
+            } : current);
+            return;
+          }
           if (drag.current?.type !== "pan") return;
           const d = drag.current;
           setSnapshot({
@@ -600,6 +647,19 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
           });
         }}
         onPointerUp={() => {
+          if (drawing.current) {
+            past.current.push(drawing.current.before);
+            if (past.current.length > 80) past.current.shift();
+            future.current = [];
+            drawing.current = null;
+            setHistoryVersion((v) => v + 1);
+            setSnapshot((current) => (current ? { ...current } : current));
+            return;
+          }
+          if (drag.current?.type === "pan") drag.current = null;
+        }}
+        onPointerCancel={() => {
+          drawing.current = null;
           if (drag.current?.type === "pan") drag.current = null;
         }}
       >
@@ -610,6 +670,18 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
             transformOrigin: "0 0",
           }}
         >
+          <CanvasStrokes
+            strokes={snapshot.strokes}
+            erasing={tool === "eraser"}
+            onErase={(strokeId) => {
+              if (tool !== "eraser") return;
+              commit({
+                ...snapshot,
+                strokes: snapshot.strokes.filter((stroke) => stroke.id !== strokeId),
+              });
+            }}
+          />
+
           <CanvasEdges
             snapshot={snapshot}
             selectedEdgeId={selectedEdgeId}
@@ -745,7 +817,7 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
           ))}
         </div>
 
-        {!snapshot.nodes.length && (
+        {!snapshot.nodes.length && !snapshot.strokes.length && (
           <EmptyCanvas
             onAdd={() => {
               const rect = canvasRef.current?.getBoundingClientRect();
@@ -847,6 +919,9 @@ function CanvasToolbar({
     { id: "hand", label: "تحريك", icon: Hand, shortcut: "H" },
     { id: "node", label: "عقدة", icon: Circle, shortcut: "N" },
     { id: "connector", label: "موصل", icon: Link2, shortcut: "L" },
+    { id: "pen", label: "قلم", icon: Pencil, shortcut: "P" },
+    { id: "highlighter", label: "تمييز", icon: Highlighter, shortcut: "B" },
+    { id: "eraser", label: "ممحاة", icon: Eraser, shortcut: "E" },
   ];
   return (
     <div className="frost-strong absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 gap-1 rounded-2xl p-1.5 md:bottom-auto md:left-auto md:start-4 md:top-1/2 md:translate-x-0 md:-translate-y-1/2 md:flex-col">
@@ -881,6 +956,67 @@ function CanvasToolbar({
         G
       </button>
     </div>
+  );
+}
+
+function CanvasStrokes({
+  strokes,
+  erasing,
+  onErase,
+}: {
+  strokes: CanvasStroke[];
+  erasing: boolean;
+  onErase: (strokeId: string) => void;
+}) {
+  return (
+    <svg className="absolute left-0 top-0 overflow-visible">
+      {strokes.map((stroke) => {
+        if (stroke.points.length === 1) {
+          const point = stroke.points[0]!;
+          return (
+            <circle
+              key={stroke.id}
+              cx={point.x}
+              cy={point.y}
+              r={Math.max(1, stroke.size * point.pressure * 0.5)}
+              fill={stroke.tool === "highlighter" ? "var(--warning)" : "var(--ink)"}
+              opacity={stroke.tool === "highlighter" ? 0.32 : 0.9}
+              className={erasing ? "cursor-crosshair" : "pointer-events-none"}
+              onPointerDown={erasing ? (event) => {
+                event.stopPropagation();
+                onErase(stroke.id);
+              } : undefined}
+            />
+          );
+        }
+        return (
+          <g key={stroke.id}>
+            {stroke.points.slice(1).map((point, index) => {
+              const previous = stroke.points[index]!;
+              const pressure = (previous.pressure + point.pressure) / 2;
+              return (
+                <line
+                  key={index}
+                  x1={previous.x}
+                  y1={previous.y}
+                  x2={point.x}
+                  y2={point.y}
+                  stroke={stroke.tool === "highlighter" ? "var(--warning)" : "var(--ink)"}
+                  strokeWidth={stroke.size * (0.55 + pressure * 0.9)}
+                  strokeLinecap="round"
+                  opacity={stroke.tool === "highlighter" ? 0.3 : 0.92}
+                  className={erasing ? "cursor-crosshair" : "pointer-events-none"}
+                  onPointerDown={erasing ? (event) => {
+                    event.stopPropagation();
+                    onErase(stroke.id);
+                  } : undefined}
+                />
+              );
+            })}
+          </g>
+        );
+      })}
+    </svg>
   );
 }
 
@@ -1111,12 +1247,14 @@ function CanvasInspector({
           <div className="mt-6 space-y-2 text-sm text-muted-foreground">
             <p>العقد: {snapshot.nodes.length}</p>
             <p>الروابط: {snapshot.edges.length}</p>
+            <p>الرسم الحر: {snapshot.strokes.length}</p>
             <p>التكبير: {Math.round(snapshot.viewport.zoom * 100)}٪</p>
             <p>المحاذاة: {snapToGrid ? "مفعّلة" : "متوقفة"}</p>
           </div>
           <div className="mt-6 rounded-2xl bg-muted/60 p-3 text-xs leading-6 text-muted-foreground">
             <strong className="text-foreground">اختصارات:</strong><br />
             V تحديد · H تحريك · N عقدة · L ربط<br />
+            P قلم · B تمييز · E ممحاة<br />
             Ctrl/Cmd+C نسخ · Ctrl/Cmd+V لصق · Ctrl/Cmd+D تكرار<br />
             Delete حذف · G شبكة · 0 ملاءمة
           </div>
