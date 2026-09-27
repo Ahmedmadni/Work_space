@@ -1,5 +1,6 @@
 import { CURRENT_USER, delay, newId, nowIso, readDb, writeDb } from "./local-db";
 import { deleteBoardCanvas } from "./canvas.service";
+import { deleteBoardAssets } from "./canvas-assets.service";
 import type { Board, BoardWithContext, CreateBoardInput } from "@/types";
 
 function withContext(board: Board, db = readDb()): BoardWithContext {
@@ -115,6 +116,11 @@ export async function deleteBoard(id: string): Promise<void> {
     db.boards = db.boards.filter((b) => b.id !== id);
   });
   deleteBoardCanvas(id);
+  try {
+    await deleteBoardAssets(id);
+  } catch (error) {
+    if (import.meta.env.DEV) console.warn("[assets] تعذر تنظيف أصول اللوحة.", error);
+  }
   await delay(null, 120);
 }
 

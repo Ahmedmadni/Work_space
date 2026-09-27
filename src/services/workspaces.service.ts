@@ -1,5 +1,6 @@
 import { CURRENT_USER, delay, newId, nowIso, readDb, writeDb } from "./local-db";
 import { deleteManyBoardCanvases } from "./canvas.service";
+import { deleteManyBoardAssets } from "./canvas-assets.service";
 import type { CreateWorkspaceInput, Workspace, WorkspaceWithStats } from "@/types";
 
 function withStats(ws: Workspace, db = readDb()): WorkspaceWithStats {
@@ -93,6 +94,7 @@ export async function deleteWorkspace(id: string): Promise<void> {
     db.boards = db.boards.filter((b) => b.workspace_id !== id);
   });
   deleteManyBoardCanvases(boardIds);
+  await deleteManyBoardAssets(boardIds);
   await delay(null, 120);
 }
 

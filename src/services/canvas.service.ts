@@ -41,7 +41,8 @@ function normalizeNodeKind(value: unknown): CanvasNodeKind {
     value === "sticky" ||
     value === "text" ||
     value === "rectangle" ||
-    value === "ellipse"
+    value === "ellipse" ||
+    value === "image"
     ? value
     : "idea";
 }
@@ -53,7 +54,7 @@ function defaultNodeStyle(kind: CanvasNodeKind): CanvasNodeStyle {
   if (kind === "sticky" || kind === "note") {
     return { fill: "warning", stroke: "warning", font_size: 16, text_align: "start" };
   }
-  if (kind === "rectangle" || kind === "ellipse") {
+  if (kind === "rectangle" || kind === "ellipse" || kind === "image") {
     return { fill: "transparent", stroke: "brand", font_size: 16, text_align: "center" };
   }
   return { fill: "transparent", stroke: "brand", font_size: 16, text_align: "start" };
@@ -95,6 +96,7 @@ function normalizeNode(value: unknown, boardId: string): CanvasNode | null {
     height: Math.max(72, safeNumber(raw.height, 110)),
     title: typeof raw.title === "string" ? raw.title : "فكرة جديدة",
     description: typeof raw.description === "string" ? raw.description : null,
+    asset_id: typeof raw.asset_id === "string" ? raw.asset_id : null,
     style: normalizeNodeStyle(raw.style, kind),
     created_at: typeof raw.created_at === "string" ? raw.created_at : now,
     updated_at: typeof raw.updated_at === "string" ? raw.updated_at : now,
@@ -244,8 +246,10 @@ export function createCanvasNode(
         ? { width: 210, height: 170 }
         : kind === "text"
           ? { width: 260, height: 80 }
-          : kind === "rectangle" || kind === "ellipse"
-            ? { width: 220, height: 140 }
+          : kind === "image"
+            ? { width: 320, height: 220 }
+            : kind === "rectangle" || kind === "ellipse"
+              ? { width: 220, height: 140 }
             : { width: 220, height: 110 };
   const title =
     kind === "task"
@@ -256,11 +260,13 @@ export function createCanvasNode(
           ? "ملاحظة"
           : kind === "text"
             ? "اكتب نصًا"
-            : kind === "rectangle"
-              ? "مستطيل"
-              : kind === "ellipse"
-                ? "شكل بيضاوي"
-                : "فكرة جديدة";
+            : kind === "image"
+              ? "صورة"
+              : kind === "rectangle"
+                ? "مستطيل"
+                : kind === "ellipse"
+                  ? "شكل بيضاوي"
+                  : "فكرة جديدة";
   return {
     id: `node-${crypto.randomUUID()}`,
     board_id: boardId,
@@ -271,6 +277,7 @@ export function createCanvasNode(
     height: size.height,
     title,
     description: null,
+    asset_id: null,
     style: defaultNodeStyle(kind),
     created_at: now,
     updated_at: now,
