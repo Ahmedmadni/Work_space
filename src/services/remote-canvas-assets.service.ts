@@ -55,6 +55,28 @@ async function storageRequest(path: string, init: RequestInit): Promise<Response
   return response;
 }
 
+
+async function storageBatchDelete(paths: string[]): Promise<void> {
+  if (!paths.length) return;
+  const session = await requireRemoteSession();
+  const response = await fetch(
+    `${BACKEND_CONFIG.supabaseUrl}/storage/v1/object/${BUCKET}`,
+    {
+      method: "DELETE",
+      headers: {
+        apikey: BACKEND_CONFIG.supabaseAnonKey,
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ prefixes: paths }),
+    },
+  );
+  if (!response.ok) {
+    const details = await response.text().catch(() => "");
+    throw new Error(details || `STORAGE_BATCH_DELETE_HTTP_${response.status}`);
+  }
+}
+
 async function boardProjectId(boardId: string): Promise<string> {
   const rows = await supabaseRest<BoardProjectRow[]>("boards", {
     query: { select: "id,project_id", id: `eq.${boardId}`, limit: 1 },
@@ -165,18 +187,9 @@ export async function remoteDeleteBoardAssets(boardId: string): Promise<void> {
     query: { select: "*", board_id: `eq.${boardId}` },
   });
 
-  for (const row of rows) {
-    try {
-      await storageRequest(row.object_path, { method: "DELETE" });
-    } catch (error) {
-      if (import.meta.env.DEV) {
-        console.warn("[storage] تعذر حذف ملف من Storage؛ تم إيقاف الحذف لمنع ملف يتيم.", error);
-      }
-      throw error;
-    }
-  }
-
   if (rows.length) {
+    await storageBatchDelete(rows.map((row) => row.object_path));
+
     await supabaseRest("canvas_assets", {
       method: "DELETE",
       query: { board_id: `eq.${boardId}` },
