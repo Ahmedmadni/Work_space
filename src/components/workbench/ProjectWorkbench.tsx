@@ -335,6 +335,7 @@ export function ProjectWorkbench({
         >
           <BoardCanvas
             boardId={boardId}
+            projectId={projectId}
             initialFocusNodeId={initialFocusNodeId}
             readOnly={!canEdit}
           />
