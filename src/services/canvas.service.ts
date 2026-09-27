@@ -2,6 +2,7 @@ import type {
   BoardCanvasSnapshot,
   CanvasEdge,
   CanvasNode,
+  CanvasStroke,
   CanvasViewport,
 } from "@/types";
 
@@ -64,9 +65,40 @@ function normalizeEdge(value: unknown, boardId: string, nodeIds: Set<string>): C
   };
 }
 
+
+function normalizeStroke(value: unknown, boardId: string): CanvasStroke | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Partial<CanvasStroke>;
+  if (typeof raw.id !== "string" || !Array.isArray(raw.points)) return null;
+  const points = raw.points.flatMap((point) => {
+    if (!point || typeof point !== "object") return [];
+    const p = point as { x?: unknown; y?: unknown; pressure?: unknown };
+    if (typeof p.x !== "number" || typeof p.y !== "number") return [];
+    return [{
+      x: p.x,
+      y: p.y,
+      pressure:
+        typeof p.pressure === "number" && Number.isFinite(p.pressure)
+          ? Math.min(1, Math.max(0, p.pressure))
+          : 0.5,
+    }];
+  });
+  if (!points.length) return null;
+  const now = new Date().toISOString();
+  return {
+    id: raw.id,
+    board_id: boardId,
+    tool: raw.tool === "highlighter" ? "highlighter" : "pen",
+    points,
+    size: Math.min(48, Math.max(1, safeNumber(raw.size, raw.tool === "highlighter" ? 18 : 3))),
+    created_at: typeof raw.created_at === "string" ? raw.created_at : now,
+    updated_at: typeof raw.updated_at === "string" ? raw.updated_at : now,
+  };
+}
+
 function normalizeSnapshot(boardId: string, value: unknown): BoardCanvasSnapshot {
   if (!value || typeof value !== "object") {
-    return { board_id: boardId, nodes: [], edges: [], viewport: DEFAULT_VIEWPORT, updated_at: null };
+    return { board_id: boardId, nodes: [], edges: [], strokes: [], viewport: DEFAULT_VIEWPORT, updated_at: null };
   }
   const raw = value as Partial<BoardCanvasSnapshot>;
   const nodes = Array.isArray(raw.nodes)
@@ -76,11 +108,15 @@ function normalizeSnapshot(boardId: string, value: unknown): BoardCanvasSnapshot
   const edges = Array.isArray(raw.edges)
     ? raw.edges.map((e) => normalizeEdge(e, boardId, nodeIds)).filter((e): e is CanvasEdge => !!e)
     : [];
+  const strokes = Array.isArray(raw.strokes)
+    ? raw.strokes.map((stroke) => normalizeStroke(stroke, boardId)).filter((stroke): stroke is CanvasStroke => !!stroke)
+    : [];
   const viewportRaw = raw.viewport && typeof raw.viewport === "object" ? raw.viewport : DEFAULT_VIEWPORT;
   return {
     board_id: boardId,
     nodes,
     edges,
+    strokes,
     viewport: {
       x: safeNumber((viewportRaw as CanvasViewport).x, 0),
       y: safeNumber((viewportRaw as CanvasViewport).y, 0),
