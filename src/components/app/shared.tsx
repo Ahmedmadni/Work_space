@@ -28,6 +28,7 @@ import { ACCENT_CHIP_CLASS, BOARD_TYPE_LABELS, PROJECT_STATUS_LABELS } from "@/l
 import { arabicNumber, relativeTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { AccentColor, BoardType, BoardWithContext, Project, ProjectStatus, WorkspaceWithStats } from "@/types";
+import { useProjectAccess } from "@/hooks/use-collaboration";
 import { useArchiveBoard, useDeleteBoard, useToggleFavorite, useUpdateBoard } from "@/hooks/use-boards";
 import { useArchiveProject, useDeleteProject, useUpdateProject } from "@/hooks/use-projects";
 import { useArchiveWorkspace, useDeleteWorkspace, useUpdateWorkspace } from "@/hooks/use-workspaces";
@@ -223,12 +224,14 @@ function ActionsMenu({
   onArchive,
   onDelete,
   withDuplicate,
+  showDelete = true,
 }: {
   onOpen: () => void;
   onEdit: () => void;
   onArchive: () => void;
   onDelete: () => void;
   withDuplicate?: boolean;
+  showDelete?: boolean;
 }) {
   return (
     <DropdownMenu dir="rtl">
@@ -242,8 +245,12 @@ function ActionsMenu({
         <DropdownMenuItem onSelect={onEdit}><Pencil className="h-4 w-4" />تعديل</DropdownMenuItem>
         {withDuplicate && <DropdownMenuItem disabled><Copy className="h-4 w-4" />نسخ (قريبًا)</DropdownMenuItem>}
         <DropdownMenuItem onSelect={onArchive}><Archive className="h-4 w-4" />أرشفة</DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={onDelete} className="text-danger focus:text-danger"><Trash2 className="h-4 w-4" />حذف</DropdownMenuItem>
+        {showDelete && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={onDelete} className="text-danger focus:text-danger"><Trash2 className="h-4 w-4" />حذف</DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -286,6 +293,9 @@ function Meta({ w }: { w: WorkspaceWithStats }) {
 
 export function ProjectCard({ project: p, boards }: { project: Project; boards?: number | undefined }) {
   const navigate = useNavigate();
+  const access = useProjectAccess(p.id);
+  const canEdit = access.data?.can_edit ?? false;
+  const canManage = access.data?.can_manage ?? false;
   const [edit, setEdit] = useState(false);
   const [del, setDel] = useState(false);
   const update = useUpdateProject();
@@ -307,9 +317,17 @@ export function ProjectCard({ project: p, boards }: { project: Project; boards?:
           <span>{relativeTime(p.updated_at)}</span>
         </div>
       </Link>
-      <div className="absolute end-3 top-3">
-        <ActionsMenu onOpen={() => void navigate({ to: "/workspace/$workspaceId/project/$projectId", params })} onEdit={() => setEdit(true)} onArchive={() => archive.mutate(p.id)} onDelete={() => setDel(true)} />
-      </div>
+      {canEdit && (
+        <div className="absolute end-3 top-3">
+          <ActionsMenu
+            onOpen={() => void navigate({ to: "/workspace/$workspaceId/project/$projectId", params })}
+            onEdit={() => setEdit(true)}
+            onArchive={() => archive.mutate(p.id)}
+            onDelete={() => setDel(true)}
+            showDelete={canManage}
+          />
+        </div>
+      )}
       <EditEntityDialog open={edit} onOpenChange={setEdit} title="تعديل المشروع" initialName={p.name} initialDescription={p.description} initialStatus={p.status} pending={update.isPending}
         onSave={(v, done) => update.mutate({ id: p.id, name: v.name, description: v.description, ...(v.status ? { status: v.status } : {}) }, { onSuccess: done })} />
       <ConfirmDialog open={del} onOpenChange={setDel} title={`حذف «${p.name}»؟`} description="سيتم حذف المشروع وجميع لوحاته نهائيًا." onConfirm={() => remove.mutate(p.id)} />
