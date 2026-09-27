@@ -108,6 +108,7 @@ function MentionChips({
 function CommentComposer({
   projectId,
   boardId,
+  originBoardId,
   targetType,
   targetId,
   pageNumber,
@@ -116,6 +117,7 @@ function CommentComposer({
 }: {
   projectId: string;
   boardId: string | null;
+  originBoardId: string;
   targetType: "board" | "document";
   targetId: string;
   pageNumber?: number;
@@ -139,6 +141,7 @@ function CommentComposer({
       {
         body,
         boardId,
+        originBoardId,
         targetType,
         targetId,
         pageNumber: targetType === "document" ? pageNumber ?? null : null,
@@ -570,6 +573,7 @@ function CommentsTab({
         <CommentComposer
           projectId={projectId}
           boardId={targetType === "document" ? null : boardId}
+          originBoardId={boardId}
           targetType={targetType}
           targetId={targetId}
           pageNumber={pageNumber}
