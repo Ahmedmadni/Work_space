@@ -40,6 +40,7 @@ import { useProject, useProjects } from "@/hooks/use-projects";
 import { useCurrentUser } from "@/hooks/use-auth";
 import type { Profile } from "@/types";
 import { cn } from "@/lib/utils";
+import { isSupabaseBackend } from "@/lib/backend-config";
 import { Glyph } from "./shared";
 import { CreateBoardDialog, CreateProjectDialog } from "./dialogs";
 
@@ -376,17 +377,21 @@ export function AppShell({ children }: { children: ReactNode }) {
                   <DropdownMenuItem asChild>
                     <Link to="/help">المساعدة</Link>
                   </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onSelect={() => {
-                      void signOut().then(() => {
-                        window.location.replace("/login");
-                      });
-                    }}
-                    className="text-danger focus:text-danger"
-                  >
-                    تسجيل الخروج
-                  </DropdownMenuItem>
+                  {isSupabaseBackend() && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onSelect={() => {
+                          void signOut().then(() => {
+                            window.location.replace("/login");
+                          });
+                        }}
+                        className="text-danger focus:text-danger"
+                      >
+                        تسجيل الخروج
+                      </DropdownMenuItem>
+                    </>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
