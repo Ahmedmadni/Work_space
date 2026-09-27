@@ -47,6 +47,7 @@ import { toast } from "sonner";
 
 import { BoardHistoryPanel } from "@/components/canvas/BoardHistoryPanel";
 import { NodeReviewPanel } from "@/components/collaboration/NodeReviewPanel";
+import { NodeExecutionControls } from "@/components/collaboration/NodeExecutionControls";
 import { useBoardCanvas, useSaveBoardCanvas } from "@/hooks/use-canvas";
 import { useBoardNodeReviewSummary } from "@/hooks/use-live-collaboration";
 import { useCanvasRealtime } from "@/hooks/use-canvas-realtime";
@@ -62,6 +63,7 @@ import type {
   CanvasColor,
   CanvasEdge,
   CanvasNode,
+  CanvasNodeAssignment,
   CanvasNodeStatus,
   CanvasPriority,
   CanvasStroke,
@@ -608,6 +610,34 @@ export function BoardCanvas({
     priorityFilter !== "all" ||
     ownerFilter !== "all" ||
     tagFilter !== "all";
+
+  const syncNodeAssignment = useCallback(
+    (nodeId: string, assignment: CanvasNodeAssignment) => {
+      const patch = (
+        source: BoardCanvasSnapshot | null,
+      ): BoardCanvasSnapshot | null => {
+        if (!source) return source;
+        return {
+          ...source,
+          nodes: source.nodes.map((node) =>
+            node.id === nodeId
+              ? {
+                  ...node,
+                  assignee_user_id: assignment.assignee_user_id,
+                  assignee_name: assignment.assignee_name,
+                  owner: assignment.assignee_name,
+                }
+              : node,
+          ),
+        };
+      };
+
+      baseSnapshotRef.current = patch(baseSnapshotRef.current);
+      latestSnapshotRef.current = patch(latestSnapshotRef.current);
+      setSnapshot((current) => patch(current));
+    },
+    [],
+  );
 
   const visibleNodes = useMemo(
     () =>
@@ -1851,6 +1881,9 @@ export function BoardCanvas({
         onDuplicate={duplicateSelection}
         onAddDependency={addDependency}
         onRemoveDependency={removeDependency}
+        projectId={projectId}
+        boardId={boardId}
+        onNodeAssignmentChange={syncNodeAssignment}
         reviewOpenCount={
           selectedNode
             ? reviewSummaryByNode.get(selectedNode.id)?.open_thread_count ?? 0
@@ -3120,6 +3153,9 @@ function CanvasInspector({
   onDuplicate,
   onAddDependency,
   onRemoveDependency,
+  projectId,
+  boardId,
+  onNodeAssignmentChange,
   reviewOpenCount,
   onOpenReview,
 }: {
@@ -3134,6 +3170,12 @@ function CanvasInspector({
   onDuplicate: () => void;
   onAddDependency: (sourceNodeId: string, targetNodeId: string) => void;
   onRemoveDependency: (edgeId: string) => void;
+  projectId?: string;
+  boardId: string;
+  onNodeAssignmentChange: (
+    nodeId: string,
+    assignment: CanvasNodeAssignment,
+  ) => void;
   reviewOpenCount: number;
   onOpenReview: () => void;
 }) {
@@ -3148,6 +3190,9 @@ function CanvasInspector({
           onDuplicate={onDuplicate}
           onAddDependency={onAddDependency}
           onRemoveDependency={onRemoveDependency}
+          projectId={projectId}
+          boardId={boardId}
+          onNodeAssignmentChange={onNodeAssignmentChange}
           reviewOpenCount={reviewOpenCount}
           onOpenReview={onOpenReview}
         />
@@ -3207,6 +3252,9 @@ function NodeInspector({
   onDuplicate,
   onAddDependency,
   onRemoveDependency,
+  projectId,
+  boardId,
+  onNodeAssignmentChange,
   reviewOpenCount,
   onOpenReview,
 }: {
@@ -3217,6 +3265,12 @@ function NodeInspector({
   onDuplicate: () => void;
   onAddDependency: (sourceNodeId: string, targetNodeId: string) => void;
   onRemoveDependency: (edgeId: string) => void;
+  projectId?: string;
+  boardId: string;
+  onNodeAssignmentChange: (
+    nodeId: string,
+    assignment: CanvasNodeAssignment,
+  ) => void;
   reviewOpenCount: number;
   onOpenReview: () => void;
 }) {
@@ -3413,18 +3467,29 @@ function NodeInspector({
               />
             </label>
 
-            <label className="block">
-              <span className="mb-1.5 flex items-center gap-1 text-xs text-muted-foreground">
-                <UserRound className="h-3.5 w-3.5" /> المالك
-              </span>
-              <input
-                value={owner}
-                placeholder="مثال: أحمد"
-                onChange={(event) => setOwner(event.target.value)}
-                onBlur={() => onChange({ owner: owner.trim() || null })}
-                className="w-full rounded-lg border border-border bg-background px-2.5 py-2 text-xs"
+            {projectId ? (
+              <NodeExecutionControls
+                projectId={projectId}
+                boardId={boardId}
+                node={node}
+                onAssignmentChange={(assignment) =>
+                  onNodeAssignmentChange(node.id, assignment)
+                }
               />
-            </label>
+            ) : (
+              <label className="block">
+                <span className="mb-1.5 flex items-center gap-1 text-xs text-muted-foreground">
+                  <UserRound className="h-3.5 w-3.5" /> المالك
+                </span>
+                <input
+                  value={owner}
+                  placeholder="مثال: أحمد"
+                  onChange={(event) => setOwner(event.target.value)}
+                  onBlur={() => onChange({ owner: owner.trim() || null })}
+                  className="w-full rounded-lg border border-border bg-background px-2.5 py-2 text-xs"
+                />
+              </label>
+            )}
 
             <div>
               <span className="mb-2 flex items-center gap-1 text-xs text-muted-foreground">

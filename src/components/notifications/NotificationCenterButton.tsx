@@ -3,9 +3,12 @@ import {
   AtSign,
   Bell,
   CheckCheck,
+  Clock3,
   FileText,
+  ListTodo,
   MessageSquareReply,
   ShieldCheck,
+  UserCheck,
   UserMinus,
   UserPlus,
 } from "lucide-react";
@@ -35,6 +38,7 @@ const FILTERS: Array<{ value: NotificationFilter; label: string }> = [
   { value: "all", label: "الكل" },
   { value: "unread", label: "غير المقروء" },
   { value: "mentions", label: "الإشارات والردود" },
+  { value: "tasks", label: "المهام" },
 ];
 
 const ROLE_LABELS: Record<string, string> = {
@@ -49,6 +53,9 @@ function notificationIcon(notification: UserNotification) {
   if (notification.kind === "reply") return MessageSquareReply;
   if (notification.kind === "project_added") return UserPlus;
   if (notification.kind === "role_changed") return ShieldCheck;
+  if (notification.kind === "task_assigned") return UserCheck;
+  if (notification.kind === "task_status") return ListTodo;
+  if (notification.kind === "task_due") return Clock3;
   return UserMinus;
 }
 
@@ -68,6 +75,27 @@ function notificationTitle(notification: UserNotification) {
         ? ROLE_LABELS[notification.metadata.role] ?? notification.metadata.role
         : "صلاحية جديدة";
     return `تم تغيير صلاحيتك إلى ${role}`;
+  }
+  const taskTitle =
+    typeof notification.metadata.title === "string"
+      ? notification.metadata.title
+      : "مهمة";
+  if (notification.kind === "task_assigned") {
+    return `تم إسناد «${taskTitle}» إليك`;
+  }
+  if (notification.kind === "task_status") {
+    return `تغيّرت حالة «${taskTitle}»`;
+  }
+  if (notification.kind === "task_due") {
+    const event =
+      typeof notification.metadata.event === "string"
+        ? notification.metadata.event
+        : "";
+    return event === "overdue"
+      ? `«${taskTitle}» متأخرة`
+      : event === "due_soon"
+        ? `اقترب استحقاق «${taskTitle}»`
+        : `تغيّر استحقاق «${taskTitle}»`;
   }
   return `تمت إزالتك من «${notification.project_name}»`;
 }
@@ -175,7 +203,7 @@ export function NotificationCenterButton() {
                 الإشعارات
               </SheetTitle>
               <SheetDescription className="mt-1">
-                الإشارات، الردود، ودعوات وتغييرات صلاحيات المشاريع.
+                الإشارات، الردود، تكليفات المهام، الاستحقاقات وتغييرات الوصول.
               </SheetDescription>
             </div>
 
@@ -193,7 +221,7 @@ export function NotificationCenterButton() {
           </div>
         </SheetHeader>
 
-        <div className="grid grid-cols-3 gap-1 border-b border-border bg-muted/20 p-1.5">
+        <div className="grid grid-cols-2 gap-1 border-b border-border bg-muted/20 p-1.5 sm:grid-cols-4">
           {FILTERS.map((item) => (
             <button
               key={item.value}

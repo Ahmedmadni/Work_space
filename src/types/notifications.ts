@@ -3,9 +3,12 @@ export type NotificationKind =
   | "reply"
   | "project_added"
   | "role_changed"
-  | "project_removed";
+  | "project_removed"
+  | "task_assigned"
+  | "task_status"
+  | "task_due";
 
-export type NotificationFilter = "all" | "unread" | "mentions";
+export type NotificationFilter = "all" | "unread" | "mentions" | "tasks";
 
 export interface UserNotification {
   id: string;
