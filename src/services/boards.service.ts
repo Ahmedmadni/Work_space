@@ -1,3 +1,17 @@
+import { isSupabaseBackend } from "@/lib/backend-config";
+import {
+  remoteArchiveBoard,
+  remoteCreateBoard,
+  remoteDeleteBoard,
+  remoteGetBoard,
+  remoteListArchivedBoards,
+  remoteListBoards,
+  remoteMarkBoardOpened,
+  remoteRenameBoard,
+  remoteRestoreBoard,
+  remoteToggleBoardFavorite,
+  remoteUpdateBoard,
+} from "./remote-boards.service";
 import { CURRENT_USER, delay, newId, nowIso, readDb, writeDb } from "./local-db";
 import { deleteBoardCanvas } from "./canvas.service";
 import { deleteBoardAssets } from "./canvas-assets.service";
@@ -20,6 +34,7 @@ export async function listBoards(filter?: {
   /** "opened": آخر فتح (ثم آخر تعديل)، الافتراضي: آخر تعديل. */
   sort?: "updated" | "opened";
 }): Promise<BoardWithContext[]> {
+  if (isSupabaseBackend()) return remoteListBoards(filter);
   const db = readDb();
   // اللوحات النشطة فقط: ليست مؤرشفة وتتبع مشروعًا نشطًا.
   const activeProjects = new Set(
@@ -36,17 +51,20 @@ export async function listBoards(filter?: {
 }
 
 export async function listArchivedBoards(): Promise<BoardWithContext[]> {
+  if (isSupabaseBackend()) return remoteListArchivedBoards();
   const db = readDb();
   return delay(db.boards.filter((b) => b.archived_at).map((b) => withContext(b, db)));
 }
 
 export async function getBoard(id: string): Promise<BoardWithContext | null> {
+  if (isSupabaseBackend()) return remoteGetBoard(id);
   const db = readDb();
   const board = db.boards.find((b) => b.id === id);
   return delay(board ? withContext(board, db) : null);
 }
 
 export async function createBoard(input: CreateBoardInput): Promise<Board> {
+  if (isSupabaseBackend()) return remoteCreateBoard(input);
   const db = readDb();
   const project = db.projects.find((p) => p.id === input.project_id);
   if (!project) throw new Error("Project not found");
@@ -78,6 +96,7 @@ export async function createBoard(input: CreateBoardInput): Promise<Board> {
 }
 
 export async function renameBoard(id: string, name: string): Promise<void> {
+  if (isSupabaseBackend()) return remoteRenameBoard(id, name);
   writeDb((db) => {
     const board = db.boards.find((b) => b.id === id);
     if (board) {
@@ -89,6 +108,7 @@ export async function renameBoard(id: string, name: string): Promise<void> {
 }
 
 export async function toggleBoardFavorite(id: string): Promise<void> {
+  if (isSupabaseBackend()) return remoteToggleBoardFavorite(id);
   writeDb((db) => {
     const board = db.boards.find((b) => b.id === id);
     if (board) board.is_favorite = !board.is_favorite;
@@ -97,6 +117,7 @@ export async function toggleBoardFavorite(id: string): Promise<void> {
 }
 
 export async function archiveBoard(id: string): Promise<void> {
+  if (isSupabaseBackend()) return remoteArchiveBoard(id);
   writeDb((db) => {
     const board = db.boards.find((b) => b.id === id);
     if (board) board.archived_at = nowIso();
@@ -105,6 +126,7 @@ export async function archiveBoard(id: string): Promise<void> {
 }
 
 export async function restoreBoard(id: string): Promise<void> {
+  if (isSupabaseBackend()) return remoteRestoreBoard(id);
   writeDb((db) => {
     const board = db.boards.find((b) => b.id === id);
     if (board) board.archived_at = null;
@@ -113,6 +135,7 @@ export async function restoreBoard(id: string): Promise<void> {
 }
 
 export async function deleteBoard(id: string): Promise<void> {
+  if (isSupabaseBackend()) return remoteDeleteBoard(id);
   writeDb((db) => {
     db.boards = db.boards.filter((b) => b.id !== id);
   });
@@ -130,6 +153,7 @@ export async function updateBoard(
   id: string,
   patch: { name?: string; description?: string | null },
 ): Promise<void> {
+  if (isSupabaseBackend()) return remoteUpdateBoard(id, patch);
   writeDb((db) => {
     const board = db.boards.find((b) => b.id === id);
     if (!board) return;
@@ -142,6 +166,7 @@ export async function updateBoard(
 
 /** يسجّل فتح اللوحة لترتيب «آخر اللوحات» دون تغيير تاريخ التعديل. */
 export async function markBoardOpened(id: string): Promise<void> {
+  if (isSupabaseBackend()) return remoteMarkBoardOpened(id);
   writeDb((db) => {
     const board = db.boards.find((b) => b.id === id);
     if (board) board.last_opened_at = nowIso();
