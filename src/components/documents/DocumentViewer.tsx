@@ -150,6 +150,7 @@ export function DocumentViewer({
   const [pdf, setPdf] = useState<PdfDocumentLike | null>(null);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
   const [imageNatural, setImageNatural] = useState({ width: 1200, height: 800 });
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const renderTaskRef = useRef<{ cancel?: () => void } | null>(null);
@@ -198,6 +199,17 @@ export function DocumentViewer({
     }
     const url = URL.createObjectURL(blob);
     setImageUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [blobQuery.data, isPdf]);
+
+  useEffect(() => {
+    const blob = blobQuery.data;
+    if (!blob || !isPdf) {
+      setFallbackUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    setFallbackUrl(url);
     return () => URL.revokeObjectURL(url);
   }, [blobQuery.data, isPdf]);
 
@@ -496,8 +508,6 @@ export function DocumentViewer({
     );
   }
 
-  const fallbackUrl = URL.createObjectURL(blobQuery.data);
-
   return (
     <div className="flex h-full min-h-0 flex-col bg-muted/20">
       <div className="frost hairline-b z-20 flex min-h-12 flex-wrap items-center gap-1 px-2 py-1.5">
@@ -619,7 +629,7 @@ export function DocumentViewer({
         <div className="m-3 flex items-center justify-between gap-3 rounded-xl border border-warning/30 bg-warning/10 p-3 text-xs">
           <span>تعذر تشغيل عارض PDF المتقدم: {pdfError}</span>
           <a
-            href={fallbackUrl}
+            href={fallbackUrl ?? "#"}
             target="_blank"
             rel="noreferrer"
             className="inline-flex shrink-0 items-center gap-1 font-medium text-brand"
