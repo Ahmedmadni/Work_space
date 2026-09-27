@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
+import { recordProjectActivity } from "@/services/live-collaboration.service";
+
 import {
   getProjectAccess,
   inviteProjectMember,
@@ -62,6 +64,17 @@ export function useInviteProjectMember(projectId: string) {
     }) => inviteProjectMember({ projectId, ...input }),
     onSuccess: (result) => {
       invalidate();
+      void recordProjectActivity({
+        projectId,
+        action: "member_invited",
+        entityType: "member",
+        entityId: result.user_id ?? result.invitation_id ?? result.email,
+        metadata: {
+          email: result.email,
+          role: result.role,
+          status: result.status,
+        },
+      }).catch(() => {});
       toast.success(
         result.status === "added"
           ? "تمت إضافة العضو إلى المشروع."
@@ -80,8 +93,15 @@ export function useUpdateProjectMemberRole(projectId: string) {
       userId: string;
       role: Exclude<ProjectRole, "owner">;
     }) => updateProjectMemberRole({ projectId, ...input }),
-    onSuccess: () => {
+    onSuccess: (_, input) => {
       invalidate();
+      void recordProjectActivity({
+        projectId,
+        action: "member_role_updated",
+        entityType: "member",
+        entityId: input.userId,
+        metadata: { role: input.role },
+      }).catch(() => {});
       toast.success("تم تحديث صلاحية العضو.");
     },
     onError: (error) =>
@@ -94,8 +114,14 @@ export function useRemoveProjectMember(projectId: string) {
   return useMutation({
     mutationFn: (userId: string) =>
       removeProjectMember({ projectId, userId }),
-    onSuccess: () => {
+    onSuccess: (_, userId) => {
       invalidate();
+      void recordProjectActivity({
+        projectId,
+        action: "member_removed",
+        entityType: "member",
+        entityId: userId,
+      }).catch(() => {});
       toast.success("تمت إزالة العضو من المشروع.");
     },
     onError: (error) =>

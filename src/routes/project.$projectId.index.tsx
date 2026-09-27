@@ -28,6 +28,7 @@ import { CreateBoardDialog } from "@/components/app/dialogs";
 import { ProjectShareDialog } from "@/components/collaboration/ProjectShareDialog";
 import { useProject } from "@/hooks/use-projects";
 import { useProjectAccess } from "@/hooks/use-collaboration";
+import { useProjectPresence } from "@/hooks/use-live-collaboration";
 import { useBoards } from "@/hooks/use-boards";
 import { useCanvasNodeSearch, useProjectExecutionSummary } from "@/hooks/use-canvas";
 import type {
@@ -281,6 +282,7 @@ function ProjectDetail() {
   const project = useProject(projectId);
   const boards = useBoards({ projectId });
   const access = useProjectAccess(projectId);
+  const presence = useProjectPresence(projectId, "project", null, true);
   const [shareOpen, setShareOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | CanvasNodeStatus>("all");
@@ -361,6 +363,28 @@ function ProjectDetail() {
         actions={
           <>
             <StatusBadge status={p.status} />
+            {(presence.data?.length ?? 0) > 0 && (
+              <div
+                className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-2 py-1.5"
+                title="المتصلون الآن"
+              >
+                <div className="flex -space-x-1.5 space-x-reverse">
+                  {(presence.data ?? []).slice(0, 4).map((person) => (
+                    <span
+                      key={person.user_id}
+                      title={person.full_name}
+                      className="relative grid h-6 w-6 place-items-center rounded-full border-2 border-card bg-muted text-[8px] font-bold"
+                    >
+                      {person.full_name.trim().slice(0, 1) || "م"}
+                      <span className="absolute -bottom-0.5 -end-0.5 h-2 w-2 rounded-full border border-card bg-success" />
+                    </span>
+                  ))}
+                </div>
+                <span className="text-[10px] text-muted-foreground">
+                  {presence.data?.length ?? 0} متصل
+                </span>
+              </div>
+            )}
             {access.data?.role === "viewer" && (
               <span className="rounded-lg bg-muted px-2.5 py-1.5 text-xs text-muted-foreground">
                 عرض فقط

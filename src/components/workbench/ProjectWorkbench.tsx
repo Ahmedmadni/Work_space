@@ -68,12 +68,20 @@ export function ProjectWorkbench({
   boardName,
   initialFocusNodeId,
   canEdit = true,
+  onContextChange,
 }: {
   projectId: string;
   boardId: string;
   boardName: string;
   initialFocusNodeId?: string;
   canEdit?: boolean;
+  onContextChange?: (
+    context: {
+      type: "board" | "document";
+      id: string;
+      pageNumber?: number;
+    },
+  ) => void;
 }) {
   const documentsQuery = useProjectDocuments(projectId);
   const uploadDocument = useUploadProjectDocument(projectId);
@@ -84,6 +92,7 @@ export function ProjectWorkbench({
     initial.openDocumentIds,
   );
   const [activeTab, setActiveTab] = useState(initial.activeTab);
+  const [activeDocumentPage, setActiveDocumentPage] = useState(1);
   const documents = documentsQuery.data ?? [];
 
   useEffect(() => {
@@ -152,6 +161,23 @@ export function ProjectWorkbench({
     activeTab === "board"
       ? null
       : documents.find((document) => document.id === activeTab) ?? null;
+
+  useEffect(() => {
+    onContextChange?.(
+      activeDocument
+        ? {
+            type: "document",
+            id: activeDocument.id,
+            pageNumber: activeDocumentPage,
+          }
+        : { type: "board", id: boardId },
+    );
+  }, [
+    activeDocument,
+    activeDocumentPage,
+    boardId,
+    onContextChange,
+  ]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -335,6 +361,7 @@ export function ProjectWorkbench({
         >
           <BoardCanvas
             boardId={boardId}
+            projectId={projectId}
             initialFocusNodeId={initialFocusNodeId}
             readOnly={!canEdit}
           />
@@ -346,6 +373,7 @@ export function ProjectWorkbench({
               projectId={projectId}
               document={activeDocument}
               readOnly={!canEdit}
+              onPageChange={setActiveDocumentPage}
             />
           </div>
         )}

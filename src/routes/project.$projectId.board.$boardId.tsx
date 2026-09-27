@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { ProjectWorkbench } from "@/components/workbench/ProjectWorkbench";
 import { ProjectShareDialog } from "@/components/collaboration/ProjectShareDialog";
+import { ProjectCollaborationDock } from "@/components/collaboration/ProjectCollaborationDock";
 import { useBoard, useMarkBoardOpened } from "@/hooks/use-boards";
 import { useProject } from "@/hooks/use-projects";
 import { useProjectAccess } from "@/hooks/use-collaboration";
@@ -31,6 +32,11 @@ function BoardPage() {
   const markOpened = useMarkBoardOpened();
   const access = useProjectAccess(projectId);
   const [shareOpen, setShareOpen] = useState(false);
+  const [liveContext, setLiveContext] = useState<{
+    type: "board" | "document";
+    id: string;
+    pageNumber?: number;
+  }>({ type: "board", id: boardId });
   const marked = useRef<string | null>(null);
 
   const valid = !!board && board.project_id === projectId && !!project.data;
@@ -80,6 +86,13 @@ function BoardPage() {
         </div>
 
         <div className="ms-auto flex items-center gap-2">
+          <ProjectCollaborationDock
+            projectId={projectId}
+            boardId={boardId}
+            presenceContextType={liveContext.type}
+            presenceContextId={liveContext.id}
+            documentPageNumber={liveContext.pageNumber}
+          />
           {access.data?.role === "viewer" && (
             <span className="hidden rounded-lg bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground sm:inline">
               عرض فقط
@@ -104,6 +117,7 @@ function BoardPage() {
           boardName={board.name}
           initialFocusNodeId={node}
           canEdit={access.data?.can_edit ?? false}
+          onContextChange={setLiveContext}
         />
       )}
 
