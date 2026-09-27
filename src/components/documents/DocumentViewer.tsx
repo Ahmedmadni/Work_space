@@ -137,10 +137,12 @@ export function DocumentViewer({
   projectId,
   document,
   readOnly = false,
+  onPageChange,
 }: {
   projectId: string;
   document: ProjectDocument;
   readOnly?: boolean;
+  onPageChange?: (pageNumber: number) => void;
 }) {
   const blobQuery = useProjectDocumentBlob(document.id);
   const [pageNumber, setPageNumber] = useState(1);
@@ -316,6 +318,10 @@ export function DocumentViewer({
   useEffect(() => {
     setPageNumber((current) => Math.min(current, Math.max(1, pageCount)));
   }, [pageCount]);
+
+  useEffect(() => {
+    onPageChange?.(pageNumber);
+  }, [onPageChange, pageNumber]);
 
   const activeStyle = useMemo(() => {
     if (tool === "highlight") {
