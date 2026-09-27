@@ -8,6 +8,7 @@ import {
   Link2,
   Plus,
   Search,
+  Share2,
   UserRound,
   X,
 } from "lucide-react";
@@ -24,7 +25,9 @@ import {
   StatusBadge,
 } from "@/components/app/shared";
 import { CreateBoardDialog } from "@/components/app/dialogs";
+import { ProjectShareDialog } from "@/components/collaboration/ProjectShareDialog";
 import { useProject } from "@/hooks/use-projects";
+import { useProjectAccess } from "@/hooks/use-collaboration";
 import { useBoards } from "@/hooks/use-boards";
 import { useCanvasNodeSearch, useProjectExecutionSummary } from "@/hooks/use-canvas";
 import type {
@@ -277,6 +280,8 @@ function ProjectDetail() {
   const { projectId } = Route.useParams();
   const project = useProject(projectId);
   const boards = useBoards({ projectId });
+  const access = useProjectAccess(projectId);
+  const [shareOpen, setShareOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | CanvasNodeStatus>("all");
   const [priority, setPriority] = useState<"all" | CanvasPriority>("all");
@@ -333,7 +338,7 @@ function ProjectDetail() {
   if (!project.data) return <NotFoundState backTo="/projects" />;
 
   const p = project.data;
-  const create = (
+  const create = access.data?.can_edit ? (
     <CreateBoardDialog
       projectId={p.id}
       trigger={
@@ -343,7 +348,7 @@ function ProjectDetail() {
         </Button>
       }
     />
-  );
+  ) : null;
 
   const matches = nodeSearch.data ?? [];
 
@@ -356,6 +361,18 @@ function ProjectDetail() {
         actions={
           <>
             <StatusBadge status={p.status} />
+            {access.data?.role === "viewer" && (
+              <span className="rounded-lg bg-muted px-2.5 py-1.5 text-xs text-muted-foreground">
+                عرض فقط
+              </span>
+            )}
+            <Button
+              variant="outline"
+              onClick={() => setShareOpen(true)}
+            >
+              <Share2 className="h-4 w-4" />
+              مشاركة
+            </Button>
             {create}
           </>
         }
@@ -526,6 +543,13 @@ function ProjectDetail() {
       ) : (
         <BoardGrid boards={visibleBoards} />
       )}
+
+      <ProjectShareDialog
+        projectId={projectId}
+        projectName={p.name}
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+      />
     </>
   );
 }
