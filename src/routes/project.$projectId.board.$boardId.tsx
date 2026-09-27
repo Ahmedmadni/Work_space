@@ -12,9 +12,26 @@ import { BOARD_TYPE_LABELS } from "@/lib/labels";
 import { NotFoundState } from "@/components/app/shared";
 
 export const Route = createFileRoute("/project/$projectId/board/$boardId")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    node: typeof search.node === "string" ? search.node : undefined,
-  }),
+  validateSearch: (search: Record<string, unknown>) => {
+    const rawPage =
+      typeof search.page === "number"
+        ? search.page
+        : typeof search.page === "string"
+          ? Number(search.page)
+          : NaN;
+    return {
+      node: typeof search.node === "string" ? search.node : undefined,
+      doc: typeof search.doc === "string" ? search.doc : undefined,
+      page:
+        Number.isInteger(rawPage) && rawPage > 0
+          ? rawPage
+          : undefined,
+      comment:
+        typeof search.comment === "string"
+          ? search.comment
+          : undefined,
+    };
+  },
   head: () => ({
     meta: [
       { title: "اللوحة — ProjectFlow" },
@@ -26,7 +43,7 @@ export const Route = createFileRoute("/project/$projectId/board/$boardId")({
 
 function BoardPage() {
   const { boardId, projectId } = Route.useParams();
-  const { node } = Route.useSearch();
+  const { node, doc, page, comment } = Route.useSearch();
   const { data: board, isLoading } = useBoard(boardId);
   const project = useProject(projectId);
   const markOpened = useMarkBoardOpened();
@@ -92,6 +109,7 @@ function BoardPage() {
             presenceContextType={liveContext.type}
             presenceContextId={liveContext.id}
             documentPageNumber={liveContext.pageNumber}
+            focusCommentId={comment}
           />
           {access.data?.role === "viewer" && (
             <span className="hidden rounded-lg bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground sm:inline">
@@ -116,6 +134,8 @@ function BoardPage() {
           boardId={boardId}
           boardName={board.name}
           initialFocusNodeId={node}
+          initialDocumentId={doc}
+          initialDocumentPage={page}
           canEdit={access.data?.can_edit ?? false}
           onContextChange={setLiveContext}
         />
