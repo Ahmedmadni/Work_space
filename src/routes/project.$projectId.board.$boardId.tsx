@@ -35,6 +35,7 @@ function BoardPage() {
   const [liveContext, setLiveContext] = useState<{
     type: "board" | "document";
     id: string;
+    pageNumber?: number;
   }>({ type: "board", id: boardId });
   const marked = useRef<string | null>(null);
 
@@ -90,6 +91,7 @@ function BoardPage() {
             boardId={boardId}
             presenceContextType={liveContext.type}
             presenceContextId={liveContext.id}
+            documentPageNumber={liveContext.pageNumber}
           />
           {access.data?.role === "viewer" && (
             <span className="hidden rounded-lg bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground sm:inline">
