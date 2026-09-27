@@ -96,6 +96,7 @@ export function useSaveDocumentAnnotations(
 ) {
   const queryClient = useQueryClient();
   return useMutation({
+    scope: { id: `document-annotations:${documentId}:${pageNumber}` },
     mutationFn: (annotations: DocumentAnnotation[]) =>
       saveDocumentAnnotations(documentId, pageNumber, annotations),
     onSuccess: (_, annotations) => {
