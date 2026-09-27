@@ -6,6 +6,8 @@ import type {
   CanvasNodeKind,
   CanvasNodeStatus,
   CanvasPriority,
+  CanvasNodeSearchFilters,
+  CanvasNodeSearchMatch,
   CanvasNodeStyle,
   CanvasStroke,
   CanvasViewport,
@@ -105,6 +107,19 @@ function normalizePriority(value: unknown): CanvasPriority | null {
     : null;
 }
 
+function normalizeTags(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const unique = new Set<string>();
+  for (const item of value) {
+    if (typeof item !== "string") continue;
+    const tag = item.trim().replace(/\s+/g, " ");
+    if (!tag) continue;
+    unique.add(tag.slice(0, 40));
+    if (unique.size >= 12) break;
+  }
+  return [...unique];
+}
+
 function normalizeLocalDate(value: unknown): string | null {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
   const [year, month, day] = value.split("-").map(Number);
@@ -148,6 +163,8 @@ function normalizeNode(value: unknown, boardId: string): CanvasNode | null {
     progress: Math.min(100, Math.max(0, safeNumber(raw.progress, raw.status === "done" ? 100 : 0))),
     start_date: normalizeLocalDate(raw.start_date),
     due_date: normalizeLocalDate(raw.due_date),
+    owner: typeof raw.owner === "string" && raw.owner.trim() ? raw.owner.trim().slice(0, 80) : null,
+    tags: normalizeTags(raw.tags),
     asset_id: typeof raw.asset_id === "string" ? raw.asset_id : null,
     style: normalizeNodeStyle(raw.style, kind),
     created_at: typeof raw.created_at === "string" ? raw.created_at : now,
@@ -269,6 +286,51 @@ function writeStore(store: CanvasStore) {
   }
 }
 
+
+
+function isSemanticKind(kind: CanvasNodeKind) {
+  return kind === "idea" || kind === "task" || kind === "milestone" || kind === "note" || kind === "sticky";
+}
+
+function nodeMatchesFilters(node: CanvasNode, filters: CanvasNodeSearchFilters): boolean {
+  const query = filters.query?.trim().toLocaleLowerCase("ar") ?? "";
+  if (query) {
+    const haystack = [
+      node.title,
+      node.description ?? "",
+      node.owner ?? "",
+      node.tags.join(" "),
+    ]
+      .join(" ")
+      .toLocaleLowerCase("ar");
+    if (!haystack.includes(query)) return false;
+  }
+  if (filters.status && (!isSemanticKind(node.kind) || node.status !== filters.status)) return false;
+  if (filters.priority && (!isSemanticKind(node.kind) || node.priority !== filters.priority)) return false;
+  if (filters.owner && node.owner !== filters.owner) return false;
+  if (filters.tag && !node.tags.includes(filters.tag)) return false;
+  return true;
+}
+
+export async function searchCanvasNodes(
+  boardIds: string[],
+  filters: CanvasNodeSearchFilters,
+): Promise<CanvasNodeSearchMatch[]> {
+  if (!boardIds.length) return [];
+  const store = readStore();
+  const results: CanvasNodeSearchMatch[] = [];
+
+  for (const boardId of boardIds) {
+    const snapshot = normalizeSnapshot(boardId, store.boards[boardId]);
+    for (const node of snapshot.nodes) {
+      if (!nodeMatchesFilters(node, filters)) continue;
+      results.push({ board_id: boardId, node });
+    }
+  }
+
+  return results.sort((a, b) => b.node.updated_at.localeCompare(a.node.updated_at));
+}
+
 export async function getBoardCanvas(boardId: string): Promise<BoardCanvasSnapshot> {
   const store = readStore();
   return normalizeSnapshot(boardId, store.boards[boardId]);
@@ -334,6 +396,8 @@ export function createCanvasNode(
     progress: 0,
     start_date: null,
     due_date: null,
+    owner: null,
+    tags: [],
     asset_id: null,
     style: defaultNodeStyle(kind),
     created_at: now,
