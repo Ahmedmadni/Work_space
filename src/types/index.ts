@@ -134,6 +134,10 @@ export interface CanvasNode {
   /** تواريخ محلية بصيغة YYYY-MM-DD لعرض Roadmap دون مشاكل مناطق زمنية. */
   start_date: string | null;
   due_date: string | null;
+  /** المالك الحالي كاسم حر مؤقتًا؛ سيُستبدل بمعرّف مستخدم عند تفعيل الحسابات. */
+  owner: string | null;
+  /** وسوم نصية قصيرة للبحث والتصفية عبر اللوحات. */
+  tags: string[];
   /** مرجع ملف الصورة في مخزن الأصول المحلي/Storage المستقبلي. */
   asset_id: string | null;
   style: CanvasNodeStyle;
@@ -166,6 +170,19 @@ export interface BoardCanvasSnapshot {
   strokes: CanvasStroke[];
   viewport: CanvasViewport;
   updated_at: string | null;
+}
+
+export interface CanvasNodeSearchFilters {
+  query?: string;
+  status?: CanvasNodeStatus | null;
+  priority?: CanvasPriority | null;
+  owner?: string | null;
+  tag?: string | null;
+}
+
+export interface CanvasNodeSearchMatch {
+  board_id: string;
+  node: CanvasNode;
 }
 
 export interface WorkspaceWithStats extends Workspace {
