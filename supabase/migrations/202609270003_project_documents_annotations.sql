@@ -226,9 +226,14 @@ begin
     raise exception 'DOCUMENT_EDIT_DENIED' using errcode = '42501';
   end if;
 
-  delete from public.document_annotations
-  where document_id = p_document_id
-    and page_number = p_page_number;
+  delete from public.document_annotations existing
+  where existing.document_id = p_document_id
+    and existing.page_number = p_page_number
+    and not exists (
+      select 1
+      from jsonb_array_elements(coalesce(p_annotations, '[]'::jsonb)) incoming
+      where incoming->>'id' = existing.id
+    );
 
   for a in
     select value
@@ -259,7 +264,17 @@ begin
       auth.uid(),
       coalesce(nullif(a->>'created_at', '')::timestamptz, now()),
       coalesce(nullif(a->>'updated_at', '')::timestamptz, now())
-    );
+    )
+    on conflict (id) do update
+    set
+      kind = excluded.kind,
+      geometry = excluded.geometry,
+      color = excluded.color,
+      size = excluded.size,
+      opacity = excluded.opacity,
+      updated_at = excluded.updated_at
+    where public.document_annotations.document_id = p_document_id
+      and public.document_annotations.page_number = p_page_number;
   end loop;
 end;
 $projectflow$;
