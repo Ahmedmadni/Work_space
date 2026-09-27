@@ -19,6 +19,7 @@ import {
   Pencil,
   Highlighter,
   Eraser,
+  Image as ImageIcon,
   Plus,
   Redo2,
   Scissors,
@@ -31,8 +32,11 @@ import {
   ZoomOut,
 } from "lucide-react";
 
+import { toast } from "sonner";
+
 import { useBoardCanvas, useSaveBoardCanvas } from "@/hooks/use-canvas";
 import { createCanvasEdge, createCanvasNode } from "@/services/canvas.service";
+import { getCanvasAsset, saveCanvasImage } from "@/services/canvas-assets.service";
 import { cn } from "@/lib/utils";
 import type {
   BoardCanvasSnapshot,
@@ -52,6 +56,7 @@ type Tool =
   | "rectangle"
   | "ellipse"
   | "sticky"
+  | "image"
   | "pen"
   | "highlighter"
   | "eraser";
@@ -135,6 +140,7 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
   const [highlighterColor, setHighlighterColor] = useState<CanvasColor>("warning");
 
   const canvasRef = useRef<HTMLDivElement | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
   const drag = useRef<DragState>(null);
   const drawing = useRef<{ strokeId: string; before: BoardCanvasSnapshot } | null>(null);
   const initializedBoard = useRef<string | null>(null);
@@ -476,6 +482,67 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
     [snapshot, tool, connectorSourceId, boardId, commit],
   );
 
+
+  const uploadImage = useCallback(
+    async (file: File) => {
+      if (!snapshot || !canvasRef.current) return;
+      const rect = canvasRef.current.getBoundingClientRect();
+      const world = screenToWorld(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      if (!world) return;
+
+      try {
+        const asset = await saveCanvasImage(boardId, file);
+        let width = 320;
+        let height = 220;
+
+        if (typeof createImageBitmap === "function") {
+          try {
+            const bitmap = await createImageBitmap(file);
+            const ratio = bitmap.width / Math.max(1, bitmap.height);
+            height = Math.min(320, Math.max(140, width / Math.max(0.35, ratio)));
+            bitmap.close();
+          } catch {
+            // الأبعاد الافتراضية كافية إذا تعذر قراءة أبعاد الصورة.
+          }
+        }
+
+        const node = createCanvasNode(
+          boardId,
+          {
+            x: snap(world.x - width / 2, snapToGrid),
+            y: snap(world.y - height / 2, snapToGrid),
+          },
+          "image",
+        );
+        node.asset_id = asset.id;
+        node.title = file.name;
+        node.width = width;
+        node.height = height;
+
+        setSnapshot((current) => {
+          if (!current) return current;
+          past.current.push(cloneSnapshot(current));
+          if (past.current.length > 80) past.current.shift();
+          future.current = [];
+          setHistoryVersion((value) => value + 1);
+          return { ...current, nodes: [...current.nodes, node] };
+        });
+        setSelectedNodeIds([node.id]);
+        setSelectedEdgeId(null);
+        setTool("select");
+      } catch (error) {
+        const message =
+          error instanceof Error && error.message === "Image is too large"
+            ? "حجم الصورة يتجاوز 8MB."
+            : "تعذر إضافة الصورة.";
+        toast.error(message);
+      } finally {
+        if (imageInputRef.current) imageInputRef.current.value = "";
+      }
+    },
+    [snapshot, boardId, screenToWorld, snapToGrid],
+  );
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (isEditableTarget(event.target)) return;
@@ -582,6 +649,10 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
         tool={tool}
         snapToGrid={snapToGrid}
         onTool={(next) => {
+          if (next === "image") {
+            imageInputRef.current?.click();
+            return;
+          }
           setTool(next);
           if (next !== "connector") setConnectorSourceId(null);
         }}
@@ -601,6 +672,18 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
           }
         />
       )}
+
+
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) void uploadImage(file);
+        }}
+      />
 
       <div
         ref={canvasRef}
@@ -1004,6 +1087,7 @@ function CanvasToolbar({
     { id: "rectangle", label: "مستطيل", icon: Square, shortcut: "R" },
     { id: "ellipse", label: "شكل بيضاوي", icon: Circle, shortcut: "O" },
     { id: "sticky", label: "ملاحظة لاصقة", icon: StickyNote, shortcut: "S" },
+    { id: "image", label: "صورة", icon: ImageIcon, shortcut: "—" },
     { id: "pen", label: "قلم", icon: Pencil, shortcut: "P" },
     { id: "highlighter", label: "تمييز", icon: Highlighter, shortcut: "B" },
     { id: "eraser", label: "ممحاة", icon: Eraser, shortcut: "E" },
@@ -1273,6 +1357,8 @@ function CanvasNodeCard({
       <Type className="h-4 w-4" />
     ) : node.kind === "rectangle" ? (
       <Square className="h-4 w-4" />
+    ) : node.kind === "image" ? (
+      <ImageIcon className="h-4 w-4" />
     ) : (
       <Circle className="h-4 w-4" />
     );
@@ -1280,6 +1366,7 @@ function CanvasNodeCard({
   const isText = node.kind === "text";
   const isShape = node.kind === "rectangle" || node.kind === "ellipse";
   const isSticky = node.kind === "sticky" || node.kind === "note";
+  const isImage = node.kind === "image";
   const fill =
     node.style.fill === "transparent"
       ? "transparent"
@@ -1309,6 +1396,7 @@ function CanvasNodeCard({
         borderStyle: isShape || isSticky ? "solid" : undefined,
         borderRadius: node.kind === "ellipse" ? "9999px" : undefined,
         boxShadow: isText ? "none" : undefined,
+        overflow: isImage ? "hidden" : undefined,
         textAlign:
           node.style.text_align === "center"
             ? "center"
@@ -1318,7 +1406,8 @@ function CanvasNodeCard({
       }}
       className={cn(
         "group select-none p-4 transition-shadow",
-        !isText && !isShape && !isSticky && "frost-strong rounded-2xl shadow-frost",
+        !isText && !isShape && !isSticky && !isImage && "frost-strong rounded-2xl shadow-frost",
+        isImage && "rounded-2xl bg-muted shadow-frost",
         isSticky && "rounded-xl shadow-frost",
         isShape && "flex flex-col justify-center",
         isText && "rounded-lg",
@@ -1340,18 +1429,26 @@ function CanvasNodeCard({
                   ? "مستطيل"
                   : node.kind === "ellipse"
                     ? "بيضاوي"
-                    : "فكرة"}
+                    : node.kind === "image"
+                      ? "صورة"
+                      : "فكرة"}
       </span>
-      <span
-        className={cn("block leading-6", isText || isShape ? "font-medium" : "font-semibold")}
-        style={{ fontSize: node.style.font_size }}
-      >
-        {node.title}
-      </span>
-      {node.description && (
-        <span className="mt-1.5 block line-clamp-3 text-xs leading-5 text-muted-foreground">
-          {node.description}
-        </span>
+      {isImage && node.asset_id ? (
+        <CanvasImage assetId={node.asset_id} alt={node.title} />
+      ) : (
+        <>
+          <span
+            className={cn("block leading-6", isText || isShape ? "font-medium" : "font-semibold")}
+            style={{ fontSize: node.style.font_size }}
+          >
+            {node.title}
+          </span>
+          {node.description && (
+            <span className="mt-1.5 block line-clamp-3 text-xs leading-5 text-muted-foreground">
+              {node.description}
+            </span>
+          )}
+        </>
       )}
       {selected && (
         <button
@@ -1504,6 +1601,7 @@ function NodeInspector({
               ["text", "نص"],
               ["rectangle", "مستطيل"],
               ["ellipse", "بيضاوي"],
+              ["image", "صورة"],
             ] as const).map(([kind, label]) => (
               <button
                 key={kind}
