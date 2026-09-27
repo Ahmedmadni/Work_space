@@ -1,5 +1,6 @@
 import { requireRemoteSession } from "@/services/auth.service";
 import { supabaseRest } from "@/services/supabase-rest";
+import { remoteDeleteBoardAssets } from "@/services/remote-canvas-assets.service";
 import type { Board, BoardWithContext, CreateBoardInput } from "@/types";
 
 interface BoardRow {
@@ -149,6 +150,7 @@ export async function remoteRestoreBoard(id: string): Promise<void> {
 }
 
 export async function remoteDeleteBoard(id: string): Promise<void> {
+  await remoteDeleteBoardAssets(id);
   await supabaseRest("boards", {
     method: "DELETE",
     query: { id: `eq.${id}` },
