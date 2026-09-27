@@ -12,7 +12,7 @@ import {
   listDocumentAnnotations,
   saveDocumentAnnotations,
 } from "@/services/document-annotations.service";
-import type { DocumentAnnotation } from "@/types/documents";
+import type { DocumentAnnotation, ProjectDocument } from "@/types/documents";
 
 export function useProjectDocuments(projectId: string) {
   return useQuery({
@@ -36,6 +36,13 @@ export function useUploadProjectDocument(projectId: string) {
   return useMutation({
     mutationFn: (file: File) => uploadProjectDocument(projectId, file),
     onSuccess: (document) => {
+      queryClient.setQueryData<ProjectDocument[]>(
+        ["project-documents", projectId],
+        (current) => [
+          document,
+          ...(current ?? []).filter((item) => item.id !== document.id),
+        ],
+      );
       void queryClient.invalidateQueries({
         queryKey: ["project-documents", projectId],
       });
