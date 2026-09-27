@@ -324,7 +324,6 @@ function ReviewComposer({
     setBody("");
     setMentionIds([]);
     setMemberToAdd("");
-    onCancelReply();
   }, [nodeId]);
 
   const availableMembers = (collaborators.data ?? []).filter(
