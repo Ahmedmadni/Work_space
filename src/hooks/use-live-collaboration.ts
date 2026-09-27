@@ -15,6 +15,7 @@ import {
   deleteProjectComment,
   endProjectPresence,
   heartbeatProjectPresence,
+  listBoardNodeReviewSummary,
   listProjectActivity,
   listProjectComments,
   listProjectPresence,
@@ -41,6 +42,19 @@ function sessionId() {
   });
 }
 
+export function useBoardNodeReviewSummary(
+  projectId: string,
+  boardId: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ["board-node-review-summary", projectId, boardId],
+    queryFn: () => listBoardNodeReviewSummary(projectId, boardId),
+    enabled: enabled && !!projectId && !!boardId,
+    refetchInterval: enabled ? 4_000 : false,
+  });
+}
+
 export function useProjectComments(
   projectId: string,
   filters: ProjectCommentFilters = {},
@@ -62,6 +76,9 @@ function useInvalidateLive(projectId: string) {
     });
     void queryClient.invalidateQueries({
       queryKey: ["project-activity", projectId],
+    });
+    void queryClient.invalidateQueries({
+      queryKey: ["board-node-review-summary", projectId],
     });
   };
 }
