@@ -9,6 +9,9 @@ import { BOARD_TYPE_LABELS } from "@/lib/labels";
 import { NotFoundState } from "@/components/app/shared";
 
 export const Route = createFileRoute("/project/$projectId/board/$boardId")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    node: typeof search.node === "string" ? search.node : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "اللوحة — ProjectFlow" },
@@ -20,6 +23,7 @@ export const Route = createFileRoute("/project/$projectId/board/$boardId")({
 
 function BoardPage() {
   const { boardId, projectId } = Route.useParams();
+  const { node } = Route.useSearch();
   const { data: board, isLoading } = useBoard(boardId);
   const project = useProject(projectId);
   const markOpened = useMarkBoardOpened();
@@ -83,7 +87,7 @@ function BoardPage() {
         </div>
       </header>
 
-      <BoardCanvas boardId={boardId} />
+      <BoardCanvas boardId={boardId} initialFocusNodeId={node} />
     </div>
   );
 }
