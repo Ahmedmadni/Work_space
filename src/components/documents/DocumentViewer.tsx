@@ -179,11 +179,16 @@ export function DocumentViewer({
   }, [document.id]);
 
   useEffect(() => {
-    if (!annotationsQuery.data) return;
-    setAnnotations(annotationsQuery.data);
+    setAnnotations([]);
     setUndoStack([]);
     setRedoStack([]);
-  }, [annotationsQuery.data, document.id, pageNumber]);
+    drawingRef.current = null;
+  }, [document.id, pageNumber]);
+
+  useEffect(() => {
+    if (!annotationsQuery.data) return;
+    setAnnotations(annotationsQuery.data);
+  }, [annotationsQuery.data]);
 
   useEffect(() => {
     const blob = blobQuery.data;
@@ -654,7 +659,6 @@ export function DocumentViewer({
           )}
 
           <svg
-            key={`${document.id}:${pageNumber}:${draftVersion}`}
             viewBox={`0 0 ${displayWidth} ${displayHeight}`}
             className={`absolute inset-0 h-full w-full ${
               tool === "view"
