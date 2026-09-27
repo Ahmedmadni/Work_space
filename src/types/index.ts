@@ -255,6 +255,16 @@ export interface CanvasNodeAssignment {
   assignee_name: string | null;
 }
 
+export interface CanvasNodeExecutionUpdate {
+  node_id: string;
+  version: number;
+  status: CanvasNodeStatus;
+  priority: CanvasPriority | null;
+  progress: number;
+  updated_at: string;
+  revision?: number;
+}
+
 export interface ProjectExecutionSummary {
   total: number;
   completed: number;
