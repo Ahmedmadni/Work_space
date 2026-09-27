@@ -33,7 +33,12 @@ function sessionId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();
   }
-  return `session-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const hex = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx";
+  return hex.replace(/[xy]/g, (token) => {
+    const value = Math.floor(Math.random() * 16);
+    const nibble = token === "x" ? value : (value & 0x3) | 0x8;
+    return nibble.toString(16);
+  });
 }
 
 export function useProjectComments(
