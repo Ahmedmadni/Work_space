@@ -59,14 +59,24 @@ create policy project_documents_select_member on public.project_documents
 for select to authenticated
 using (public.can_access_project(project_id));
 
-drop policy if exists project_documents_write_editor on public.project_documents;
-create policy project_documents_write_editor on public.project_documents
-for all to authenticated
-using (public.can_edit_project(project_id))
+drop policy if exists project_documents_insert_editor on public.project_documents;
+create policy project_documents_insert_editor on public.project_documents
+for insert to authenticated
 with check (
   created_by = auth.uid()
   and public.can_edit_project(project_id)
 );
+
+drop policy if exists project_documents_update_editor on public.project_documents;
+create policy project_documents_update_editor on public.project_documents
+for update to authenticated
+using (public.can_edit_project(project_id))
+with check (public.can_edit_project(project_id));
+
+drop policy if exists project_documents_delete_editor on public.project_documents;
+create policy project_documents_delete_editor on public.project_documents
+for delete to authenticated
+using (public.can_edit_project(project_id));
 
 drop policy if exists document_annotations_select_member on public.document_annotations;
 create policy document_annotations_select_member on public.document_annotations
@@ -80,9 +90,22 @@ using (
   )
 );
 
-drop policy if exists document_annotations_write_editor on public.document_annotations;
-create policy document_annotations_write_editor on public.document_annotations
-for all to authenticated
+drop policy if exists document_annotations_insert_editor on public.document_annotations;
+create policy document_annotations_insert_editor on public.document_annotations
+for insert to authenticated
+with check (
+  created_by = auth.uid()
+  and exists (
+    select 1
+    from public.project_documents d
+    where d.id = document_id
+      and public.can_edit_project(d.project_id)
+  )
+);
+
+drop policy if exists document_annotations_update_editor on public.document_annotations;
+create policy document_annotations_update_editor on public.document_annotations
+for update to authenticated
 using (
   exists (
     select 1
@@ -92,8 +115,19 @@ using (
   )
 )
 with check (
-  created_by = auth.uid()
-  and exists (
+  exists (
+    select 1
+    from public.project_documents d
+    where d.id = document_id
+      and public.can_edit_project(d.project_id)
+  )
+);
+
+drop policy if exists document_annotations_delete_editor on public.document_annotations;
+create policy document_annotations_delete_editor on public.document_annotations
+for delete to authenticated
+using (
+  exists (
     select 1
     from public.project_documents d
     where d.id = document_id
