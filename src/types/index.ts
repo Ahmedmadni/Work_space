@@ -131,6 +131,9 @@ export interface CanvasNode {
   priority: CanvasPriority | null;
   /** نسبة الإنجاز من 0 إلى 100. */
   progress: number;
+  /** تواريخ محلية بصيغة YYYY-MM-DD لعرض Roadmap دون مشاكل مناطق زمنية. */
+  start_date: string | null;
+  due_date: string | null;
   /** مرجع ملف الصورة في مخزن الأصول المحلي/Storage المستقبلي. */
   asset_id: string | null;
   style: CanvasNodeStyle;

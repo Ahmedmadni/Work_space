@@ -105,6 +105,20 @@ function normalizePriority(value: unknown): CanvasPriority | null {
     : null;
 }
 
+function normalizeLocalDate(value: unknown): string | null {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year!, month! - 1, day!));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month! - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return value;
+}
+
 function normalizeNode(value: unknown, boardId: string): CanvasNode | null {
   if (!value || typeof value !== "object") return null;
   const raw = value as Partial<CanvasNode>;
@@ -132,6 +146,8 @@ function normalizeNode(value: unknown, boardId: string): CanvasNode | null {
     status: normalizeNodeStatus(raw.status, kind),
     priority: normalizePriority(raw.priority),
     progress: Math.min(100, Math.max(0, safeNumber(raw.progress, raw.status === "done" ? 100 : 0))),
+    start_date: normalizeLocalDate(raw.start_date),
+    due_date: normalizeLocalDate(raw.due_date),
     asset_id: typeof raw.asset_id === "string" ? raw.asset_id : null,
     style: normalizeNodeStyle(raw.style, kind),
     created_at: typeof raw.created_at === "string" ? raw.created_at : now,
@@ -316,6 +332,8 @@ export function createCanvasNode(
     status: kind === "task" || kind === "milestone" ? "planned" : "idea",
     priority: null,
     progress: 0,
+    start_date: null,
+    due_date: null,
     asset_id: null,
     style: defaultNodeStyle(kind),
     created_at: now,
