@@ -227,13 +227,13 @@ async function upsertBoard(board: Board, userId: string) {
   });
 }
 
-async function migrateAssets(board: Board): Promise<number> {
+async function migrateAssets(board: Board): Promise<string[]> {
   const assets = await listLocalBoardAssetsForMigration(board.id);
   for (const asset of assets) {
     const file = new File([asset.blob], asset.name, { type: asset.mime_type });
     await remoteMigrateCanvasImage(board.id, asset.id, file);
   }
-  return assets.length;
+  return assets.map((asset) => asset.id);
 }
 
 async function migrateCanvas(boardId: string): Promise<BoardCanvasSnapshot> {
@@ -278,10 +278,15 @@ async function migrateVersions(
   return versions.length;
 }
 
+function containsAllIds(remoteIds: string[], localIds: string[]) {
+  const remote = new Set(remoteIds);
+  return localIds.every((id) => remote.has(id));
+}
+
 async function verifyBoard(
   board: Board,
   localSnapshot: BoardCanvasSnapshot,
-  localAssetCount: number,
+  localAssetIds: string[],
   localVersions: CanvasBoardVersion[],
 ) {
   const [remoteCanvas, remoteAssets, remoteVersions] = await Promise.all([
@@ -297,15 +302,36 @@ async function verifyBoard(
     }),
   ]);
   const normalized = normalizeBoardCanvasSnapshot(board.id, remoteCanvas);
-  const sameCanvas =
+  const sameNodes =
     normalized.nodes.length === localSnapshot.nodes.length &&
+    containsAllIds(
+      normalized.nodes.map((node) => node.id),
+      localSnapshot.nodes.map((node) => node.id),
+    );
+  const sameEdges =
     normalized.edges.length === localSnapshot.edges.length &&
-    normalized.strokes.length === localSnapshot.strokes.length;
-  const sameAssets = remoteAssets.length >= localAssetCount;
-  const sameVersions = remoteVersions.length >= Math.min(localVersions.length, 20);
-  if (!sameCanvas || !sameAssets || !sameVersions) {
+    containsAllIds(
+      normalized.edges.map((edge) => edge.id),
+      localSnapshot.edges.map((edge) => edge.id),
+    );
+  const sameStrokes =
+    normalized.strokes.length === localSnapshot.strokes.length &&
+    containsAllIds(
+      normalized.strokes.map((stroke) => stroke.id),
+      localSnapshot.strokes.map((stroke) => stroke.id),
+    );
+  const sameAssets = containsAllIds(
+    remoteAssets.map((asset) => asset.id),
+    localAssetIds,
+  );
+  const localVersionIds = localVersions.slice(0, 20).map((version) => version.id);
+  const sameVersions = containsAllIds(
+    remoteVersions.map((version) => version.id),
+    localVersionIds,
+  );
+  if (!sameNodes || !sameEdges || !sameStrokes || !sameAssets || !sameVersions) {
     throw new Error(
-      `Verification mismatch: canvas=${sameCanvas}, assets=${sameAssets}, versions=${sameVersions}`,
+      `Verification mismatch: nodes=${sameNodes}, edges=${sameEdges}, strokes=${sameStrokes}, assets=${sameAssets}, versions=${sameVersions}`,
     );
   }
 }
@@ -354,7 +380,7 @@ export async function migrateLocalDataToCloud(
   const eligibleBoards = source.boards.filter((board) => !failedProjects.has(board.project_id));
   const verificationInputs = new Map<
     string,
-    { board: Board; snapshot: BoardCanvasSnapshot; assets: number; versions: CanvasBoardVersion[] }
+    { board: Board; snapshot: BoardCanvasSnapshot; assetIds: string[]; versions: CanvasBoardVersion[] }
   >();
 
   for (let index = 0; index < eligibleBoards.length; index += 1) {
@@ -368,11 +394,11 @@ export async function migrateLocalDataToCloud(
       continue;
     }
 
-    let assetCount = 0;
+    let assetIds: string[] = [];
     try {
       progress({ phase: "assets", current: index + 1, total: eligibleBoards.length, message: `رفع صور: ${board.name}` });
-      assetCount = await migrateAssets(board);
-      result.assets_migrated += assetCount;
+      assetIds = await migrateAssets(board);
+      result.assets_migrated += assetIds.length;
     } catch (error) {
       result.issues.push({ scope: "asset", id: board.id, name: board.name, message: issueMessage(error) });
     }
@@ -395,7 +421,7 @@ export async function migrateLocalDataToCloud(
       result.issues.push({ scope: "version", id: board.id, name: board.name, message: issueMessage(error) });
     }
 
-    verificationInputs.set(board.id, { board, snapshot, assets: assetCount, versions: localVersions });
+    verificationInputs.set(board.id, { board, snapshot, assetIds, versions: localVersions });
   }
 
   let verifyIndex = 0;
@@ -403,7 +429,7 @@ export async function migrateLocalDataToCloud(
     verifyIndex += 1;
     progress({ phase: "verifying", current: verifyIndex, total: verificationInputs.size, message: `التحقق من: ${input.board.name}` });
     try {
-      await verifyBoard(input.board, input.snapshot, input.assets, input.versions);
+      await verifyBoard(input.board, input.snapshot, input.assetIds, input.versions);
       result.boards_verified += 1;
     } catch (error) {
       result.issues.push({
