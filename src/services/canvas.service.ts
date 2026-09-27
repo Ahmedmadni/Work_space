@@ -288,6 +288,10 @@ function writeStore(store: CanvasStore) {
 
 
 
+function isSemanticKind(kind: CanvasNodeKind) {
+  return kind === "idea" || kind === "task" || kind === "milestone" || kind === "note" || kind === "sticky";
+}
+
 function nodeMatchesFilters(node: CanvasNode, filters: CanvasNodeSearchFilters): boolean {
   const query = filters.query?.trim().toLocaleLowerCase("ar") ?? "";
   if (query) {
@@ -301,8 +305,8 @@ function nodeMatchesFilters(node: CanvasNode, filters: CanvasNodeSearchFilters):
       .toLocaleLowerCase("ar");
     if (!haystack.includes(query)) return false;
   }
-  if (filters.status && node.status !== filters.status) return false;
-  if (filters.priority && node.priority !== filters.priority) return false;
+  if (filters.status && (!isSemanticKind(node.kind) || node.status !== filters.status)) return false;
+  if (filters.priority && (!isSemanticKind(node.kind) || node.priority !== filters.priority)) return false;
   if (filters.owner && node.owner !== filters.owner) return false;
   if (filters.tag && !node.tags.includes(filters.tag)) return false;
   return true;
