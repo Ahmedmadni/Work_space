@@ -174,6 +174,7 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
 
   const [snapshot, setSnapshot] = useState<BoardCanvasSnapshot | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("canvas");
+  const [focusNodeId, setFocusNodeId] = useState<string | null>(null);
   const [tool, setTool] = useState<Tool>("select");
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
@@ -222,6 +223,30 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
       if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
     };
   }, [snapshot, boardId]);
+
+
+  useEffect(() => {
+    if (viewMode !== "canvas" || !focusNodeId || !snapshot || !canvasRef.current) return;
+    const node = snapshot.nodes.find((item) => item.id === focusNodeId);
+    if (!node) {
+      setFocusNodeId(null);
+      return;
+    }
+    const rect = canvasRef.current.getBoundingClientRect();
+    setSnapshot((current) =>
+      current
+        ? {
+            ...current,
+            viewport: {
+              ...current.viewport,
+              x: rect.width / 2 - (node.x + node.width / 2) * current.viewport.zoom,
+              y: rect.height / 2 - (node.y + node.height / 2) * current.viewport.zoom,
+            },
+          }
+        : current,
+    );
+    setFocusNodeId(null);
+  }, [viewMode, focusNodeId, snapshot?.nodes]);
 
   const selectedNodes = useMemo(
     () => snapshot?.nodes.filter((node) => selectedNodeIds.includes(node.id)) ?? [],
@@ -1061,11 +1086,12 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
           onOpen={(nodeId) => {
             setSelectedNodeIds([nodeId]);
             setSelectedEdgeId(null);
+            setFocusNodeId(nodeId);
             setViewMode("canvas");
           }}
           onStatusChange={(nodeId, status) => {
             const node = snapshot.nodes.find((item) => item.id === nodeId);
-            if (!node) return;
+            if (!node || node.status === status) return;
             updateNode(nodeId, {
               status,
               progress: status === "done" ? 100 : node.progress === 100 ? 0 : node.progress,
@@ -1078,11 +1104,12 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
           onOpen={(nodeId) => {
             setSelectedNodeIds([nodeId]);
             setSelectedEdgeId(null);
+            setFocusNodeId(nodeId);
             setViewMode("canvas");
           }}
           onStatusChange={(nodeId, status) => {
             const node = snapshot.nodes.find((item) => item.id === nodeId);
-            if (!node) return;
+            if (!node || node.status === status) return;
             updateNode(nodeId, {
               status,
               progress: status === "done" ? 100 : node.progress === 100 ? 0 : node.progress,
