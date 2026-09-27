@@ -47,7 +47,8 @@ create table if not exists public.boards (
   updated_at timestamptz not null default now(),
   archived_at timestamptz,
   is_favorite boolean not null default false,
-  last_opened_at timestamptz
+  last_opened_at timestamptz,
+  viewport jsonb not null default '{"x":0,"y":0,"zoom":1}'::jsonb
 );
 
 create table if not exists public.canvas_nodes (
@@ -556,6 +557,173 @@ using (
   bucket_id = 'canvas-assets'
   and public.can_edit_project((storage.foldername(name))[1])
 );
+
+
+
+create or replace function public.get_board_canvas(p_board_id text)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $
+declare
+  v_project_id text;
+  v_viewport jsonb;
+  v_updated_at timestamptz;
+begin
+  select project_id, viewport, updated_at
+    into v_project_id, v_viewport, v_updated_at
+  from public.boards
+  where id = p_board_id;
+
+  if v_project_id is null or not public.can_access_project(v_project_id) then
+    raise exception 'BOARD_ACCESS_DENIED' using errcode = '42501';
+  end if;
+
+  return jsonb_build_object(
+    'board_id', p_board_id,
+    'nodes', coalesce((
+      select jsonb_agg(to_jsonb(n) - 'owner_label' || jsonb_build_object('owner', n.owner_label)
+        order by n.created_at, n.id)
+      from public.canvas_nodes n
+      where n.board_id = p_board_id
+    ), '[]'::jsonb),
+    'edges', coalesce((
+      select jsonb_agg(to_jsonb(e) order by e.created_at, e.id)
+      from public.canvas_edges e
+      where e.board_id = p_board_id
+    ), '[]'::jsonb),
+    'strokes', coalesce((
+      select jsonb_agg(to_jsonb(s) order by s.created_at, s.id)
+      from public.canvas_strokes s
+      where s.board_id = p_board_id
+    ), '[]'::jsonb),
+    'viewport', coalesce(v_viewport, '{"x":0,"y":0,"zoom":1}'::jsonb),
+    'updated_at', v_updated_at
+  );
+end;
+$;
+
+create or replace function public.save_board_canvas(
+  p_board_id text,
+  p_nodes jsonb,
+  p_edges jsonb,
+  p_strokes jsonb,
+  p_viewport jsonb
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $
+declare
+  v_project_id text;
+  n jsonb;
+  e jsonb;
+  s jsonb;
+begin
+  select project_id into v_project_id
+  from public.boards
+  where id = p_board_id;
+
+  if v_project_id is null or not public.can_edit_project(v_project_id) then
+    raise exception 'BOARD_EDIT_DENIED' using errcode = '42501';
+  end if;
+
+  if jsonb_typeof(coalesce(p_nodes, '[]'::jsonb)) <> 'array'
+    or jsonb_typeof(coalesce(p_edges, '[]'::jsonb)) <> 'array'
+    or jsonb_typeof(coalesce(p_strokes, '[]'::jsonb)) <> 'array'
+    or jsonb_typeof(coalesce(p_viewport, '{}'::jsonb)) <> 'object'
+  then
+    raise exception 'INVALID_CANVAS_PAYLOAD' using errcode = '22023';
+  end if;
+
+  delete from public.canvas_edges where board_id = p_board_id;
+  delete from public.canvas_strokes where board_id = p_board_id;
+  delete from public.canvas_nodes where board_id = p_board_id;
+
+  for n in select value from jsonb_array_elements(coalesce(p_nodes, '[]'::jsonb))
+  loop
+    insert into public.canvas_nodes (
+      id, board_id, kind, x, y, width, height, title, description,
+      status, priority, progress, start_date, due_date, owner_label,
+      tags, asset_id, style, created_at, updated_at
+    )
+    values (
+      n->>'id',
+      p_board_id,
+      coalesce(nullif(n->>'kind',''), 'idea'),
+      coalesce((n->>'x')::double precision, 0),
+      coalesce((n->>'y')::double precision, 0),
+      greatest(1, coalesce((n->>'width')::double precision, 220)),
+      greatest(1, coalesce((n->>'height')::double precision, 140)),
+      coalesce(n->>'title', ''),
+      nullif(n->>'description',''),
+      coalesce(nullif(n->>'status',''), 'idea'),
+      nullif(n->>'priority',''),
+      least(100, greatest(0, coalesce((n->>'progress')::integer, 0))),
+      nullif(n->>'start_date','')::date,
+      nullif(n->>'due_date','')::date,
+      nullif(n->>'owner',''),
+      coalesce(array(select jsonb_array_elements_text(coalesce(n->'tags','[]'::jsonb))), '{}'::text[]),
+      nullif(n->>'asset_id',''),
+      coalesce(n->'style', '{}'::jsonb),
+      coalesce(nullif(n->>'created_at','')::timestamptz, now()),
+      coalesce(nullif(n->>'updated_at','')::timestamptz, now())
+    );
+  end loop;
+
+  for e in select value from jsonb_array_elements(coalesce(p_edges, '[]'::jsonb))
+  loop
+    insert into public.canvas_edges (
+      id, board_id, source_node_id, target_node_id, kind, label, created_at, updated_at
+    )
+    values (
+      e->>'id',
+      p_board_id,
+      e->>'source_node_id',
+      e->>'target_node_id',
+      coalesce(nullif(e->>'kind',''), 'relationship'),
+      nullif(e->>'label',''),
+      coalesce(nullif(e->>'created_at','')::timestamptz, now()),
+      coalesce(nullif(e->>'updated_at','')::timestamptz, now())
+    );
+  end loop;
+
+  for s in select value from jsonb_array_elements(coalesce(p_strokes, '[]'::jsonb))
+  loop
+    insert into public.canvas_strokes (
+      id, board_id, tool, points, size, color, created_at, updated_at
+    )
+    values (
+      s->>'id',
+      p_board_id,
+      coalesce(nullif(s->>'tool',''), 'pen'),
+      coalesce(s->'points', '[]'::jsonb),
+      least(48, greatest(0.1, coalesce((s->>'size')::double precision, 3))),
+      coalesce(nullif(s->>'color',''), 'ink'),
+      coalesce(nullif(s->>'created_at','')::timestamptz, now()),
+      coalesce(nullif(s->>'updated_at','')::timestamptz, now())
+    );
+  end loop;
+
+  update public.boards
+  set
+    viewport = jsonb_build_object(
+      'x', coalesce((p_viewport->>'x')::double precision, 0),
+      'y', coalesce((p_viewport->>'y')::double precision, 0),
+      'zoom', least(2.5, greatest(0.25, coalesce((p_viewport->>'zoom')::double precision, 1)))
+    ),
+    updated_at = now()
+  where id = p_board_id;
+end;
+$;
+
+revoke all on function public.get_board_canvas(text) from public;
+revoke all on function public.save_board_canvas(text, jsonb, jsonb, jsonb, jsonb) from public;
+grant execute on function public.get_board_canvas(text) to authenticated;
+grant execute on function public.save_board_canvas(text, jsonb, jsonb, jsonb, jsonb) to authenticated;
 
 grant select, insert, update, delete on public.profiles to authenticated;
 grant select, insert, update, delete on public.projects to authenticated;
