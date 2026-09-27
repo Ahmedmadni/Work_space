@@ -1,3 +1,6 @@
+import { isSupabaseBackend } from "@/lib/backend-config";
+import { requireRemoteSession } from "@/services/auth.service";
+import { supabaseRest } from "@/services/supabase-rest";
 import {
   getBoardCanvas,
   normalizeBoardCanvasSnapshot,
@@ -18,6 +21,52 @@ const AUTO_CHECKPOINT_INTERVAL_MS = 5 * 60 * 1000;
 interface HistoryStore {
   version: 1;
   boards: Record<string, CanvasBoardVersion[]>;
+}
+
+
+interface RemoteVersionRow {
+  id: string;
+  board_id: string;
+  reason: CanvasVersionReason;
+  label: string | null;
+  snapshot: unknown;
+  node_count: number;
+  edge_count: number;
+  stroke_count: number;
+  created_at: string;
+}
+
+function mapRemoteVersion(row: RemoteVersionRow): CanvasBoardVersion {
+  const snapshot = normalizeBoardCanvasSnapshot(row.board_id, row.snapshot);
+  return {
+    id: row.id,
+    board_id: row.board_id,
+    reason: row.reason,
+    label: row.label,
+    created_at: row.created_at,
+    node_count: snapshot.nodes.length,
+    edge_count: snapshot.edges.length,
+    stroke_count: snapshot.strokes.length,
+    snapshot,
+  };
+}
+
+async function trimRemoteVersions(boardId: string) {
+  const extra = await supabaseRest<Array<{ id: string }>>("board_versions", {
+    query: {
+      select: "id",
+      board_id: `eq.${boardId}`,
+      order: "created_at.desc",
+      offset: MAX_VERSIONS_PER_BOARD,
+    },
+  });
+  for (const row of extra) {
+    await supabaseRest("board_versions", {
+      method: "DELETE",
+      query: { id: `eq.${row.id}` },
+      prefer: "return=minimal",
+    });
+  }
 }
 
 function emptyStore(): HistoryStore {
@@ -93,6 +142,17 @@ function contentSignature(snapshot: BoardCanvasSnapshot): string {
 }
 
 export async function listBoardVersions(boardId: string): Promise<CanvasBoardVersion[]> {
+  if (isSupabaseBackend()) {
+    const rows = await supabaseRest<RemoteVersionRow[]>("board_versions", {
+      query: {
+        select: "*",
+        board_id: `eq.${boardId}`,
+        order: "created_at.desc",
+        limit: MAX_VERSIONS_PER_BOARD,
+      },
+    });
+    return rows.map(mapRemoteVersion);
+  }
   const store = readStore();
   return (store.boards[boardId] ?? []).map((version) => ({
     ...version,
@@ -105,8 +165,33 @@ export async function createBoardVersion(
   reason: CanvasVersionReason = "manual",
   label: string | null = null,
 ): Promise<CanvasBoardVersion> {
-  const store = readStore();
   const normalized = normalizeBoardCanvasSnapshot(snapshot.board_id, snapshot);
+
+  if (isSupabaseBackend()) {
+    const session = await requireRemoteSession();
+    const payload = {
+      id: `version-${crypto.randomUUID()}`,
+      board_id: snapshot.board_id,
+      reason,
+      label: label?.trim().slice(0, 120) || null,
+      snapshot: normalized,
+      node_count: normalized.nodes.length,
+      edge_count: normalized.edges.length,
+      stroke_count: normalized.strokes.length,
+      created_by: session.user.id,
+    };
+    const rows = await supabaseRest<RemoteVersionRow[]>("board_versions", {
+      method: "POST",
+      body: payload,
+      prefer: "return=representation",
+    });
+    const row = rows[0];
+    if (!row) throw new Error("VERSION_CREATE_FAILED");
+    await trimRemoteVersions(snapshot.board_id);
+    return mapRemoteVersion(row);
+  }
+
+  const store = readStore();
   const version: CanvasBoardVersion = {
     id: `version-${crypto.randomUUID()}`,
     board_id: snapshot.board_id,
@@ -130,8 +215,9 @@ export async function maybeCreateAutoCheckpoint(
   snapshot: BoardCanvasSnapshot,
 ): Promise<CanvasBoardVersion | null> {
   if (!snapshot.nodes.length && !snapshot.edges.length && !snapshot.strokes.length) return null;
-  const store = readStore();
-  const versions = store.boards[snapshot.board_id] ?? [];
+  const versions = isSupabaseBackend()
+    ? await listBoardVersions(snapshot.board_id)
+    : readStore().boards[snapshot.board_id] ?? [];
   const latest = versions[0];
   const now = Date.now();
   if (

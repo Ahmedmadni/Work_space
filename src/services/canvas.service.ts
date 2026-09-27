@@ -1,3 +1,5 @@
+import { isSupabaseBackend } from "@/lib/backend-config";
+import { supabaseRest } from "@/services/supabase-rest";
 import type {
   BoardCanvasSnapshot,
   CanvasEdge,
@@ -340,13 +342,19 @@ function executionPriorityRank(priority: CanvasPriority | null) {
 export async function getProjectExecutionSummary(
   boardIds: string[],
 ): Promise<ProjectExecutionSummary> {
-  const store = readStore();
+  const remoteSnapshots = isSupabaseBackend()
+    ? await Promise.all(boardIds.map((boardId) => getBoardCanvas(boardId)))
+    : null;
+  const store = remoteSnapshots ? null : readStore();
   const today = localDateKey();
   const upcomingEnd = addLocalDaysKey(7);
   const items: ProjectExecutionItem[] = [];
 
   for (const boardId of boardIds) {
-    const snapshot = normalizeBoardCanvasSnapshot(boardId, store.boards[boardId]);
+    const snapshot = remoteSnapshots
+      ? remoteSnapshots.find((item) => item.board_id === boardId) ??
+        normalizeBoardCanvasSnapshot(boardId, null)
+      : normalizeBoardCanvasSnapshot(boardId, store!.boards[boardId]);
     const semanticNodes = snapshot.nodes.filter((node) => isSemanticKind(node.kind));
     const nodeMap = new Map(semanticNodes.map((node) => [node.id, node] as const));
 
@@ -428,11 +436,17 @@ export async function searchCanvasNodes(
   filters: CanvasNodeSearchFilters,
 ): Promise<CanvasNodeSearchMatch[]> {
   if (!boardIds.length) return [];
-  const store = readStore();
+  const remoteSnapshots = isSupabaseBackend()
+    ? await Promise.all(boardIds.map((boardId) => getBoardCanvas(boardId)))
+    : null;
+  const store = remoteSnapshots ? null : readStore();
   const results: CanvasNodeSearchMatch[] = [];
 
   for (const boardId of boardIds) {
-    const snapshot = normalizeBoardCanvasSnapshot(boardId, store.boards[boardId]);
+    const snapshot = remoteSnapshots
+      ? remoteSnapshots.find((item) => item.board_id === boardId) ??
+        normalizeBoardCanvasSnapshot(boardId, null)
+      : normalizeBoardCanvasSnapshot(boardId, store!.boards[boardId]);
     for (const node of snapshot.nodes) {
       if (!nodeMatchesFilters(node, filters)) continue;
       results.push({ board_id: boardId, node });
@@ -443,16 +457,38 @@ export async function searchCanvasNodes(
 }
 
 export async function getBoardCanvas(boardId: string): Promise<BoardCanvasSnapshot> {
+  if (isSupabaseBackend()) {
+    const remote = await supabaseRest<unknown>("rpc/get_board_canvas", {
+      method: "POST",
+      body: { p_board_id: boardId },
+    });
+    return normalizeBoardCanvasSnapshot(boardId, remote);
+  }
   const store = readStore();
   return normalizeBoardCanvasSnapshot(boardId, store.boards[boardId]);
 }
 
 export async function saveBoardCanvas(snapshot: BoardCanvasSnapshot): Promise<BoardCanvasSnapshot> {
-  const store = readStore();
   const normalized = normalizeBoardCanvasSnapshot(snapshot.board_id, {
     ...snapshot,
     updated_at: new Date().toISOString(),
   });
+
+  if (isSupabaseBackend()) {
+    await supabaseRest<null>("rpc/save_board_canvas", {
+      method: "POST",
+      body: {
+        p_board_id: normalized.board_id,
+        p_nodes: normalized.nodes,
+        p_edges: normalized.edges,
+        p_strokes: normalized.strokes,
+        p_viewport: normalized.viewport,
+      },
+    });
+    return getBoardCanvas(normalized.board_id);
+  }
+
+  const store = readStore();
   store.boards[snapshot.board_id] = normalized;
   writeStore(store);
   return normalized;

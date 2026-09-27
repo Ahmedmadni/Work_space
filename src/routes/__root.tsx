@@ -12,6 +12,7 @@ import { Component, useEffect, type ErrorInfo, type ReactNode } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { useRouterState } from "@tanstack/react-router";
 import { AppShell } from "@/components/app/AppShell";
+import { AuthGate } from "@/components/auth/AuthGate";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
@@ -144,13 +145,21 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
-  const isBoard = useRouterState({ select: (s) => s.location.pathname.includes("/board/") });
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const isBoard = pathname.includes("/board/");
+  const isAuthRoute = pathname === "/login";
 
   return (
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <AppErrorBoundary>
-        {isBoard ? <Outlet /> : <AppShell><Outlet /></AppShell>}
+        {isAuthRoute ? (
+          <Outlet />
+        ) : (
+          <AuthGate>
+            {isBoard ? <Outlet /> : <AppShell><Outlet /></AppShell>}
+          </AuthGate>
+        )}
       </AppErrorBoundary>
       <Toaster position="bottom-left" richColors />
     </QueryClientProvider>

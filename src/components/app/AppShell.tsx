@@ -37,8 +37,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useProject, useProjects } from "@/hooks/use-projects";
-import { CURRENT_USER } from "@/services/local-db";
+import { useCurrentUser } from "@/hooks/use-auth";
+import type { Profile } from "@/types";
 import { cn } from "@/lib/utils";
+import { isSupabaseBackend } from "@/lib/backend-config";
 import { Glyph } from "./shared";
 import { CreateBoardDialog, CreateProjectDialog } from "./dialogs";
 
@@ -114,9 +116,11 @@ function NavItem({
 function SidebarBody({
   collapsed,
   onNavigate,
+  user,
 }: {
   collapsed: boolean;
   onNavigate?: (() => void) | undefined;
+  user: Profile | null;
 }) {
   const { data: projects } = useProjects();
   return (
@@ -170,12 +174,12 @@ function SidebarBody({
         ))}
         <div className={cn("mt-2 flex items-center gap-3 rounded-xl p-2", collapsed && "justify-center")}>
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-muted text-xs font-bold">
-            {CURRENT_USER.initials}
+            {user?.initials ?? "…"}
           </span>
           {!collapsed && (
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{CURRENT_USER.full_name}</p>
-              <p className="truncate text-xs text-muted-foreground">{CURRENT_USER.email}</p>
+              <p className="truncate text-sm font-medium">{user?.full_name ?? "جارٍ تحميل الحساب"}</p>
+              <p className="truncate text-xs text-muted-foreground">{user?.email ?? ""}</p>
             </div>
           )}
         </div>
@@ -265,6 +269,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobile, setMobile] = useState(false);
   const [dark, toggleDark] = useTheme();
+  const { user, signOut } = useCurrentUser();
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -275,13 +280,13 @@ export function AppShell({ children }: { children: ReactNode }) {
             collapsed ? "w-[68px]" : "w-64",
           )}
         >
-          <SidebarBody collapsed={collapsed} />
+          <SidebarBody collapsed={collapsed} user={user} />
         </aside>
 
         <Sheet open={mobile} onOpenChange={setMobile}>
           <SheetContent side="right" className="w-72 bg-sidebar p-0">
             <SheetTitle className="sr-only">القائمة</SheetTitle>
-            <SidebarBody collapsed={false} onNavigate={() => setMobile(false)} />
+            <SidebarBody collapsed={false} user={user} onNavigate={() => setMobile(false)} />
           </SheetContent>
         </Sheet>
 
@@ -355,14 +360,14 @@ export function AppShell({ children }: { children: ReactNode }) {
                     aria-label="حسابي"
                     className="grid h-9 w-9 place-items-center rounded-full bg-muted text-xs font-bold"
                   >
-                    {CURRENT_USER.initials}
+                    {user?.initials ?? "…"}
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-52">
                   <DropdownMenuLabel>
-                    <p>{CURRENT_USER.full_name}</p>
+                    <p>{user?.full_name ?? "جارٍ تحميل الحساب"}</p>
                     <p className="text-xs font-normal text-muted-foreground">
-                      {CURRENT_USER.email}
+                      {user?.email ?? ""}
                     </p>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
@@ -372,6 +377,21 @@ export function AppShell({ children }: { children: ReactNode }) {
                   <DropdownMenuItem asChild>
                     <Link to="/help">المساعدة</Link>
                   </DropdownMenuItem>
+                  {isSupabaseBackend() && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onSelect={() => {
+                          void signOut().then(() => {
+                            window.location.replace("/login");
+                          });
+                        }}
+                        className="text-danger focus:text-danger"
+                      >
+                        تسجيل الخروج
+                      </DropdownMenuItem>
+                    </>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>

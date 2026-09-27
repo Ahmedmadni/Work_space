@@ -1,3 +1,10 @@
+import { isSupabaseBackend } from "@/lib/backend-config";
+import {
+  remoteDeleteBoardAssets,
+  remoteGetCanvasAsset,
+  remoteListBoardAssets,
+  remoteSaveCanvasImage,
+} from "@/services/remote-canvas-assets.service";
 import type { CanvasBackupAsset } from "@/types";
 
 const DB_NAME = "projectflow-assets";
@@ -55,6 +62,7 @@ export async function saveCanvasImage(
   boardId: string,
   file: File,
 ): Promise<CanvasAssetRecord> {
+  if (isSupabaseBackend()) return remoteSaveCanvasImage(boardId, file);
   if (!file.type.startsWith("image/")) {
     throw new Error("Unsupported file type");
   }
@@ -83,6 +91,7 @@ export async function saveCanvasImage(
 }
 
 export async function listBoardAssets(boardId: string): Promise<CanvasAssetRecord[]> {
+  if (isSupabaseBackend()) return remoteListBoardAssets(boardId);
   const db = await openDb();
   const transaction = db.transaction(STORE_NAME, "readonly");
   const store = transaction.objectStore(STORE_NAME);
@@ -130,6 +139,30 @@ export async function importBoardAssets(
 ): Promise<Map<string, string>> {
   const idMap = new Map<string, string>();
   if (!assets.length) return idMap;
+
+  if (isSupabaseBackend()) {
+    for (const asset of assets) {
+      if (
+        !asset ||
+        typeof asset.id !== "string" ||
+        typeof asset.data_url !== "string" ||
+        !asset.data_url.startsWith("data:image/")
+      ) {
+        continue;
+      }
+      const response = await fetch(asset.data_url);
+      const blob = await response.blob();
+      if (!blob.type.startsWith("image/") || blob.size > MAX_IMAGE_BYTES) continue;
+      const file = new File(
+        [blob],
+        typeof asset.name === "string" && asset.name ? asset.name : "image",
+        { type: blob.type },
+      );
+      const created = await remoteSaveCanvasImage(boardId, file);
+      idMap.set(asset.id, created.id);
+    }
+    return idMap;
+  }
 
   const prepared: Array<{ oldId: string; record: CanvasAssetRecord }> = [];
   for (const asset of assets) {
@@ -181,6 +214,7 @@ export async function importBoardAssets(
 }
 
 export async function getCanvasAsset(id: string): Promise<CanvasAssetRecord | null> {
+  if (isSupabaseBackend()) return remoteGetCanvasAsset(id);
   const db = await openDb();
   const transaction = db.transaction(STORE_NAME, "readonly");
   const store = transaction.objectStore(STORE_NAME);
@@ -196,6 +230,7 @@ export async function getCanvasAsset(id: string): Promise<CanvasAssetRecord | nu
 }
 
 export async function deleteBoardAssets(boardId: string): Promise<void> {
+  if (isSupabaseBackend()) return remoteDeleteBoardAssets(boardId);
   const db = await openDb();
   const transaction = db.transaction(STORE_NAME, "readwrite");
   const done = txDone(transaction);
