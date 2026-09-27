@@ -108,6 +108,11 @@ export function ProjectWorkbench({
   const documents = documentsQuery.data ?? [];
 
   useEffect(() => {
+    if (!initialFocusNodeId) return;
+    setActiveTab("board");
+  }, [initialFocusNodeId, initialFocusCommentId]);
+
+  useEffect(() => {
     if (!initialDocumentId) return;
     setOpenDocumentIds((current) =>
       current.includes(initialDocumentId)
