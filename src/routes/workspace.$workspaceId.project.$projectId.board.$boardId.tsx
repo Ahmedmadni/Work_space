@@ -22,7 +22,7 @@ import {
   Milestone,
   StickyNote,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 import { useBoard, useMarkBoardOpened } from "@/hooks/use-boards";
 import { useBoardCanvas, useSaveBoardCanvas } from "@/hooks/use-canvas";
@@ -559,8 +559,8 @@ function CanvasNodeCard({
   connectorSource: boolean;
   zoom: number;
   onClick: () => void;
-  onDragStart: (event: React.PointerEvent<HTMLButtonElement>) => void;
-  onDragMove: (event: React.PointerEvent<HTMLButtonElement>) => void;
+  onDragStart: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+  onDragMove: (event: ReactPointerEvent<HTMLButtonElement>) => void;
   onDragEnd: () => void;
   onPointerCancel: () => void;
 }) {
