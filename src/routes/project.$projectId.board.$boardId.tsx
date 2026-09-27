@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { ProjectWorkbench } from "@/components/workbench/ProjectWorkbench";
 import { ProjectShareDialog } from "@/components/collaboration/ProjectShareDialog";
 import { ProjectCollaborationDock } from "@/components/collaboration/ProjectCollaborationDock";
+import { NotificationCenterButton } from "@/components/notifications/NotificationCenterButton";
 import { useBoard, useMarkBoardOpened } from "@/hooks/use-boards";
 import { useProject } from "@/hooks/use-projects";
 import { useProjectAccess } from "@/hooks/use-collaboration";
@@ -103,6 +104,7 @@ function BoardPage() {
         </div>
 
         <div className="ms-auto flex items-center gap-2">
+          <NotificationCenterButton />
           <ProjectCollaborationDock
             projectId={projectId}
             boardId={boardId}
