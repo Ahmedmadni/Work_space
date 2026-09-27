@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { PageHeader } from "@/components/app/shared";
+import { CloudMigrationPanel } from "@/components/settings/CloudMigrationPanel";
 import { useCurrentUser } from "@/hooks/use-auth";
 import { BACKEND_CONFIG } from "@/lib/backend-config";
 
@@ -45,6 +46,8 @@ function SettingsPage() {
           يمكنك تبديل الوضع الليلي من زر القمر أعلى الصفحة.
         </p>
       </div>
+
+      {BACKEND_CONFIG.mode === "supabase" && <CloudMigrationPanel />}
     </>
   );
 }
