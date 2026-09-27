@@ -6,6 +6,7 @@ import {
   Filter,
   Flag,
   Link2,
+  ListTodo,
   Plus,
   Search,
   Share2,
@@ -31,6 +32,7 @@ import { useProjectAccess } from "@/hooks/use-collaboration";
 import { useProjectPresence } from "@/hooks/use-live-collaboration";
 import { useBoards } from "@/hooks/use-boards";
 import { useCanvasNodeSearch, useProjectExecutionSummary } from "@/hooks/use-canvas";
+import { useCurrentTaskUserId } from "@/hooks/use-task-execution";
 import type {
   BoardWithContext,
   CanvasNodeStatus,
@@ -277,12 +279,130 @@ function ExecutionOverview({
   );
 }
 
+function MyTasksPanel({
+  summary,
+  boardMap,
+  projectId,
+  currentUserId,
+}: {
+  summary: ProjectExecutionSummary;
+  boardMap: Map<string, BoardWithContext>;
+  projectId: string;
+  currentUserId: string;
+}) {
+  const tasks = summary.items.filter(
+    (item) =>
+      item.node.assignee_user_id === currentUserId &&
+      item.node.status !== "done",
+  );
+
+  return (
+    <section className="mb-6 rounded-2xl border border-border bg-card p-4 shadow-[var(--shadow-frost)]">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="flex items-center gap-2 text-sm font-semibold">
+            <ListTodo className="h-4 w-4 text-brand" />
+            مهامي
+          </h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            العناصر المسندة إليك فعليًا في جميع لوحات هذا المشروع.
+          </p>
+        </div>
+        <span className="rounded-full bg-brand/10 px-2.5 py-1 text-xs font-semibold text-brand">
+          {tasks.length}
+        </span>
+      </div>
+
+      {!tasks.length ? (
+        <div className="mt-4 rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+          لا توجد مهام مفتوحة مسندة إليك حاليًا.
+        </div>
+      ) : (
+        <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+          {tasks.slice(0, 12).map((item) => {
+            const board = boardMap.get(item.board_id);
+            if (!board) return null;
+            return (
+              <Link
+                key={item.board_id + ":" + item.node.id}
+                to="/project/$projectId/board/$boardId"
+                params={{
+                  projectId,
+                  boardId: item.board_id,
+                }}
+                search={{ node: item.node.id }}
+                className="rounded-xl border border-border bg-background p-3 transition hover:border-brand/40 hover:bg-muted/40"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-[10px] text-muted-foreground">
+                      {board.name}
+                    </p>
+                    <p className="mt-1 truncate text-sm font-semibold">
+                      {item.node.title}
+                    </p>
+                  </div>
+                  {item.is_overdue ? (
+                    <span className="shrink-0 rounded-full bg-danger/10 px-2 py-0.5 text-[9px] font-medium text-danger">
+                      متأخرة
+                    </span>
+                  ) : item.is_upcoming ? (
+                    <span className="shrink-0 rounded-full bg-warning/10 px-2 py-0.5 text-[9px] font-medium text-warning">
+                      قريبة
+                    </span>
+                  ) : null}
+                </div>
+
+                <div className="mt-3 flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
+                  <span>
+                    {NODE_STATUS_OPTIONS.find(
+                      (option) => option.value === item.node.status,
+                    )?.label}
+                  </span>
+                  <span>{Math.round(item.node.progress)}%</span>
+                </div>
+                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-brand"
+                    style={{
+                      width: `${Math.max(
+                        0,
+                        Math.min(100, item.node.progress),
+                      )}%`,
+                    }}
+                  />
+                </div>
+
+                <div className="mt-2 text-[10px] text-muted-foreground">
+                  {item.node.due_date
+                    ? "الاستحقاق " + formatLocalDate(item.node.due_date)
+                    : "بدون تاريخ استحقاق"}
+                  {item.waiting_on_dependencies
+                    ? ` · ينتظر ${item.waiting_on.length}`
+                    : ""}
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      )}
+
+      {tasks.length > 12 && (
+        <p className="mt-3 text-center text-xs text-muted-foreground">
+          يعرض أول 12 مهمة حسب الأولوية والاستحقاق.
+        </p>
+      )}
+    </section>
+  );
+}
+
 function ProjectDetail() {
   const { projectId } = Route.useParams();
   const project = useProject(projectId);
   const boards = useBoards({ projectId });
   const access = useProjectAccess(projectId);
   const presence = useProjectPresence(projectId, "project", null, true);
+  const currentTaskUserId = useCurrentTaskUserId();
   const [shareOpen, setShareOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | CanvasNodeStatus>("all");
@@ -407,6 +527,15 @@ function ProjectDetail() {
           summary={execution.data}
           boardMap={boardMap}
           projectId={projectId}
+        />
+      )}
+
+      {execution.data && currentTaskUserId && (
+        <MyTasksPanel
+          summary={execution.data}
+          boardMap={boardMap}
+          projectId={projectId}
+          currentUserId={currentTaskUserId}
         />
       )}
 
