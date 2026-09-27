@@ -146,10 +146,10 @@ export async function previewLocalCloudMigration(
     projects: source.projects.length,
     boards: source.boards.length,
     ...details,
-    excluded_demo_projects: includeDemo ? 0 : excludedProjectIds.size,
-    excluded_demo_boards: includeDemo
-      ? 0
-      : persisted.boards.filter((board) => excludedProjectIds.has(board.project_id)).length,
+    excluded_demo_projects: excludedProjectIds.size,
+    excluded_demo_boards: persisted.boards.filter((board) =>
+      excludedProjectIds.has(board.project_id),
+    ).length,
     remote_project_collisions: source.projects.filter((project) => remoteProjectIds.has(project.id)).length,
     remote_board_collisions: source.boards.filter((board) => remoteBoardIds.has(board.id)).length,
   };
