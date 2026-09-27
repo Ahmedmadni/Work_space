@@ -8,6 +8,8 @@ import type {
   CanvasPriority,
   CanvasNodeSearchFilters,
   CanvasNodeSearchMatch,
+  ProjectExecutionItem,
+  ProjectExecutionSummary,
   CanvasNodeStyle,
   CanvasStroke,
   CanvasViewport,
@@ -310,6 +312,116 @@ function nodeMatchesFilters(node: CanvasNode, filters: CanvasNodeSearchFilters):
   if (filters.owner && node.owner !== filters.owner) return false;
   if (filters.tag && !node.tags.includes(filters.tag)) return false;
   return true;
+}
+
+
+function localDateKey(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function addLocalDaysKey(days: number): string {
+  const date = new Date();
+  date.setHours(12, 0, 0, 0);
+  date.setDate(date.getDate() + days);
+  return localDateKey(date);
+}
+
+function executionPriorityRank(priority: CanvasPriority | null) {
+  if (priority === "critical") return 0;
+  if (priority === "high") return 1;
+  if (priority === "medium") return 2;
+  if (priority === "low") return 3;
+  return 4;
+}
+
+export async function getProjectExecutionSummary(
+  boardIds: string[],
+): Promise<ProjectExecutionSummary> {
+  const store = readStore();
+  const today = localDateKey();
+  const upcomingEnd = addLocalDaysKey(7);
+  const items: ProjectExecutionItem[] = [];
+
+  for (const boardId of boardIds) {
+    const snapshot = normalizeSnapshot(boardId, store.boards[boardId]);
+    const semanticNodes = snapshot.nodes.filter((node) => isSemanticKind(node.kind));
+    const nodeMap = new Map(semanticNodes.map((node) => [node.id, node] as const));
+
+    for (const node of semanticNodes) {
+      const dependencies = snapshot.edges
+        .filter(
+          (edge) =>
+            edge.kind === "dependency" &&
+            edge.source_node_id === node.id &&
+            nodeMap.has(edge.target_node_id),
+        )
+        .flatMap((edge) => {
+          const target = nodeMap.get(edge.target_node_id);
+          return target ? [target] : [];
+        });
+
+      const dependencyDone = dependencies.filter((target) => target.status === "done").length;
+      const active = node.status !== "done";
+      const waitingOn = dependencies
+        .filter((target) => target.status !== "done")
+        .map((target) => ({ id: target.id, title: target.title }));
+
+      items.push({
+        board_id: boardId,
+        node,
+        dependency_total: dependencies.length,
+        dependency_done: dependencyDone,
+        waiting_on: waitingOn,
+        is_overdue: !!node.due_date && node.due_date < today && active,
+        is_upcoming:
+          !!node.due_date &&
+          node.due_date >= today &&
+          node.due_date <= upcomingEnd &&
+          active,
+        is_critical: node.priority === "critical" && active,
+        is_unassigned: !node.owner && active,
+        dependency_ready:
+          dependencies.length > 0 &&
+          dependencyDone === dependencies.length &&
+          active &&
+          node.status !== "blocked",
+        waiting_on_dependencies: waitingOn.length > 0 && active,
+      });
+    }
+  }
+
+  items.sort((a, b) => {
+    if (a.is_overdue !== b.is_overdue) return a.is_overdue ? -1 : 1;
+    const priorityDiff =
+      executionPriorityRank(a.node.priority) - executionPriorityRank(b.node.priority);
+    if (priorityDiff !== 0) return priorityDiff;
+    const dueA = a.node.due_date ?? "9999-12-31";
+    const dueB = b.node.due_date ?? "9999-12-31";
+    if (dueA !== dueB) return dueA.localeCompare(dueB);
+    return b.node.updated_at.localeCompare(a.node.updated_at);
+  });
+
+  const total = items.length;
+  const completed = items.filter((item) => item.node.status === "done").length;
+  const progressTotal = items.reduce((sum, item) => sum + item.node.progress, 0);
+
+  return {
+    total,
+    completed,
+    in_progress: items.filter((item) => item.node.status === "in_progress").length,
+    blocked: items.filter((item) => item.node.status === "blocked").length,
+    overdue: items.filter((item) => item.is_overdue).length,
+    upcoming: items.filter((item) => item.is_upcoming).length,
+    critical: items.filter((item) => item.is_critical).length,
+    unassigned: items.filter((item) => item.is_unassigned).length,
+    dependency_ready: items.filter((item) => item.dependency_ready).length,
+    waiting_on_dependencies: items.filter((item) => item.waiting_on_dependencies).length,
+    average_progress: total ? Math.round(progressTotal / total) : 0,
+    items,
+  };
 }
 
 export async function searchCanvasNodes(
