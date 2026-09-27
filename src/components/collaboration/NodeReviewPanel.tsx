@@ -1,5 +1,7 @@
 import {
   AtSign,
+  Bell,
+  BellOff,
   Check,
   Circle,
   MessageSquare,
@@ -36,6 +38,11 @@ import {
   useProjectAccess,
   useProjectCollaborators,
 } from "@/hooks/use-collaboration";
+import {
+  useCanvasNodeWatchers,
+  useCurrentTaskUserId,
+  useSetCanvasNodeWatching,
+} from "@/hooks/use-task-execution";
 import {
   useCreateProjectComment,
   useDeleteProjectComment,
@@ -479,6 +486,21 @@ export function NodeReviewPanel({
   );
   const activity = useProjectActivity(projectId, open && !!node, 150);
   const currentUserId = getCurrentCollaborationUserId();
+  const taskUserId = useCurrentTaskUserId();
+  const watchers = useCanvasNodeWatchers(
+    projectId,
+    boardId,
+    node?.id ?? "",
+    open && !!node,
+  );
+  const setWatching = useSetCanvasNodeWatching(
+    projectId,
+    boardId,
+    node?.id ?? "",
+  );
+  const watching =
+    !!taskUserId &&
+    (watchers.data ?? []).some((watcher) => watcher.user_id === taskUserId);
   const canEdit = !readOnly && !!access.data?.can_edit;
   const canManage = !!access.data?.can_manage;
 
@@ -542,6 +564,30 @@ export function NodeReviewPanel({
           <SheetDescription className="line-clamp-2">
             {node?.title ?? "العنصر"}
           </SheetDescription>
+          {node && (
+            <div className="mt-2 flex items-center gap-2">
+              <button
+                type="button"
+                disabled={!taskUserId || setWatching.isPending}
+                onClick={() => setWatching.mutate(!watching)}
+                className={
+                  watching
+                    ? "inline-flex items-center gap-1.5 rounded-lg bg-brand/10 px-2.5 py-1.5 text-[10px] font-medium text-brand"
+                    : "inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                }
+              >
+                {watching ? (
+                  <BellOff className="h-3.5 w-3.5" />
+                ) : (
+                  <Bell className="h-3.5 w-3.5" />
+                )}
+                {watching ? "إيقاف المتابعة" : "متابعة العنصر"}
+              </button>
+              <span className="text-[10px] text-muted-foreground">
+                {(watchers.data ?? []).length} متابع
+              </span>
+            </div>
+          )}
         </SheetHeader>
 
         <div className="grid grid-cols-2 border-b border-border bg-muted/20 p-1.5">
