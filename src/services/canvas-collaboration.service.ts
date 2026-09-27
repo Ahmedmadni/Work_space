@@ -262,3 +262,135 @@ export async function saveCollaborativeBoardCanvas(
         : snapshot.revision ?? 0,
   };
 }
+
+
+function findEntityVersion(
+  snapshot: BoardCanvasSnapshot,
+  type: "node" | "edge" | "stroke",
+  id: string,
+) {
+  const items =
+    type === "node"
+      ? snapshot.nodes
+      : type === "edge"
+        ? snapshot.edges
+        : snapshot.strokes;
+  return entityVersion(items.find((item) => item.id === id) ?? { version: 1 });
+}
+
+export function rebaseLocalCanvasChanges(
+  authoritative: BoardCanvasSnapshot,
+  sentSnapshot: BoardCanvasSnapshot,
+  currentLocal: BoardCanvasSnapshot,
+): { snapshot: BoardCanvasSnapshot; conflicts: CanvasConflict[] } {
+  const operations = diffBoardCanvas(sentSnapshot, currentLocal);
+  const conflicts: CanvasConflict[] = [];
+  const rebased = normalizeBoardCanvasSnapshot(
+    authoritative.board_id,
+    authoritative,
+  );
+  rebased.viewport = currentLocal.viewport;
+
+  const nodeMap = new Map(rebased.nodes.map((item) => [item.id, item] as const));
+  const edgeMap = new Map(rebased.edges.map((item) => [item.id, item] as const));
+  const strokeMap = new Map(
+    rebased.strokes.map((item) => [item.id, item] as const),
+  );
+
+  for (const operation of operations) {
+    const type = operation.op.startsWith("node_")
+      ? "node"
+      : operation.op.startsWith("edge_")
+        ? "edge"
+        : "stroke";
+    const id =
+      "entity" in operation ? operation.entity.id : operation.id;
+    const previousVersion = findEntityVersion(sentSnapshot, type, id);
+    const remoteVersion = findEntityVersion(authoritative, type, id);
+
+    if (
+      operation.op.endsWith("_update") ||
+      operation.op.endsWith("_delete")
+    ) {
+      const remoteExists =
+        type === "node"
+          ? authoritative.nodes.some((item) => item.id === id)
+          : type === "edge"
+            ? authoritative.edges.some((item) => item.id === id)
+            : authoritative.strokes.some((item) => item.id === id);
+
+      if (!remoteExists || remoteVersion !== previousVersion) {
+        conflicts.push({
+          entity_type: type,
+          id,
+          reason: remoteExists ? "version_mismatch" : "missing",
+          expected_version: previousVersion,
+          actual_version: remoteExists ? remoteVersion : null,
+        });
+        continue;
+      }
+    }
+
+    if (operation.op === "node_create") {
+      if (!nodeMap.has(operation.entity.id)) {
+        nodeMap.set(operation.entity.id, operation.entity);
+      }
+    } else if (operation.op === "node_update") {
+      const remote = nodeMap.get(operation.entity.id);
+      if (remote) {
+        nodeMap.set(operation.entity.id, {
+          ...operation.entity,
+          version: remote.version,
+        });
+      }
+    } else if (operation.op === "node_delete") {
+      nodeMap.delete(operation.id);
+      for (const [edgeId, edge] of edgeMap) {
+        if (
+          edge.source_node_id === operation.id ||
+          edge.target_node_id === operation.id
+        ) {
+          edgeMap.delete(edgeId);
+        }
+      }
+    } else if (operation.op === "edge_create") {
+      if (!edgeMap.has(operation.entity.id)) {
+        edgeMap.set(operation.entity.id, operation.entity);
+      }
+    } else if (operation.op === "edge_update") {
+      const remote = edgeMap.get(operation.entity.id);
+      if (remote) {
+        edgeMap.set(operation.entity.id, {
+          ...operation.entity,
+          version: remote.version,
+        });
+      }
+    } else if (operation.op === "edge_delete") {
+      edgeMap.delete(operation.id);
+    } else if (operation.op === "stroke_create") {
+      if (!strokeMap.has(operation.entity.id)) {
+        strokeMap.set(operation.entity.id, operation.entity);
+      }
+    } else if (operation.op === "stroke_update") {
+      const remote = strokeMap.get(operation.entity.id);
+      if (remote) {
+        strokeMap.set(operation.entity.id, {
+          ...operation.entity,
+          version: remote.version,
+        });
+      }
+    } else if (operation.op === "stroke_delete") {
+      strokeMap.delete(operation.id);
+    }
+  }
+
+  rebased.nodes = [...nodeMap.values()];
+  rebased.edges = [...edgeMap.values()].filter(
+    (edge) =>
+      nodeMap.has(edge.source_node_id) &&
+      nodeMap.has(edge.target_node_id),
+  );
+  rebased.strokes = [...strokeMap.values()];
+
+  return { snapshot: rebased, conflicts };
+}
