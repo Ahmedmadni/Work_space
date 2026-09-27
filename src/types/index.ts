@@ -15,6 +15,9 @@ export type BoardType =
 
 export type AccentColor = "brand" | "amber" | "sky" | "rose" | "violet" | "lime";
 
+export type CanvasNodeKind = "idea" | "task" | "milestone" | "note";
+export type CanvasEdgeKind = "relationship" | "dependency";
+
 export interface Profile {
   id: string;
   full_name: string;
@@ -72,6 +75,47 @@ export interface Board {
   is_favorite: boolean;
   /** آخر مرة فُتحت فيها اللوحة (محليًا). */
   last_opened_at: string | null;
+}
+
+/** عقدة مستقلة داخل مساحة اللوحة. تبقى كيانًا منفصلًا لتسهيل البحث والصلاحيات لاحقًا. */
+export interface CanvasNode {
+  id: string;
+  board_id: string;
+  kind: CanvasNodeKind;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  title: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** علاقة بين عقدتين داخل نفس اللوحة. */
+export interface CanvasEdge {
+  id: string;
+  board_id: string;
+  source_node_id: string;
+  target_node_id: string;
+  kind: CanvasEdgeKind;
+  label: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CanvasViewport {
+  x: number;
+  y: number;
+  zoom: number;
+}
+
+export interface BoardCanvasSnapshot {
+  board_id: string;
+  nodes: CanvasNode[];
+  edges: CanvasEdge[];
+  viewport: CanvasViewport;
+  updated_at: string | null;
 }
 
 export interface WorkspaceWithStats extends Workspace {
