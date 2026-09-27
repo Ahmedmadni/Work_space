@@ -137,11 +137,13 @@ export function DocumentViewer({
   projectId,
   document,
   readOnly = false,
+  initialPageNumber,
   onPageChange,
 }: {
   projectId: string;
   document: ProjectDocument;
   readOnly?: boolean;
+  initialPageNumber?: number;
   onPageChange?: (pageNumber: number) => void;
 }) {
   const blobQuery = useProjectDocumentBlob(document.id);
@@ -318,6 +320,13 @@ export function DocumentViewer({
   useEffect(() => {
     setPageNumber((current) => Math.min(current, Math.max(1, pageCount)));
   }, [pageCount]);
+
+  useEffect(() => {
+    if (!initialPageNumber || initialPageNumber < 1) return;
+    setPageNumber(
+      Math.min(initialPageNumber, Math.max(1, pageCount)),
+    );
+  }, [document.id, initialPageNumber, pageCount]);
 
   useEffect(() => {
     onPageChange?.(pageNumber);

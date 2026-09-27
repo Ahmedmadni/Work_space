@@ -108,6 +108,7 @@ function MentionChips({
 function CommentComposer({
   projectId,
   boardId,
+  originBoardId,
   targetType,
   targetId,
   pageNumber,
@@ -116,6 +117,7 @@ function CommentComposer({
 }: {
   projectId: string;
   boardId: string | null;
+  originBoardId: string;
   targetType: "board" | "document";
   targetId: string;
   pageNumber?: number;
@@ -139,6 +141,7 @@ function CommentComposer({
       {
         body,
         boardId,
+        originBoardId,
         targetType,
         targetId,
         pageNumber: targetType === "document" ? pageNumber ?? null : null,
@@ -261,6 +264,7 @@ function CommentItem({
   currentUserId,
   onReply,
   child,
+  focused = false,
 }: {
   projectId: string;
   comment: ProjectComment;
@@ -269,6 +273,7 @@ function CommentItem({
   currentUserId: string | null;
   onReply: (comment: ProjectComment) => void;
   child?: boolean;
+  focused?: boolean;
 }) {
   const update = useUpdateProjectComment(projectId);
   const remove = useDeleteProjectComment(projectId);
@@ -282,10 +287,15 @@ function CommentItem({
 
   return (
     <article
+      id={"comment-" + comment.id}
       className={
-        child
-          ? "ms-8 border-s-2 border-brand/15 ps-3"
-          : "rounded-xl border border-border bg-card p-3"
+        focused
+          ? child
+            ? "ms-8 rounded-xl border-s-2 border-brand bg-brand/5 p-3 ps-3 ring-2 ring-brand/20"
+            : "rounded-xl border border-brand bg-brand/5 p-3 ring-2 ring-brand/20"
+          : child
+            ? "ms-8 border-s-2 border-brand/15 ps-3"
+            : "rounded-xl border border-border bg-card p-3"
       }
     >
       <div className="flex items-start gap-2.5">
@@ -446,12 +456,14 @@ function CommentsTab({
   targetType,
   targetId,
   pageNumber,
+  focusCommentId,
 }: {
   projectId: string;
   boardId: string;
   targetType: "board" | "document";
   targetId: string;
   pageNumber?: number;
+  focusCommentId?: string;
 }) {
   const access = useProjectAccess(projectId);
   const comments = useProjectComments(projectId, {
@@ -469,6 +481,16 @@ function CommentsTab({
     setReplyTo(null);
     setShowAllPages(false);
   }, [targetId, targetType, pageNumber]);
+
+  useEffect(() => {
+    if (!focusCommentId || !comments.data?.length) return;
+    const timer = window.setTimeout(() => {
+      document
+        .getElementById("comment-" + focusCommentId)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [comments.data, focusCommentId]);
 
   const all = comments.data ?? [];
   const scoped =
@@ -548,6 +570,7 @@ function CommentsTab({
                 canManageProject={access.data?.can_manage ?? false}
                 currentUserId={currentUserId}
                 onReply={setReplyTo}
+                focused={comment.id === focusCommentId}
               />
               {(childrenByParent.get(comment.id) ?? []).map((child) => (
                 <CommentItem
@@ -559,6 +582,7 @@ function CommentsTab({
                   currentUserId={currentUserId}
                   onReply={setReplyTo}
                   child
+                  focused={child.id === focusCommentId}
                 />
               ))}
             </div>
@@ -570,6 +594,7 @@ function CommentsTab({
         <CommentComposer
           projectId={projectId}
           boardId={targetType === "document" ? null : boardId}
+          originBoardId={boardId}
           targetType={targetType}
           targetId={targetId}
           pageNumber={pageNumber}
@@ -687,15 +712,23 @@ export function ProjectCollaborationDock({
   presenceContextType = "board",
   presenceContextId,
   documentPageNumber,
+  focusCommentId,
 }: {
   projectId: string;
   boardId: string;
   presenceContextType?: "board" | "document";
   presenceContextId?: string | null;
   documentPageNumber?: number;
+  focusCommentId?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<DockTab>("comments");
+
+  useEffect(() => {
+    if (!focusCommentId) return;
+    setOpen(true);
+    setTab("comments");
+  }, [focusCommentId]);
   const commentTargetType =
     presenceContextType === "document" ? "document" : "board";
   const commentTargetId =
@@ -820,6 +853,7 @@ export function ProjectCollaborationDock({
                 ? documentPageNumber
                 : undefined
             }
+            focusCommentId={focusCommentId}
           />
         ) : tab === "activity" ? (
           <ActivityTab projectId={projectId} />

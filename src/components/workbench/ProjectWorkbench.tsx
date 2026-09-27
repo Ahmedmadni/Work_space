@@ -67,6 +67,8 @@ export function ProjectWorkbench({
   boardId,
   boardName,
   initialFocusNodeId,
+  initialDocumentId,
+  initialDocumentPage,
   canEdit = true,
   onContextChange,
 }: {
@@ -74,6 +76,8 @@ export function ProjectWorkbench({
   boardId: string;
   boardName: string;
   initialFocusNodeId?: string;
+  initialDocumentId?: string;
+  initialDocumentPage?: number;
   canEdit?: boolean;
   onContextChange?: (
     context: {
@@ -88,12 +92,31 @@ export function ProjectWorkbench({
   const deleteDocument = useDeleteProjectDocument(projectId);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const initial = useMemo(() => readState(projectId), [projectId]);
-  const [openDocumentIds, setOpenDocumentIds] = useState(
-    initial.openDocumentIds,
+  const [openDocumentIds, setOpenDocumentIds] = useState(() =>
+    initialDocumentId && !initial.openDocumentIds.includes(initialDocumentId)
+      ? [...initial.openDocumentIds, initialDocumentId]
+      : initial.openDocumentIds,
   );
-  const [activeTab, setActiveTab] = useState(initial.activeTab);
-  const [activeDocumentPage, setActiveDocumentPage] = useState(1);
+  const [activeTab, setActiveTab] = useState(
+    initialDocumentId ?? initial.activeTab,
+  );
+  const [activeDocumentPage, setActiveDocumentPage] = useState(
+    initialDocumentPage ?? 1,
+  );
   const documents = documentsQuery.data ?? [];
+
+  useEffect(() => {
+    if (!initialDocumentId) return;
+    setOpenDocumentIds((current) =>
+      current.includes(initialDocumentId)
+        ? current
+        : [...current, initialDocumentId],
+    );
+    setActiveTab(initialDocumentId);
+    if (initialDocumentPage && initialDocumentPage > 0) {
+      setActiveDocumentPage(initialDocumentPage);
+    }
+  }, [initialDocumentId, initialDocumentPage]);
 
   useEffect(() => {
     if (!documentsQuery.isSuccess) return;
@@ -373,6 +396,11 @@ export function ProjectWorkbench({
               projectId={projectId}
               document={activeDocument}
               readOnly={!canEdit}
+              initialPageNumber={
+                activeDocument.id === initialDocumentId
+                  ? initialDocumentPage
+                  : undefined
+              }
               onPageChange={setActiveDocumentPage}
             />
           </div>

@@ -1,0 +1,290 @@
+import { useNavigate } from "@tanstack/react-router";
+import {
+  AtSign,
+  Bell,
+  CheckCheck,
+  FileText,
+  MessageSquareReply,
+  ShieldCheck,
+  UserMinus,
+  UserPlus,
+} from "lucide-react";
+import { useState } from "react";
+
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import {
+  useMarkAllNotificationsRead,
+  useMarkNotificationRead,
+  useNotifications,
+  useUnreadNotificationCount,
+} from "@/hooks/use-notifications";
+import { relativeTime } from "@/lib/format";
+import type {
+  NotificationFilter,
+  UserNotification,
+} from "@/types/notifications";
+
+const FILTERS: Array<{ value: NotificationFilter; label: string }> = [
+  { value: "all", label: "الكل" },
+  { value: "unread", label: "غير المقروء" },
+  { value: "mentions", label: "الإشارات والردود" },
+];
+
+const ROLE_LABELS: Record<string, string> = {
+  owner: "المالك",
+  admin: "مسؤول",
+  editor: "محرر",
+  viewer: "مشاهد",
+};
+
+function notificationIcon(notification: UserNotification) {
+  if (notification.kind === "mention") return AtSign;
+  if (notification.kind === "reply") return MessageSquareReply;
+  if (notification.kind === "project_added") return UserPlus;
+  if (notification.kind === "role_changed") return ShieldCheck;
+  return UserMinus;
+}
+
+function notificationTitle(notification: UserNotification) {
+  if (notification.kind === "mention") {
+    return `${notification.actor_name} ذكرك في تعليق`;
+  }
+  if (notification.kind === "reply") {
+    return `${notification.actor_name} رد على تعليقك`;
+  }
+  if (notification.kind === "project_added") {
+    return `تمت إضافتك إلى «${notification.project_name}»`;
+  }
+  if (notification.kind === "role_changed") {
+    const role =
+      typeof notification.metadata.role === "string"
+        ? ROLE_LABELS[notification.metadata.role] ?? notification.metadata.role
+        : "صلاحية جديدة";
+    return `تم تغيير صلاحيتك إلى ${role}`;
+  }
+  return `تمت إزالتك من «${notification.project_name}»`;
+}
+
+function notificationContext(notification: UserNotification) {
+  if (notification.document_name) {
+    return notification.page_number
+      ? `${notification.document_name} · صفحة ${notification.page_number}`
+      : notification.document_name;
+  }
+  if (notification.board_name) return notification.board_name;
+  return notification.project_name;
+}
+
+function notificationPreview(notification: UserNotification) {
+  const preview =
+    typeof notification.metadata.preview === "string"
+      ? notification.metadata.preview.trim()
+      : "";
+  return preview.length > 180 ? preview.slice(0, 177) + "…" : preview;
+}
+
+export function NotificationCenterButton() {
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [filter, setFilter] = useState<NotificationFilter>("all");
+  const notifications = useNotifications(filter, true);
+  const unread = useUnreadNotificationCount(true);
+  const markRead = useMarkNotificationRead();
+  const markAll = useMarkAllNotificationsRead();
+  const count = unread.data ?? 0;
+
+  const openNotification = (notification: UserNotification) => {
+    if (!notification.read_at) markRead.mutate(notification.id);
+
+    if (notification.kind === "project_removed") {
+      return;
+    }
+
+    setOpen(false);
+
+    if (notification.board_id) {
+      void navigate({
+        to: "/project/$projectId/board/$boardId",
+        params: {
+          projectId: notification.project_id,
+          boardId: notification.board_id,
+        },
+        search: {
+          doc: notification.document_id ?? undefined,
+          page: notification.page_number ?? undefined,
+          comment: notification.comment_id ?? undefined,
+        },
+      });
+      return;
+    }
+
+    void navigate({
+      to: "/project/$projectId",
+      params: { projectId: notification.project_id },
+    });
+  };
+
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
+        <button
+          type="button"
+          aria-label={
+            count > 0 ? `الإشعارات، ${count} غير مقروء` : "الإشعارات"
+          }
+          title="الإشعارات"
+          className="relative grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+        >
+          <Bell className="h-4 w-4" />
+          {count > 0 && (
+            <span className="absolute -end-1 -top-1 grid min-h-4 min-w-4 place-items-center rounded-full bg-danger px-1 text-[9px] font-bold text-white">
+              {Math.min(count, 99)}
+            </span>
+          )}
+        </button>
+      </SheetTrigger>
+
+      <SheetContent
+        side="left"
+        dir="rtl"
+        className="flex h-full w-[min(95vw,440px)] max-w-none flex-col gap-0 p-0 sm:max-w-[440px]"
+      >
+        <SheetHeader className="border-b border-border px-5 py-4 pe-12 text-start">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <SheetTitle className="flex items-center gap-2">
+                <Bell className="h-5 w-5 text-brand" />
+                الإشعارات
+              </SheetTitle>
+              <SheetDescription className="mt-1">
+                الإشارات، الردود، ودعوات وتغييرات صلاحيات المشاريع.
+              </SheetDescription>
+            </div>
+
+            {count > 0 && (
+              <button
+                type="button"
+                disabled={markAll.isPending}
+                onClick={() => markAll.mutate()}
+                className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1.5 text-[10px] font-medium text-brand hover:bg-brand/10 disabled:opacity-40"
+              >
+                <CheckCheck className="h-3.5 w-3.5" />
+                قراءة الكل
+              </button>
+            )}
+          </div>
+        </SheetHeader>
+
+        <div className="grid grid-cols-3 gap-1 border-b border-border bg-muted/20 p-1.5">
+          {FILTERS.map((item) => (
+            <button
+              key={item.value}
+              type="button"
+              onClick={() => setFilter(item.value)}
+              className={
+                filter === item.value
+                  ? "rounded-lg bg-background px-2 py-2 text-[11px] font-semibold shadow-sm"
+                  : "rounded-lg px-2 py-2 text-[11px] text-muted-foreground hover:text-foreground"
+              }
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {notifications.isLoading ? (
+            <div className="space-y-2 p-4">
+              <div className="h-20 animate-pulse rounded-xl bg-muted" />
+              <div className="h-20 animate-pulse rounded-xl bg-muted" />
+              <div className="h-20 animate-pulse rounded-xl bg-muted" />
+            </div>
+          ) : !(notifications.data?.length ?? 0) ? (
+            <div className="grid min-h-72 place-items-center p-6 text-center">
+              <div>
+                <Bell className="mx-auto h-9 w-9 text-muted-foreground/40" />
+                <p className="mt-3 text-sm font-semibold">
+                  لا توجد إشعارات هنا
+                </p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  ستظهر الإشارات والردود وتغييرات الوصول إلى المشاريع في هذا المكان.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {(notifications.data ?? []).map((notification) => {
+                const Icon = notificationIcon(notification);
+                const preview = notificationPreview(notification);
+                const removed = notification.kind === "project_removed";
+
+                return (
+                  <button
+                    key={notification.id}
+                    type="button"
+                    onClick={() => openNotification(notification)}
+                    className={
+                      notification.read_at
+                        ? "flex w-full gap-3 px-4 py-3 text-start hover:bg-muted/40"
+                        : "flex w-full gap-3 bg-brand/[0.035] px-4 py-3 text-start hover:bg-brand/[0.07]"
+                    }
+                  >
+                    <span
+                      className={
+                        notification.read_at
+                          ? "grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground"
+                          : "grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand/10 text-brand"
+                      }
+                    >
+                      <Icon className="h-4 w-4" />
+                    </span>
+
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-start gap-2">
+                        <span className="min-w-0 flex-1 text-xs font-semibold leading-5">
+                          {notificationTitle(notification)}
+                        </span>
+                        {!notification.read_at && (
+                          <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-brand" />
+                        )}
+                      </span>
+
+                      <span className="mt-0.5 block truncate text-[10px] text-muted-foreground">
+                        {notificationContext(notification)}
+                      </span>
+
+                      {preview && (
+                        <span className="mt-1.5 block line-clamp-2 text-[11px] leading-5 text-foreground/75">
+                          {preview}
+                        </span>
+                      )}
+
+                      <span className="mt-1.5 flex items-center gap-2 text-[9px] text-muted-foreground">
+                        <span>{relativeTime(notification.created_at)}</span>
+                        {removed ? (
+                          <span>لم يعد لديك وصول للمشروع</span>
+                        ) : notification.document_id ? (
+                          <span className="inline-flex items-center gap-1">
+                            <FileText className="h-3 w-3" />
+                            فتح المستند
+                          </span>
+                        ) : null}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}

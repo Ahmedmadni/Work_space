@@ -42,6 +42,7 @@ export interface CreateProjectCommentInput {
   projectId: string;
   body: string;
   boardId?: string | null;
+  originBoardId?: string | null;
   targetType?: CollaborationTargetType;
   targetId?: string | null;
   pageNumber?: number | null;
