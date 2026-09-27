@@ -40,6 +40,9 @@ export function NodeExecutionControls({
   const currentUserId = useCurrentTaskUserId();
 
   const watcherList = watchers.data ?? [];
+  const assignableMembers = (collaborators.data ?? []).filter(
+    (member) => member.role !== "viewer",
+  );
   const watching = !!currentUserId &&
     watcherList.some((watcher) => watcher.user_id === currentUserId);
 
@@ -80,16 +83,14 @@ export function NodeExecutionControls({
           className="w-full rounded-lg border border-border bg-background px-2.5 py-2 text-xs outline-none focus:border-brand disabled:opacity-50"
         >
           <option value="">بدون مسؤول</option>
-          {(collaborators.data ?? []).map((member) => (
+          {assignableMembers.map((member) => (
             <option key={member.user_id} value={member.user_id}>
               {member.full_name}
               {member.role === "owner"
                 ? " · المالك"
                 : member.role === "admin"
                   ? " · مسؤول"
-                  : member.role === "editor"
-                    ? " · محرر"
-                    : " · مشاهد"}
+                  : " · محرر"}
             </option>
           ))}
         </select>
