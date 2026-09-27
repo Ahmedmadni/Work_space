@@ -173,6 +173,19 @@ export function deleteBoardHistory(boardId: string): void {
   writeStore(store);
 }
 
+export function deleteManyBoardHistories(boardIds: string[]): void {
+  if (!boardIds.length) return;
+  const store = readStore();
+  let changed = false;
+  for (const boardId of boardIds) {
+    if (boardId in store.boards) {
+      delete store.boards[boardId];
+      changed = true;
+    }
+  }
+  if (changed) writeStore(store);
+}
+
 export async function exportBoardBackup(boardId: string): Promise<CanvasBoardBackup> {
   const snapshot = await getBoardCanvas(boardId);
   const assets = await exportBoardAssets(boardId);
