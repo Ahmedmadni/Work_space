@@ -156,6 +156,13 @@ export async function previewLocalCloudMigration(
 }
 
 async function upsertProject(project: Project, userId: string) {
+  const existing = await supabaseRest<Array<{ id: string; created_by: string }>>("projects", {
+    query: { select: "id,created_by", id: `eq.${project.id}`, limit: 1 },
+  });
+  if (existing[0] && existing[0].created_by !== userId) {
+    throw new Error("يوجد مشروع سحابي بنفس المعرّف لكنه ليس مملوكًا للحساب الحالي.");
+  }
+
   await supabaseRest("projects", {
     method: "POST",
     query: { on_conflict: "id" },
@@ -188,6 +195,18 @@ async function upsertProject(project: Project, userId: string) {
 }
 
 async function upsertBoard(board: Board, userId: string) {
+  const existing = await supabaseRest<
+    Array<{ id: string; project_id: string; created_by: string }>
+  >("boards", {
+    query: { select: "id,project_id,created_by", id: `eq.${board.id}`, limit: 1 },
+  });
+  if (
+    existing[0] &&
+    (existing[0].created_by !== userId || existing[0].project_id !== board.project_id)
+  ) {
+    throw new Error("يوجد Board سحابية بنفس المعرّف ولا تطابق ملكية/مشروع البيانات المحلية.");
+  }
+
   await supabaseRest("boards", {
     method: "POST",
     query: { on_conflict: "id" },
