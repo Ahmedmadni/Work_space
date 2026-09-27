@@ -566,7 +566,7 @@ language plpgsql
 stable
 security definer
 set search_path = public
-as $
+as $projectflow$
 declare
   v_project_id text;
   v_viewport jsonb;
@@ -584,7 +584,7 @@ begin
   return jsonb_build_object(
     'board_id', p_board_id,
     'nodes', coalesce((
-      select jsonb_agg(to_jsonb(n) - 'owner_label' || jsonb_build_object('owner', n.owner_label)
+      select jsonb_agg((to_jsonb(n) - 'owner_label') || jsonb_build_object('owner', n.owner_label)
         order by n.created_at, n.id)
       from public.canvas_nodes n
       where n.board_id = p_board_id
@@ -603,7 +603,7 @@ begin
     'updated_at', v_updated_at
   );
 end;
-$;
+$projectflow$;
 
 create or replace function public.save_board_canvas(
   p_board_id text,
@@ -616,7 +616,7 @@ returns void
 language plpgsql
 security definer
 set search_path = public
-as $
+as $projectflow$
 declare
   v_project_id text;
   n jsonb;
@@ -718,7 +718,7 @@ begin
     updated_at = now()
   where id = p_board_id;
 end;
-$;
+$projectflow$;
 
 revoke all on function public.get_board_canvas(text) from public;
 revoke all on function public.save_board_canvas(text, jsonb, jsonb, jsonb, jsonb) from public;
