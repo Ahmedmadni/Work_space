@@ -78,7 +78,7 @@ function BoardPage() {
   const [snapshot, setSnapshot] = useState<BoardCanvasSnapshot | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [connectorSourceId, setConnectorSourceId] = useState<string | null>(null);
-  const [saveState, setSaveState] = useState<"saved" | "saving">("saved");
+  const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
 
   const marked = useRef<string | null>(null);
   const drag = useRef<DragState>(null);
@@ -111,7 +111,8 @@ function BoardPage() {
     if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
     autosaveTimer.current = setTimeout(() => {
       saveCanvas.mutate(snapshot, {
-        onSettled: () => setSaveState("saved"),
+        onSuccess: () => setSaveState("saved"),
+        onError: () => setSaveState("error"),
       });
     }, 450);
     return () => {
@@ -288,10 +289,14 @@ function BoardPage() {
 
         <span className={cn(
           "ms-3 hidden items-center gap-1 rounded-full px-2.5 py-0.5 text-xs sm:flex",
-          saveState === "saved" ? "bg-success/15 text-success" : "bg-warning/15 text-warning",
+          saveState === "saved"
+            ? "bg-success/15 text-success"
+            : saveState === "error"
+              ? "bg-danger/15 text-danger"
+              : "bg-warning/15 text-warning",
         )}>
           {saveState === "saved" && <CheckCircle2 className="h-3 w-3" />}
-          {saveState === "saved" ? "تم الحفظ" : "جارٍ الحفظ…"}
+          {saveState === "saved" ? "تم الحفظ" : saveState === "error" ? "تعذر الحفظ" : "جارٍ الحفظ…"}
         </span>
 
         <div className="ms-auto flex items-center">
@@ -441,6 +446,10 @@ function BoardPage() {
                     if (past.current.length > 60) past.current.shift();
                     future.current = [];
                     drag.current = null;
+                    setSnapshot((current) => current ? { ...current } : current);
+                  }}
+                  onPointerCancel={() => {
+                    drag.current = null;
                   }}
                 />
               ))}
@@ -543,6 +552,7 @@ function CanvasNodeCard({
   onDragStart,
   onDragMove,
   onDragEnd,
+  onPointerCancel,
 }: {
   node: CanvasNode;
   selected: boolean;
@@ -552,6 +562,7 @@ function CanvasNodeCard({
   onDragStart: (event: React.PointerEvent<HTMLButtonElement>) => void;
   onDragMove: (event: React.PointerEvent<HTMLButtonElement>) => void;
   onDragEnd: () => void;
+  onPointerCancel: () => void;
 }) {
   const icon =
     node.kind === "task" ? <CheckCircle2 className="h-4 w-4" /> :
@@ -566,6 +577,7 @@ function CanvasNodeCard({
       onPointerDown={onDragStart}
       onPointerMove={onDragMove}
       onPointerUp={onDragEnd}
+      onPointerCancel={onPointerCancel}
       style={{
         position: "absolute",
         left: node.x,
