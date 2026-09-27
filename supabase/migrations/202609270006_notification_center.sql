@@ -122,7 +122,13 @@ begin
   v_actor := auth.uid();
 
   if tg_op = 'INSERT' then
-    if v_actor is not null and new.user_id = v_actor then
+    if exists (
+      select 1
+      from public.projects p
+      where p.id = new.project_id
+        and p.created_by = new.user_id
+        and new.role = 'owner'
+    ) then
       return new;
     end if;
 
