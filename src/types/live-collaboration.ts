@@ -79,3 +79,12 @@ export interface RecordProjectActivityInput {
   entityId?: string | null;
   metadata?: Record<string, unknown>;
 }
+
+
+export interface NodeReviewSummary {
+  node_id: string;
+  open_thread_count: number;
+  total_thread_count: number;
+  comment_count: number;
+  latest_comment_at: string | null;
+}
