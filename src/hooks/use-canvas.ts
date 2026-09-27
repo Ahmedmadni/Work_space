@@ -16,6 +16,7 @@ export function useSaveBoardCanvas(boardId: string) {
     mutationFn: (snapshot: BoardCanvasSnapshot) => saveBoardCanvas(snapshot),
     onSuccess: (snapshot) => {
       qc.setQueryData(["canvas", boardId], snapshot);
+      void qc.invalidateQueries({ queryKey: ["canvas-search"] });
     },
   });
 }
