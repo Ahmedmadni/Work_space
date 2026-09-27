@@ -30,9 +30,13 @@ export function useSaveBoardCanvas(boardId: string) {
       qc.setQueryData(["canvas", boardId], snapshot);
       void qc.invalidateQueries({ queryKey: ["canvas-search"] });
       void qc.invalidateQueries({ queryKey: ["project-execution-summary"] });
-      void maybeCreateAutoCheckpoint(snapshot).then((version) => {
-        if (version) void qc.invalidateQueries({ queryKey: ["canvas-versions", boardId] });
-      });
+      void maybeCreateAutoCheckpoint(snapshot)
+        .then((version) => {
+          if (version) void qc.invalidateQueries({ queryKey: ["canvas-versions", boardId] });
+        })
+        .catch((error) => {
+          if (import.meta.env.DEV) console.warn("[history] تعذر إنشاء checkpoint تلقائي.", error);
+        });
     },
   });
 }
