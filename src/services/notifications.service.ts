@@ -1,0 +1,103 @@
+import { isSupabaseBackend } from "@/lib/backend-config";
+import { supabaseRest } from "@/services/supabase-rest";
+import type {
+  NotificationFilter,
+  NotificationKind,
+  UserNotification,
+} from "@/types/notifications";
+
+function normalizeKind(value: unknown): NotificationKind {
+  return value === "mention" ||
+    value === "reply" ||
+    value === "project_added" ||
+    value === "role_changed" ||
+    value === "project_removed"
+    ? value
+    : "mention";
+}
+
+function normalizeNotification(
+  value: Record<string, unknown>,
+): UserNotification {
+  return {
+    id: String(value.id),
+    project_id: String(value.project_id),
+    project_name:
+      typeof value.project_name === "string" && value.project_name.trim()
+        ? value.project_name
+        : "المشروع",
+    kind: normalizeKind(value.kind),
+    actor_user_id:
+      typeof value.actor_user_id === "string" ? value.actor_user_id : null,
+    actor_name:
+      typeof value.actor_name === "string" && value.actor_name.trim()
+        ? value.actor_name
+        : "النظام",
+    actor_email:
+      typeof value.actor_email === "string" ? value.actor_email : "",
+    comment_id:
+      typeof value.comment_id === "string" ? value.comment_id : null,
+    board_id:
+      typeof value.board_id === "string" ? value.board_id : null,
+    board_name:
+      typeof value.board_name === "string" ? value.board_name : null,
+    document_id:
+      typeof value.document_id === "string" ? value.document_id : null,
+    document_name:
+      typeof value.document_name === "string" ? value.document_name : null,
+    page_number:
+      typeof value.page_number === "number" ? value.page_number : null,
+    metadata:
+      value.metadata && typeof value.metadata === "object"
+        ? (value.metadata as Record<string, unknown>)
+        : {},
+    read_at:
+      typeof value.read_at === "string" ? value.read_at : null,
+    created_at: String(value.created_at),
+  };
+}
+
+export async function listUserNotifications(
+  filter: NotificationFilter = "all",
+  limit = 60,
+): Promise<UserNotification[]> {
+  if (!isSupabaseBackend()) return [];
+  const rows = await supabaseRest<Record<string, unknown>[]>(
+    "rpc/list_user_notifications",
+    {
+      method: "POST",
+      body: {
+        p_filter: filter,
+        p_limit: limit,
+      },
+    },
+  );
+  return rows.map(normalizeNotification);
+}
+
+export async function countUnreadNotifications(): Promise<number> {
+  if (!isSupabaseBackend()) return 0;
+  const count = await supabaseRest<unknown>(
+    "rpc/count_unread_notifications",
+    { method: "POST", body: {} },
+  );
+  return typeof count === "number" && Number.isFinite(count) ? count : 0;
+}
+
+export async function markNotificationRead(
+  notificationId: string,
+): Promise<void> {
+  if (!isSupabaseBackend()) return;
+  await supabaseRest<null>("rpc/mark_notification_read", {
+    method: "POST",
+    body: { p_notification_id: notificationId },
+  });
+}
+
+export async function markAllNotificationsRead(): Promise<void> {
+  if (!isSupabaseBackend()) return;
+  await supabaseRest<null>("rpc/mark_all_notifications_read", {
+    method: "POST",
+    body: {},
+  });
+}
