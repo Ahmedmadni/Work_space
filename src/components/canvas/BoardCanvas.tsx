@@ -955,6 +955,7 @@ export function BoardCanvas({
     redo,
     fitView,
     setZoom,
+    readOnly,
   ]);
 
   if (isLoading || !snapshot) {
