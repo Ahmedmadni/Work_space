@@ -1000,7 +1000,7 @@ function CanvasToolbar({
     { id: "eraser", label: "ممحاة", icon: Eraser, shortcut: "E" },
   ];
   return (
-    <div className="frost-strong absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 gap-1 rounded-2xl p-1.5 md:bottom-auto md:left-auto md:start-4 md:top-1/2 md:translate-x-0 md:-translate-y-1/2 md:flex-col">
+    <div className="frost-strong absolute bottom-4 left-1/2 z-30 flex max-w-[calc(100vw-1rem)] -translate-x-1/2 gap-1 overflow-x-auto rounded-2xl p-1.5 md:bottom-auto md:left-auto md:start-4 md:top-1/2 md:max-h-[calc(100vh-6rem)] md:max-w-none md:translate-x-0 md:-translate-y-1/2 md:flex-col md:overflow-y-auto md:overflow-x-hidden">
       {tools.map(({ id, label, icon: Icon, shortcut }) => (
         <button
           key={id}
@@ -1009,7 +1009,7 @@ function CanvasToolbar({
           aria-pressed={tool === id}
           onClick={() => onTool(id)}
           className={cn(
-            "grid h-10 w-10 place-items-center rounded-xl transition",
+            "grid h-10 w-10 shrink-0 place-items-center rounded-xl transition",
             tool === id
               ? "bg-brand text-primary-foreground"
               : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -1491,7 +1491,10 @@ function NodeInspector({
               ["idea", "فكرة"],
               ["task", "مهمة"],
               ["milestone", "معلم"],
-              ["note", "ملاحظة"],
+              ["sticky", "ملاحظة"],
+              ["text", "نص"],
+              ["rectangle", "مستطيل"],
+              ["ellipse", "بيضاوي"],
             ] as const).map(([kind, label]) => (
               <button
                 key={kind}
@@ -1508,6 +1511,106 @@ function NodeInspector({
             ))}
           </div>
         </div>
+        <div className="space-y-3 rounded-2xl border border-border bg-muted/30 p-3">
+          <div>
+            <span className="mb-2 block text-xs text-muted-foreground">لون التعبئة</span>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                title="شفاف"
+                aria-label="تعبئة شفافة"
+                onClick={() => onChange({ style: { ...node.style, fill: "transparent" } })}
+                className={cn(
+                  "grid h-7 w-7 place-items-center rounded-full border border-border text-[10px]",
+                  node.style.fill === "transparent" && "ring-2 ring-brand",
+                )}
+              >
+                ×
+              </button>
+              {DRAWING_COLORS.map((item) => (
+                <button
+                  key={item.value}
+                  type="button"
+                  title={item.label}
+                  aria-label={`تعبئة ${item.label}`}
+                  onClick={() => onChange({ style: { ...node.style, fill: item.value } })}
+                  className={cn(
+                    "h-7 w-7 rounded-full border-2 border-background",
+                    node.style.fill === item.value && "ring-2 ring-brand ring-offset-1 ring-offset-background",
+                  )}
+                  style={{ backgroundColor: canvasColorVar(item.value) }}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <span className="mb-2 block text-xs text-muted-foreground">لون الحدود</span>
+            <div className="flex flex-wrap gap-1.5">
+              {DRAWING_COLORS.map((item) => (
+                <button
+                  key={item.value}
+                  type="button"
+                  title={item.label}
+                  aria-label={`حدود ${item.label}`}
+                  onClick={() => onChange({ style: { ...node.style, stroke: item.value } })}
+                  className={cn(
+                    "h-7 w-7 rounded-full border-2 border-background",
+                    node.style.stroke === item.value && "ring-2 ring-brand ring-offset-1 ring-offset-background",
+                  )}
+                  style={{ backgroundColor: canvasColorVar(item.value) }}
+                />
+              ))}
+            </div>
+          </div>
+
+          <label className="block">
+            <span className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
+              <span>حجم الخط</span>
+              <span>{Math.round(node.style.font_size)}px</span>
+            </span>
+            <input
+              type="range"
+              min={10}
+              max={48}
+              value={node.style.font_size}
+              onChange={(event) =>
+                onChange({
+                  style: { ...node.style, font_size: Number(event.target.value) },
+                })
+              }
+              className="w-full accent-[var(--brand)]"
+            />
+          </label>
+
+          <div>
+            <span className="mb-2 block text-xs text-muted-foreground">محاذاة النص</span>
+            <div className="grid grid-cols-3 gap-1.5">
+              {([
+                ["start", "بداية"],
+                ["center", "وسط"],
+                ["end", "نهاية"],
+              ] as const).map(([align, label]) => (
+                <button
+                  key={align}
+                  type="button"
+                  onClick={() =>
+                    onChange({ style: { ...node.style, text_align: align } })
+                  }
+                  className={cn(
+                    "rounded-lg border px-2 py-1.5 text-xs",
+                    node.style.text_align === align
+                      ? "border-brand bg-brand/10 text-brand"
+                      : "border-border hover:bg-muted",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
         <button
           onClick={onDuplicate}
           className="flex w-full items-center justify-center gap-2 rounded-xl border border-border px-3 py-2 text-sm hover:bg-muted"
