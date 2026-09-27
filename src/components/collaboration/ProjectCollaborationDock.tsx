@@ -277,7 +277,8 @@ function CommentItem({
   const [draft, setDraft] = useState(comment.body);
 
   const canModify =
-    currentUserId === comment.created_by || canManageProject;
+    canEditProject &&
+    (currentUserId === comment.created_by || canManageProject);
 
   return (
     <article
