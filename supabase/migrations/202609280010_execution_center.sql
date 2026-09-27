@@ -222,3 +222,92 @@ revoke all on function public.update_canvas_node_execution(
 grant execute on function public.update_canvas_node_execution(
   text, text, text, bigint, boolean, text, boolean, text
 ) to authenticated;
+
+
+create or replace function public.cleanup_downgraded_project_member_tasks()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $projectflow$
+declare
+  v_board record;
+  v_revision bigint;
+  v_node_ids jsonb;
+begin
+  if old.role not in ('owner','admin','editor')
+    or new.role <> 'viewer'
+  then
+    return new;
+  end if;
+
+  for v_board in
+    select
+      b.id as board_id,
+      coalesce(
+        jsonb_agg(a.node_id order by a.node_id)
+          filter (where a.node_id is not null),
+        '[]'::jsonb
+      ) as node_ids
+    from public.boards b
+    left join public.canvas_node_assignments a
+      on a.board_id = b.id
+      and a.assignee_user_id = new.user_id
+    where b.project_id = new.project_id
+    group by b.id
+  loop
+    v_node_ids := v_board.node_ids;
+    if jsonb_array_length(v_node_ids) = 0 then
+      continue;
+    end if;
+
+    delete from public.canvas_node_assignments
+    where board_id = v_board.board_id
+      and assignee_user_id = new.user_id;
+
+    update public.boards
+    set
+      canvas_revision = canvas_revision + 1,
+      updated_at = now()
+    where id = v_board.board_id
+    returning canvas_revision into v_revision;
+
+    insert into public.board_collaboration_events (
+      board_id,
+      revision,
+      actor_user_id,
+      client_id,
+      operations
+    )
+    values (
+      v_board.board_id,
+      v_revision,
+      auth.uid(),
+      gen_random_uuid(),
+      jsonb_build_array(
+        jsonb_build_object(
+          'op', 'task_assignee_role_downgraded',
+          'user_id', new.user_id,
+          'node_ids', v_node_ids
+        )
+      )
+    );
+  end loop;
+
+  return new;
+end;
+$projectflow$;
+
+drop trigger if exists project_members_cleanup_tasks_on_viewer
+  on public.project_members;
+create trigger project_members_cleanup_tasks_on_viewer
+after update of role on public.project_members
+for each row
+when (
+  old.role is distinct from new.role
+  and new.role = 'viewer'
+)
+execute function public.cleanup_downgraded_project_member_tasks();
+
+revoke all on function public.cleanup_downgraded_project_member_tasks()
+  from public;
