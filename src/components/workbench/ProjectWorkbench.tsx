@@ -67,6 +67,7 @@ export function ProjectWorkbench({
   boardId,
   boardName,
   initialFocusNodeId,
+  initialFocusCommentId,
   initialDocumentId,
   initialDocumentPage,
   canEdit = true,
@@ -76,6 +77,7 @@ export function ProjectWorkbench({
   boardId: string;
   boardName: string;
   initialFocusNodeId?: string;
+  initialFocusCommentId?: string;
   initialDocumentId?: string;
   initialDocumentPage?: number;
   canEdit?: boolean;
@@ -386,6 +388,7 @@ export function ProjectWorkbench({
             boardId={boardId}
             projectId={projectId}
             initialFocusNodeId={initialFocusNodeId}
+            initialFocusCommentId={initialFocusCommentId}
             readOnly={!canEdit}
           />
         </div>
