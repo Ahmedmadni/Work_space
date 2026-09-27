@@ -155,6 +155,10 @@ function normalizeNode(value: unknown, boardId: string): CanvasNode | null {
   return {
     id: raw.id,
     board_id: boardId,
+    version:
+      typeof raw.version === "number" && Number.isFinite(raw.version)
+        ? Math.max(1, Math.floor(raw.version))
+        : 1,
     kind,
     x: safeNumber(raw.x, 0),
     y: safeNumber(raw.y, 0),
@@ -190,6 +194,10 @@ function normalizeEdge(value: unknown, boardId: string, nodeIds: Set<string>): C
   return {
     id: raw.id,
     board_id: boardId,
+    version:
+      typeof raw.version === "number" && Number.isFinite(raw.version)
+        ? Math.max(1, Math.floor(raw.version))
+        : 1,
     source_node_id: raw.source_node_id,
     target_node_id: raw.target_node_id,
     kind: raw.kind === "dependency" ? "dependency" : "relationship",
@@ -222,6 +230,10 @@ function normalizeStroke(value: unknown, boardId: string): CanvasStroke | null {
   return {
     id: raw.id,
     board_id: boardId,
+    version:
+      typeof raw.version === "number" && Number.isFinite(raw.version)
+        ? Math.max(1, Math.floor(raw.version))
+        : 1,
     tool: raw.tool === "highlighter" ? "highlighter" : "pen",
     points,
     size: Math.min(48, Math.max(1, safeNumber(raw.size, raw.tool === "highlighter" ? 18 : 3))),
@@ -233,7 +245,7 @@ function normalizeStroke(value: unknown, boardId: string): CanvasStroke | null {
 
 export function normalizeBoardCanvasSnapshot(boardId: string, value: unknown): BoardCanvasSnapshot {
   if (!value || typeof value !== "object") {
-    return { board_id: boardId, nodes: [], edges: [], strokes: [], viewport: DEFAULT_VIEWPORT, updated_at: null };
+    return { board_id: boardId, revision: 0, nodes: [], edges: [], strokes: [], viewport: DEFAULT_VIEWPORT, updated_at: null };
   }
   const raw = value as Partial<BoardCanvasSnapshot>;
   const nodes = Array.isArray(raw.nodes)
@@ -249,6 +261,10 @@ export function normalizeBoardCanvasSnapshot(boardId: string, value: unknown): B
   const viewportRaw = raw.viewport && typeof raw.viewport === "object" ? raw.viewport : DEFAULT_VIEWPORT;
   return {
     board_id: boardId,
+    revision:
+      typeof raw.revision === "number" && Number.isFinite(raw.revision)
+        ? Math.max(0, Math.floor(raw.revision))
+        : 0,
     nodes,
     edges,
     strokes,
@@ -536,6 +552,7 @@ export function createCanvasNode(
   return {
     id: `node-${crypto.randomUUID()}`,
     board_id: boardId,
+    version: 1,
     kind,
     x: position.x,
     y: position.y,
@@ -566,6 +583,7 @@ export function createCanvasEdge(
   return {
     id: `edge-${crypto.randomUUID()}`,
     board_id: boardId,
+    version: 1,
     source_node_id: sourceNodeId,
     target_node_id: targetNodeId,
     kind: "relationship",

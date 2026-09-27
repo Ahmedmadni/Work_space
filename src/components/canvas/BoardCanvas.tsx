@@ -46,7 +46,12 @@ import { toast } from "sonner";
 
 import { BoardHistoryPanel } from "@/components/canvas/BoardHistoryPanel";
 import { useBoardCanvas, useSaveBoardCanvas } from "@/hooks/use-canvas";
+import { useCanvasRealtime } from "@/hooks/use-canvas-realtime";
 import { createCanvasEdge, createCanvasNode } from "@/services/canvas.service";
+import {
+  rebaseLocalCanvasChanges,
+  saveBoardViewport,
+} from "@/services/canvas-collaboration.service";
 import { getCanvasAsset, saveCanvasImage } from "@/services/canvas-assets.service";
 import { cn } from "@/lib/utils";
 import type {
@@ -59,8 +64,11 @@ import type {
   CanvasStroke,
   CanvasViewport,
 } from "@/types";
+import type { CanvasRemoteCursor } from "@/types/realtime-canvas";
+import type { RealtimeStatus } from "@/services/canvas-realtime.service";
 
 type ViewMode = "canvas" | "kanban" | "outline" | "roadmap";
+type SaveState = "saved" | "saving" | "error" | "conflict";
 
 type Tool =
   | "select"
@@ -273,6 +281,7 @@ export function BoardCanvas({
 }) {
   const { data: loadedCanvas, isLoading } = useBoardCanvas(boardId);
   const saveCanvas = useSaveBoardCanvas(boardId, projectId);
+  const realtime = useCanvasRealtime(boardId, true);
 
   const [snapshot, setSnapshot] = useState<BoardCanvasSnapshot | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("canvas");
@@ -282,7 +291,10 @@ export function BoardCanvas({
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [connectorSourceId, setConnectorSourceId] = useState<string | null>(null);
   const [snapToGrid, setSnapToGrid] = useState(true);
-  const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
+  const [saveState, setSaveState] = useState<SaveState>("saved");
+  const [conflictSnapshot, setConflictSnapshot] =
+    useState<BoardCanvasSnapshot | null>(null);
+  const [conflictCount, setConflictCount] = useState(0);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const [historyVersion, setHistoryVersion] = useState(0);
   const [penSize, setPenSize] = useState(3);
@@ -312,14 +324,27 @@ export function BoardCanvas({
   const drawing = useRef<{ strokeId: string; before: BoardCanvasSnapshot } | null>(null);
   const initializedBoard = useRef<string | null>(null);
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const viewportSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const past = useRef<BoardCanvasSnapshot[]>([]);
   const future = useRef<BoardCanvasSnapshot[]>([]);
   const clipboard = useRef<{ nodes: CanvasNode[]; edges: CanvasEdge[] } | null>(null);
+  const localEditVersion = useRef(0);
+  const lastAckEditVersion = useRef(0);
+  const cursorBroadcastAt = useRef(0);
+  const lastCursorWorld = useRef<{ x: number; y: number } | null>(null);
+  const baseSnapshotRef = useRef<BoardCanvasSnapshot | null>(null);
+  const latestSnapshotRef = useRef<BoardCanvasSnapshot | null>(null);
 
   useEffect(() => {
     if (!loadedCanvas || initializedBoard.current === boardId) return;
     initializedBoard.current = boardId;
     setSnapshot(cloneSnapshot(loadedCanvas));
+    baseSnapshotRef.current = cloneSnapshot(loadedCanvas);
+    latestSnapshotRef.current = cloneSnapshot(loadedCanvas);
+    localEditVersion.current = 0;
+    lastAckEditVersion.current = 0;
+    setConflictSnapshot(null);
+    setConflictCount(0);
     const initialNodeExists =
       !!initialFocusNodeId && loadedCanvas.nodes.some((node) => node.id === initialFocusNodeId);
     setSelectedNodeIds(initialNodeExists ? [initialFocusNodeId!] : []);
@@ -331,7 +356,33 @@ export function BoardCanvas({
   }, [loadedCanvas, boardId, initialFocusNodeId]);
 
   useEffect(() => {
+    if (
+      !loadedCanvas ||
+      !snapshot ||
+      initializedBoard.current !== boardId ||
+      (loadedCanvas.revision ?? 0) <= (snapshot.revision ?? 0) ||
+      saveState !== "saved" ||
+      localEditVersion.current > lastAckEditVersion.current
+    ) {
+      return;
+    }
+
+    const next = {
+      ...cloneSnapshot(loadedCanvas),
+      viewport: snapshot.viewport,
+    };
+    baseSnapshotRef.current = cloneSnapshot(next);
+    latestSnapshotRef.current = cloneSnapshot(next);
+    past.current = [];
+    future.current = [];
+    setHistoryVersion((value) => value + 1);
+    setSnapshot(next);
+  }, [loadedCanvas, boardId, snapshot, saveState]);
+
+  useEffect(() => {
     if (!snapshot || initializedBoard.current !== boardId) return;
+    if (saveState === "conflict") return;
+    if (drawing.current || drag.current) return;
     if (readOnly) {
       setSaveState("saved");
       return;
@@ -339,16 +390,127 @@ export function BoardCanvas({
     setSaveState("saving");
     if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
     autosaveTimer.current = setTimeout(() => {
-      saveCanvas.mutate(snapshot, {
-        onSuccess: () => setSaveState("saved"),
+      const requestEditVersion = localEditVersion.current;
+      const requestSnapshot = cloneSnapshot(snapshot);
+      const requestBase = cloneSnapshot(
+        baseSnapshotRef.current ?? snapshot,
+      );
+
+      saveCanvas.mutate(
+        {
+          snapshot: requestSnapshot,
+          baseSnapshot: requestBase,
+        },
+        {
+        onSuccess: (result) => {
+          if (result.conflicts.length) {
+            baseSnapshotRef.current = cloneSnapshot(result.snapshot);
+            setConflictSnapshot(cloneSnapshot(result.snapshot));
+            setConflictCount(result.conflicts.length);
+            setSaveState("conflict");
+            toast.error(
+              `يوجد تعارض في ${result.conflicts.length} عنصر. تعديلاتك المحلية لم تُحذف.`,
+            );
+            return;
+          }
+
+          const remoteRevisionAdvanced =
+            result.revision > (requestBase.revision ?? 0) + 1;
+          if (remoteRevisionAdvanced) {
+            past.current = [];
+            future.current = [];
+            setHistoryVersion((value) => value + 1);
+          }
+
+          const currentLocal =
+            latestSnapshotRef.current ?? requestSnapshot;
+          const rebased =
+            localEditVersion.current === requestEditVersion
+              ? {
+                  snapshot: {
+                    ...cloneSnapshot(result.snapshot),
+                    viewport: currentLocal.viewport,
+                  },
+                  conflicts: [],
+                }
+              : rebaseLocalCanvasChanges(
+                  result.snapshot,
+                  requestSnapshot,
+                  currentLocal,
+                );
+
+          baseSnapshotRef.current = cloneSnapshot(result.snapshot);
+          lastAckEditVersion.current = Math.max(
+            lastAckEditVersion.current,
+            requestEditVersion,
+          );
+
+          if (rebased.conflicts.length) {
+            setConflictSnapshot(cloneSnapshot(result.snapshot));
+            setConflictCount(rebased.conflicts.length);
+            setSaveState("conflict");
+            toast.error(
+              `وصل تعديل متزامن على ${rebased.conflicts.length} عنصر أثناء عملك. لم نحذف تعديلاتك المحلية.`,
+            );
+            return;
+          }
+
+          setConflictSnapshot(null);
+          setConflictCount(0);
+
+          if (
+            result.applied_count === 0 &&
+            localEditVersion.current === requestEditVersion
+          ) {
+            baseSnapshotRef.current = {
+              ...cloneSnapshot(result.snapshot),
+              viewport: currentLocal.viewport,
+            };
+            setSaveState("saved");
+            return;
+          }
+
+          latestSnapshotRef.current = cloneSnapshot(rebased.snapshot);
+          setSnapshot(rebased.snapshot);
+          setSaveState(
+            localEditVersion.current === requestEditVersion
+              ? "saved"
+              : "saving",
+          );
+        },
         onError: () => setSaveState("error"),
-      });
+      },
+      );
     }, 450);
     return () => {
       if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
     };
   }, [snapshot, boardId, saveCanvas, readOnly]);
 
+
+  useEffect(() => {
+    if (!snapshot || initializedBoard.current !== boardId) return;
+    if (viewportSaveTimer.current) {
+      clearTimeout(viewportSaveTimer.current);
+    }
+    viewportSaveTimer.current = setTimeout(() => {
+      void saveBoardViewport(boardId, snapshot.viewport).catch((error) => {
+        if (import.meta.env.DEV) {
+          console.warn("[canvas] تعذر حفظ موضع العرض الشخصي.", error);
+        }
+      });
+    }, 700);
+    return () => {
+      if (viewportSaveTimer.current) {
+        clearTimeout(viewportSaveTimer.current);
+      }
+    };
+  }, [
+    boardId,
+    snapshot?.viewport.x,
+    snapshot?.viewport.y,
+    snapshot?.viewport.zoom,
+  ]);
 
   useEffect(() => {
     if (viewMode !== "canvas" || !focusNodeId || !snapshot || !canvasRef.current) return;
@@ -373,6 +535,10 @@ export function BoardCanvas({
     setFocusNodeId(null);
   }, [viewMode, focusNodeId, snapshot]);
 
+
+  useEffect(() => {
+    latestSnapshotRef.current = snapshot;
+  }, [snapshot]);
 
   const boardOwners = useMemo(
     () =>
@@ -452,6 +618,7 @@ export function BoardCanvas({
       future.current = [];
       setHistoryVersion((v) => v + 1);
     }
+    localEditVersion.current += 1;
     setSnapshot(next);
   }, [snapshot, readOnly]);
 
@@ -563,6 +730,16 @@ export function BoardCanvas({
     [snapshot],
   );
 
+  useEffect(() => {
+    const world = lastCursorWorld.current;
+    realtime.sendCursor({
+      x: world?.x ?? null,
+      y: world?.y ?? null,
+      selected_node_ids: selectedNodeIds,
+      tool,
+    });
+  }, [realtime.sendCursor, selectedNodeIds, tool]);
+
   const addNodeAtScreen = useCallback(
     (clientX: number, clientY: number, kind: CanvasNode["kind"] = "idea") => {
       const world = screenToWorld(clientX, clientY);
@@ -669,6 +846,7 @@ export function BoardCanvas({
     const previous = past.current.pop();
     if (!previous) return;
     future.current.push(cloneSnapshot(snapshot));
+    localEditVersion.current += 1;
     setSnapshot(previous);
     setSelectedNodeIds([]);
     setSelectedEdgeId(null);
@@ -681,6 +859,7 @@ export function BoardCanvas({
     const next = future.current.pop();
     if (!next) return;
     past.current.push(cloneSnapshot(snapshot));
+    localEditVersion.current += 1;
     setSnapshot(next);
     setSelectedNodeIds([]);
     setSelectedEdgeId(null);
@@ -976,6 +1155,45 @@ export function BoardCanvas({
           عرض فقط
         </div>
       )}
+      <RealtimeCanvasBadge
+        status={realtime.status}
+        remoteCount={realtime.remoteCursors.length}
+      />
+      {saveState === "conflict" && conflictSnapshot && (
+        <div className="frost-strong absolute bottom-16 start-1/2 z-50 w-[min(520px,calc(100%-2rem))] -translate-x-1/2 rounded-2xl border border-warning/30 p-4 shadow-lift">
+          <p className="text-sm font-semibold">يوجد تعارض في تعديلات اللوحة</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            عدّل مستخدم آخر {conflictCount} عنصر من نفس النسخة. احتفظنا بتعديلاتك محليًا ولم نكتب فوق عمله.
+          </p>
+          <div className="mt-3 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                const localViewport = snapshot?.viewport;
+                const accepted = {
+                  ...cloneSnapshot(conflictSnapshot),
+                  viewport: localViewport ?? conflictSnapshot.viewport,
+                };
+                baseSnapshotRef.current = cloneSnapshot(accepted);
+                latestSnapshotRef.current = cloneSnapshot(accepted);
+                past.current = [];
+                future.current = [];
+                setHistoryVersion((value) => value + 1);
+                setSnapshot(accepted);
+                localEditVersion.current += 1;
+                lastAckEditVersion.current = localEditVersion.current;
+                setConflictSnapshot(null);
+                setConflictCount(0);
+                setSaveState("saved");
+                toast.success("تم تحميل النسخة المؤكدة من الخادم.");
+              }}
+              className="rounded-xl bg-brand px-3 py-2 text-xs font-semibold text-primary-foreground"
+            >
+              تحميل النسخة المؤكدة
+            </button>
+          </div>
+        </div>
+      )}
       {!readOnly && (
       <button
         type="button"
@@ -1049,7 +1267,14 @@ export function BoardCanvas({
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}
         onReplaceSnapshot={(nextSnapshot) => {
-          setSnapshot(cloneSnapshot(nextSnapshot));
+          const accepted = cloneSnapshot(nextSnapshot);
+          baseSnapshotRef.current = cloneSnapshot(accepted);
+          latestSnapshotRef.current = cloneSnapshot(accepted);
+          localEditVersion.current += 1;
+          lastAckEditVersion.current = localEditVersion.current;
+          setConflictSnapshot(null);
+          setConflictCount(0);
+          setSnapshot(accepted);
           setSelectedNodeIds([]);
           setSelectedEdgeId(null);
           setConnectorSourceId(null);
@@ -1091,6 +1316,15 @@ export function BoardCanvas({
               ? "cursor-crosshair"
               : "cursor-default",
         )}
+        onPointerLeave={() => {
+          lastCursorWorld.current = null;
+          realtime.sendCursor({
+            x: null,
+            y: null,
+            selected_node_ids: selectedNodeIds,
+            tool,
+          });
+        }}
         onContextMenu={(event) => {
           event.preventDefault();
           if (readOnly) return;
@@ -1148,6 +1382,7 @@ export function BoardCanvas({
             const stroke: CanvasStroke = {
               id: `stroke-${crypto.randomUUID()}`,
               board_id: boardId,
+              version: 1,
               tool,
               points: [{ x: world.x, y: world.y, pressure }],
               size: tool === "highlighter" ? highlighterSize : penSize,
@@ -1182,6 +1417,21 @@ export function BoardCanvas({
           }
         }}
         onPointerMove={(event) => {
+          const nowMs = Date.now();
+          if (nowMs - cursorBroadcastAt.current >= 70) {
+            const world = screenToWorld(event.clientX, event.clientY);
+            if (world) {
+              cursorBroadcastAt.current = nowMs;
+              lastCursorWorld.current = world;
+              realtime.sendCursor({
+                x: world.x,
+                y: world.y,
+                selected_node_ids: selectedNodeIds,
+                tool,
+              });
+            }
+          }
+
           if (drawing.current) {
             const world = screenToWorld(event.clientX, event.clientY);
             if (!world) return;
@@ -1217,15 +1467,22 @@ export function BoardCanvas({
             if (past.current.length > 80) past.current.shift();
             future.current = [];
             drawing.current = null;
+            localEditVersion.current += 1;
             setHistoryVersion((v) => v + 1);
             setSnapshot((current) => (current ? { ...current } : current));
             return;
           }
-          if (drag.current?.type === "pan") drag.current = null;
+          if (drag.current?.type === "pan") {
+            drag.current = null;
+            setSnapshot((current) => (current ? { ...current } : current));
+          }
         }}
         onPointerCancel={() => {
           drawing.current = null;
-          if (drag.current?.type === "pan") drag.current = null;
+          if (drag.current?.type === "pan") {
+            drag.current = null;
+            setSnapshot((current) => (current ? { ...current } : current));
+          }
         }}
       >
         <div
@@ -1236,6 +1493,11 @@ export function BoardCanvas({
             transformOrigin: "0 0",
           }}
         >
+          <RemoteCollaborationOverlay
+            cursors={realtime.remoteCursors}
+            nodes={snapshot.nodes}
+          />
+
           <CanvasStrokes
             strokes={snapshot.strokes}
             erasing={tool === "eraser"}
@@ -1334,6 +1596,7 @@ export function BoardCanvas({
                 if (past.current.length > 80) past.current.shift();
                 future.current = [];
                 drag.current = null;
+                localEditVersion.current += 1;
                 setHistoryVersion((v) => v + 1);
                 setSnapshot((current) => (current ? { ...current } : current));
               }}
@@ -3347,6 +3610,98 @@ function EdgeInspector({
   );
 }
 
+function RemoteCollaborationOverlay({
+  cursors,
+  nodes,
+}: {
+  cursors: CanvasRemoteCursor[];
+  nodes: CanvasNode[];
+}) {
+  if (!cursors.length) return null;
+  const nodeMap = new Map(nodes.map((node) => [node.id, node] as const));
+
+  return (
+    <div className="pointer-events-none absolute inset-0 z-40">
+      {cursors.flatMap((cursor) =>
+        cursor.selected_node_ids.flatMap((nodeId) => {
+          const node = nodeMap.get(nodeId);
+          if (!node) return [];
+          return [
+            <div
+              key={cursor.client_id + "-selection-" + nodeId}
+              className="absolute rounded-2xl border-2 border-brand/50"
+              style={{
+                left: node.x - 4,
+                top: node.y - 4,
+                width: node.width + 8,
+                height: node.height + 8,
+              }}
+            >
+              <span className="absolute -top-5 start-0 rounded-md bg-brand px-1.5 py-0.5 text-[9px] font-semibold text-primary-foreground">
+                {cursor.user_name}
+              </span>
+            </div>,
+          ];
+        }),
+      )}
+
+      {cursors.map((cursor) =>
+        cursor.x === null || cursor.y === null ? null : (
+          <div
+            key={cursor.client_id + "-cursor"}
+            className="absolute"
+            style={{
+              transform: `translate(${cursor.x}px, ${cursor.y}px)`,
+            }}
+          >
+            <MousePointer2 className="h-5 w-5 fill-brand text-brand" />
+            <span className="ms-4 -mt-1 block whitespace-nowrap rounded-md bg-brand px-1.5 py-0.5 text-[9px] font-semibold text-primary-foreground shadow-sm">
+              {cursor.user_name}
+            </span>
+          </div>
+        ),
+      )}
+    </div>
+  );
+}
+
+function RealtimeCanvasBadge({
+  status,
+  remoteCount,
+}: {
+  status: RealtimeStatus;
+  remoteCount: number;
+}) {
+  const label =
+    status === "connected"
+      ? remoteCount
+        ? `مباشر · ${remoteCount + 1} يعملون`
+        : "مباشر"
+      : status === "connecting"
+        ? "جارٍ الاتصال…"
+        : status === "reconnecting"
+          ? "إعادة اتصال…"
+          : status === "error"
+            ? "تعذر الاتصال المباشر"
+            : "غير متصل";
+
+  return (
+    <div className="frost pointer-events-none absolute bottom-4 start-4 z-30 hidden items-center gap-2 rounded-xl px-2.5 py-1.5 text-[10px] text-muted-foreground shadow-frost sm:flex">
+      <span
+        className={cn(
+          "h-2 w-2 rounded-full",
+          status === "connected"
+            ? "bg-success"
+            : status === "connecting" || status === "reconnecting"
+              ? "bg-warning"
+              : "bg-muted-foreground/50",
+        )}
+      />
+      {label}
+    </div>
+  );
+}
+
 function EmptyCanvas({ onAdd }: { onAdd: () => void }) {
   return (
     <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-8">
@@ -3381,7 +3736,7 @@ function ZoomControls({
   onRedo,
 }: {
   zoom: number;
-  saveState: "saved" | "saving" | "error";
+  saveState: SaveState;
   canUndo: boolean;
   canRedo: boolean;
   onZoomOut: () => void;
@@ -3399,10 +3754,18 @@ function ZoomControls({
             ? "text-success"
             : saveState === "error"
               ? "text-danger"
-              : "text-warning",
+              : saveState === "conflict"
+                ? "text-warning"
+                : "text-warning",
         )}
       >
-        {saveState === "saved" ? "محفوظ" : saveState === "error" ? "خطأ بالحفظ" : "يحفظ…"}
+        {saveState === "saved"
+          ? "محفوظ"
+          : saveState === "error"
+            ? "خطأ بالحفظ"
+            : saveState === "conflict"
+              ? "تعارض"
+              : "يحفظ…"}
       </span>
       <button onClick={onUndo} disabled={!canUndo} aria-label="تراجع" className="grid h-9 w-9 place-items-center rounded-lg hover:bg-muted disabled:opacity-35"><Undo2 className="h-4 w-4" /></button>
       <button onClick={onRedo} disabled={!canRedo} aria-label="إعادة" className="grid h-9 w-9 place-items-center rounded-lg hover:bg-muted disabled:opacity-35"><Redo2 className="h-4 w-4" /></button>

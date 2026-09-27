@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { recordProjectActivity } from "@/services/live-collaboration.service";
+import { saveCollaborativeBoardCanvas } from "@/services/canvas-collaboration.service";
 import {
   getBoardCanvas,
   getProjectExecutionSummary,
-  saveBoardCanvas,
   searchCanvasNodes,
 } from "@/services/canvas.service";
 import {
@@ -28,12 +28,21 @@ const boardActivityAt = new Map<string, number>();
 export function useSaveBoardCanvas(boardId: string, projectId?: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (snapshot: BoardCanvasSnapshot) => saveBoardCanvas(snapshot),
-    onSuccess: (snapshot) => {
+    scope: { id: `canvas-save:${boardId}` },
+    mutationFn: async ({
+      snapshot,
+      baseSnapshot,
+    }: {
+      snapshot: BoardCanvasSnapshot;
+      baseSnapshot: BoardCanvasSnapshot;
+    }) => saveCollaborativeBoardCanvas(snapshot, baseSnapshot),
+    onSuccess: (result) => {
+      const snapshot = result.snapshot;
       qc.setQueryData(["canvas", boardId], snapshot);
       void qc.invalidateQueries({ queryKey: ["canvas-search"] });
       void qc.invalidateQueries({ queryKey: ["project-execution-summary"] });
-      if (projectId) {
+
+      if (projectId && result.applied_count > 0) {
         const last = boardActivityAt.get(boardId) ?? 0;
         if (Date.now() - last >= 60_000) {
           boardActivityAt.set(boardId, Date.now());
@@ -43,22 +52,31 @@ export function useSaveBoardCanvas(boardId: string, projectId?: string) {
             entityType: "board",
             entityId: boardId,
             metadata: {
+              revision: result.revision,
               node_count: snapshot.nodes.length,
               edge_count: snapshot.edges.length,
               stroke_count: snapshot.strokes.length,
+              conflicts: result.conflicts.length,
             },
           }).catch((error) => {
             if (import.meta.env.DEV) console.warn("[activity] تعذر تسجيل تحديث اللوحة.", error);
           });
         }
       }
-      void maybeCreateAutoCheckpoint(snapshot)
-        .then((version) => {
-          if (version) void qc.invalidateQueries({ queryKey: ["canvas-versions", boardId] });
-        })
-        .catch((error) => {
-          if (import.meta.env.DEV) console.warn("[history] تعذر إنشاء checkpoint تلقائي.", error);
-        });
+
+      if (!result.conflicts.length && result.applied_count > 0) {
+        void maybeCreateAutoCheckpoint(snapshot)
+          .then((version) => {
+            if (version) {
+              void qc.invalidateQueries({
+                queryKey: ["canvas-versions", boardId],
+              });
+            }
+          })
+          .catch((error) => {
+            if (import.meta.env.DEV) console.warn("[history] تعذر إنشاء checkpoint تلقائي.", error);
+          });
+      }
     },
   });
 }
