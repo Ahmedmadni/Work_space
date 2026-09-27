@@ -18,6 +18,7 @@ import {
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
+  type ReactNode,
 } from "react";
 
 import {
@@ -112,7 +113,7 @@ function ToolButton({
   active?: boolean;
   label: string;
   onClick: () => void;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <button
@@ -158,6 +159,7 @@ export function DocumentViewer({
   const annotationsQuery = useDocumentAnnotations(document.id, pageNumber);
   const saveAnnotations = useSaveDocumentAnnotations(document.id, pageNumber);
   const pageCountMutation = useUpdateProjectDocumentPageCount(projectId);
+  const updatePageCount = pageCountMutation.mutate;
   const [annotations, setAnnotations] = useState<DocumentAnnotation[]>([]);
   const [undoStack, setUndoStack] = useState<DocumentAnnotation[][]>([]);
   const [redoStack, setRedoStack] = useState<DocumentAnnotation[][]>([]);
@@ -166,7 +168,7 @@ export function DocumentViewer({
     | { kind: "rectangle"; start: AnnotationPoint; current: AnnotationPoint }
     | null
   >(null);
-  const [draftVersion, setDraftVersion] = useState(0);
+  const [, setDraftVersion] = useState(0);
 
   const isPdf = document.mime_type === "application/pdf";
 
@@ -231,7 +233,7 @@ export function DocumentViewer({
         setPdf(loaded);
         setPageCount(loaded.numPages);
         if (document.page_count !== loaded.numPages) {
-          pageCountMutation.mutate({
+          updatePageCount({
             documentId: document.id,
             pageCount: loaded.numPages,
           });
@@ -252,7 +254,13 @@ export function DocumentViewer({
       renderTaskRef.current?.cancel?.();
       void loaded?.destroy?.();
     };
-  }, [blobQuery.data, document.id, document.page_count, isPdf]);
+  }, [
+    blobQuery.data,
+    document.id,
+    document.page_count,
+    isPdf,
+    updatePageCount,
+  ]);
 
   useEffect(() => {
     if (!isPdf || !pdf || !canvasRef.current) return;
