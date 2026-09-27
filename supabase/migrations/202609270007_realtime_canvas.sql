@@ -255,7 +255,7 @@ begin
     raise exception 'INVALID_CANVAS_OPERATIONS' using errcode = '22023';
   end if;
 
-  if jsonb_array_length(coalesce(p_operations, '[]'::jsonb)) > 500 then
+  if jsonb_array_length(coalesce(p_operations, '[]'::jsonb)) > 2500 then
     raise exception 'TOO_MANY_CANVAS_OPERATIONS' using errcode = '22023';
   end if;
 
@@ -327,7 +327,12 @@ begin
         );
       else
         v_applied_count := v_applied_count + 1;
-        v_applied_ops := v_applied_ops || jsonb_build_array(v_operation);
+        v_applied_ops := v_applied_ops || jsonb_build_array(
+          jsonb_build_object(
+            'op', v_op,
+            'id', coalesce(v_id, v_entity->>'id')
+          )
+        );
       end if;
 
     elsif v_op = 'node_update' then
@@ -384,7 +389,12 @@ begin
         );
       else
         v_applied_count := v_applied_count + 1;
-        v_applied_ops := v_applied_ops || jsonb_build_array(v_operation);
+        v_applied_ops := v_applied_ops || jsonb_build_array(
+          jsonb_build_object(
+            'op', v_op,
+            'id', coalesce(v_id, v_entity->>'id')
+          )
+        );
       end if;
 
     elsif v_op = 'node_delete' then
@@ -412,7 +422,12 @@ begin
           and version = v_expected_version;
 
         v_applied_count := v_applied_count + 1;
-        v_applied_ops := v_applied_ops || jsonb_build_array(v_operation);
+        v_applied_ops := v_applied_ops || jsonb_build_array(
+          jsonb_build_object(
+            'op', v_op,
+            'id', coalesce(v_id, v_entity->>'id')
+          )
+        );
       end if;
 
     elsif v_op = 'edge_create' then
@@ -473,7 +488,12 @@ begin
         );
       else
         v_applied_count := v_applied_count + 1;
-        v_applied_ops := v_applied_ops || jsonb_build_array(v_operation);
+        v_applied_ops := v_applied_ops || jsonb_build_array(
+          jsonb_build_object(
+            'op', v_op,
+            'id', coalesce(v_id, v_entity->>'id')
+          )
+        );
       end if;
 
     elsif v_op = 'edge_update' then
@@ -539,7 +559,12 @@ begin
         );
       else
         v_applied_count := v_applied_count + 1;
-        v_applied_ops := v_applied_ops || jsonb_build_array(v_operation);
+        v_applied_ops := v_applied_ops || jsonb_build_array(
+          jsonb_build_object(
+            'op', v_op,
+            'id', coalesce(v_id, v_entity->>'id')
+          )
+        );
       end if;
 
     elsif v_op = 'edge_delete' then
@@ -567,7 +592,12 @@ begin
           and version = v_expected_version;
 
         v_applied_count := v_applied_count + 1;
-        v_applied_ops := v_applied_ops || jsonb_build_array(v_operation);
+        v_applied_ops := v_applied_ops || jsonb_build_array(
+          jsonb_build_object(
+            'op', v_op,
+            'id', coalesce(v_id, v_entity->>'id')
+          )
+        );
       end if;
 
     elsif v_op = 'stroke_create' then
@@ -605,7 +635,12 @@ begin
         );
       else
         v_applied_count := v_applied_count + 1;
-        v_applied_ops := v_applied_ops || jsonb_build_array(v_operation);
+        v_applied_ops := v_applied_ops || jsonb_build_array(
+          jsonb_build_object(
+            'op', v_op,
+            'id', coalesce(v_id, v_entity->>'id')
+          )
+        );
       end if;
 
     elsif v_op = 'stroke_update' then
@@ -643,7 +678,12 @@ begin
         );
       else
         v_applied_count := v_applied_count + 1;
-        v_applied_ops := v_applied_ops || jsonb_build_array(v_operation);
+        v_applied_ops := v_applied_ops || jsonb_build_array(
+          jsonb_build_object(
+            'op', v_op,
+            'id', coalesce(v_id, v_entity->>'id')
+          )
+        );
       end if;
 
     elsif v_op = 'stroke_delete' then
@@ -671,7 +711,12 @@ begin
           and version = v_expected_version;
 
         v_applied_count := v_applied_count + 1;
-        v_applied_ops := v_applied_ops || jsonb_build_array(v_operation);
+        v_applied_ops := v_applied_ops || jsonb_build_array(
+          jsonb_build_object(
+            'op', v_op,
+            'id', coalesce(v_id, v_entity->>'id')
+          )
+        );
       end if;
 
     else
