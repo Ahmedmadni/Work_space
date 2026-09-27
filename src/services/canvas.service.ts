@@ -1,7 +1,10 @@
 import type {
   BoardCanvasSnapshot,
   CanvasEdge,
+  CanvasColor,
   CanvasNode,
+  CanvasNodeKind,
+  CanvasNodeStyle,
   CanvasStroke,
   CanvasViewport,
 } from "@/types";
@@ -22,21 +25,77 @@ function safeNumber(value: unknown, fallback: number) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
+
+const CANVAS_COLORS: CanvasColor[] = ["ink", "brand", "warning", "info", "danger", "success"];
+
+function normalizeColor(value: unknown, fallback: CanvasColor): CanvasColor {
+  return typeof value === "string" && CANVAS_COLORS.includes(value as CanvasColor)
+    ? (value as CanvasColor)
+    : fallback;
+}
+
+function normalizeNodeKind(value: unknown): CanvasNodeKind {
+  return value === "task" ||
+    value === "milestone" ||
+    value === "note" ||
+    value === "sticky" ||
+    value === "text" ||
+    value === "rectangle" ||
+    value === "ellipse"
+    ? value
+    : "idea";
+}
+
+function defaultNodeStyle(kind: CanvasNodeKind): CanvasNodeStyle {
+  if (kind === "text") {
+    return { fill: "transparent", stroke: "ink", font_size: 22, text_align: "start" };
+  }
+  if (kind === "sticky" || kind === "note") {
+    return { fill: "warning", stroke: "warning", font_size: 16, text_align: "start" };
+  }
+  if (kind === "rectangle" || kind === "ellipse") {
+    return { fill: "transparent", stroke: "brand", font_size: 16, text_align: "center" };
+  }
+  return { fill: "transparent", stroke: "brand", font_size: 16, text_align: "start" };
+}
+
+function normalizeNodeStyle(value: unknown, kind: CanvasNodeKind): CanvasNodeStyle {
+  const defaults = defaultNodeStyle(kind);
+  if (!value || typeof value !== "object") return defaults;
+  const raw = value as Partial<CanvasNodeStyle>;
+  const fill =
+    raw.fill === "transparent"
+      ? "transparent"
+      : normalizeColor(raw.fill, defaults.fill === "transparent" ? "brand" : defaults.fill);
+  const textAlign =
+    raw.text_align === "center" || raw.text_align === "end" || raw.text_align === "start"
+      ? raw.text_align
+      : defaults.text_align;
+  return {
+    fill,
+    stroke: normalizeColor(raw.stroke, defaults.stroke),
+    font_size: Math.min(48, Math.max(10, safeNumber(raw.font_size, defaults.font_size))),
+    text_align: textAlign,
+  };
+}
+
 function normalizeNode(value: unknown, boardId: string): CanvasNode | null {
   if (!value || typeof value !== "object") return null;
   const raw = value as Partial<CanvasNode>;
   if (typeof raw.id !== "string") return null;
   const now = new Date().toISOString();
+  const kind = normalizeNodeKind(raw.kind);
   return {
     id: raw.id,
     board_id: boardId,
-    kind: raw.kind === "task" || raw.kind === "milestone" || raw.kind === "note" ? raw.kind : "idea",
+    kind,
     x: safeNumber(raw.x, 0),
     y: safeNumber(raw.y, 0),
     width: Math.max(140, safeNumber(raw.width, 220)),
     height: Math.max(72, safeNumber(raw.height, 110)),
     title: typeof raw.title === "string" ? raw.title : "فكرة جديدة",
     description: typeof raw.description === "string" ? raw.description : null,
+    style: normalizeNodeStyle(raw.style, kind),
     created_at: typeof raw.created_at === "string" ? raw.created_at : now,
     updated_at: typeof raw.updated_at === "string" ? raw.updated_at : now,
   };
@@ -91,6 +150,7 @@ function normalizeStroke(value: unknown, boardId: string): CanvasStroke | null {
     tool: raw.tool === "highlighter" ? "highlighter" : "pen",
     points,
     size: Math.min(48, Math.max(1, safeNumber(raw.size, raw.tool === "highlighter" ? 18 : 3))),
+    color: normalizeColor(raw.color, raw.tool === "highlighter" ? "warning" : "ink"),
     created_at: typeof raw.created_at === "string" ? raw.created_at : now,
     updated_at: typeof raw.updated_at === "string" ? raw.updated_at : now,
   };
@@ -177,16 +237,41 @@ export function createCanvasNode(
   kind: CanvasNode["kind"] = "idea",
 ): CanvasNode {
   const now = new Date().toISOString();
+  const size =
+    kind === "milestone"
+      ? { width: 180, height: 100 }
+      : kind === "sticky" || kind === "note"
+        ? { width: 210, height: 170 }
+        : kind === "text"
+          ? { width: 260, height: 80 }
+          : kind === "rectangle" || kind === "ellipse"
+            ? { width: 220, height: 140 }
+            : { width: 220, height: 110 };
+  const title =
+    kind === "task"
+      ? "مهمة جديدة"
+      : kind === "milestone"
+        ? "معلم رئيسي"
+        : kind === "sticky" || kind === "note"
+          ? "ملاحظة"
+          : kind === "text"
+            ? "اكتب نصًا"
+            : kind === "rectangle"
+              ? "مستطيل"
+              : kind === "ellipse"
+                ? "شكل بيضاوي"
+                : "فكرة جديدة";
   return {
     id: `node-${crypto.randomUUID()}`,
     board_id: boardId,
     kind,
     x: position.x,
     y: position.y,
-    width: kind === "milestone" ? 180 : 220,
-    height: kind === "note" ? 140 : 110,
-    title: kind === "task" ? "مهمة جديدة" : kind === "milestone" ? "معلم رئيسي" : kind === "note" ? "ملاحظة" : "فكرة جديدة",
+    width: size.width,
+    height: size.height,
+    title,
     description: null,
+    style: defaultNodeStyle(kind),
     created_at: now,
     updated_at: now,
   };

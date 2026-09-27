@@ -23,6 +23,8 @@ import {
   Redo2,
   Scissors,
   StickyNote,
+  Type,
+  Square,
   Trash2,
   Undo2,
   ZoomIn,
@@ -32,9 +34,27 @@ import {
 import { useBoardCanvas, useSaveBoardCanvas } from "@/hooks/use-canvas";
 import { createCanvasEdge, createCanvasNode } from "@/services/canvas.service";
 import { cn } from "@/lib/utils";
-import type { BoardCanvasSnapshot, CanvasEdge, CanvasNode, CanvasStroke, CanvasViewport } from "@/types";
+import type {
+  BoardCanvasSnapshot,
+  CanvasColor,
+  CanvasEdge,
+  CanvasNode,
+  CanvasStroke,
+  CanvasViewport,
+} from "@/types";
 
-type Tool = "select" | "hand" | "node" | "connector" | "pen" | "highlighter" | "eraser";
+type Tool =
+  | "select"
+  | "hand"
+  | "node"
+  | "connector"
+  | "text"
+  | "rectangle"
+  | "ellipse"
+  | "sticky"
+  | "pen"
+  | "highlighter"
+  | "eraser";
 
 type DragState =
   | {
@@ -83,6 +103,19 @@ function snap(value: number, enabled: boolean) {
   return enabled ? Math.round(value / GRID_SIZE) * GRID_SIZE : value;
 }
 
+function canvasColorVar(color: CanvasColor) {
+  return `var(--${color})`;
+}
+
+const DRAWING_COLORS: Array<{ value: CanvasColor; label: string }> = [
+  { value: "ink", label: "حبر" },
+  { value: "brand", label: "الهوية" },
+  { value: "warning", label: "عنبري" },
+  { value: "info", label: "سماوي" },
+  { value: "danger", label: "أحمر" },
+  { value: "success", label: "أخضر" },
+];
+
 export function BoardCanvas({ boardId }: { boardId: string }) {
   const { data: loadedCanvas, isLoading } = useBoardCanvas(boardId);
   const saveCanvas = useSaveBoardCanvas(boardId);
@@ -96,6 +129,10 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const [historyVersion, setHistoryVersion] = useState(0);
+  const [penSize, setPenSize] = useState(3);
+  const [penColor, setPenColor] = useState<CanvasColor>("ink");
+  const [highlighterSize, setHighlighterSize] = useState(18);
+  const [highlighterColor, setHighlighterColor] = useState<CanvasColor>("warning");
 
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const drag = useRef<DragState>(null);
@@ -361,15 +398,24 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
   const fitView = useCallback(() => {
     if (!snapshot || !canvasRef.current) return;
     const rect = canvasRef.current.getBoundingClientRect();
-    if (!snapshot.nodes.length) {
+    const strokePoints = snapshot.strokes.flatMap((stroke) => stroke.points);
+    if (!snapshot.nodes.length && !strokePoints.length) {
       setSnapshot({ ...snapshot, viewport: { x: 0, y: 0, zoom: 1 } });
       return;
     }
     const padding = 140;
-    const minX = Math.min(...snapshot.nodes.map((n) => n.x));
-    const minY = Math.min(...snapshot.nodes.map((n) => n.y));
-    const maxX = Math.max(...snapshot.nodes.map((n) => n.x + n.width));
-    const maxY = Math.max(...snapshot.nodes.map((n) => n.y + n.height));
+    const nodeMinX = snapshot.nodes.length ? Math.min(...snapshot.nodes.map((n) => n.x)) : Infinity;
+    const nodeMinY = snapshot.nodes.length ? Math.min(...snapshot.nodes.map((n) => n.y)) : Infinity;
+    const nodeMaxX = snapshot.nodes.length ? Math.max(...snapshot.nodes.map((n) => n.x + n.width)) : -Infinity;
+    const nodeMaxY = snapshot.nodes.length ? Math.max(...snapshot.nodes.map((n) => n.y + n.height)) : -Infinity;
+    const strokeMinX = strokePoints.length ? Math.min(...strokePoints.map((point) => point.x)) : Infinity;
+    const strokeMinY = strokePoints.length ? Math.min(...strokePoints.map((point) => point.y)) : Infinity;
+    const strokeMaxX = strokePoints.length ? Math.max(...strokePoints.map((point) => point.x)) : -Infinity;
+    const strokeMaxY = strokePoints.length ? Math.max(...strokePoints.map((point) => point.y)) : -Infinity;
+    const minX = Math.min(nodeMinX, strokeMinX);
+    const minY = Math.min(nodeMinY, strokeMinY);
+    const maxX = Math.max(nodeMaxX, strokeMaxX);
+    const maxY = Math.max(nodeMaxY, strokeMaxY);
     const width = Math.max(1, maxX - minX);
     const height = Math.max(1, maxY - minY);
     const zoom = Math.min(
@@ -494,6 +540,10 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
       if (key === "h") setTool("hand");
       if (key === "n") setTool("node");
       if (key === "l") setTool("connector");
+      if (key === "t") setTool("text");
+      if (key === "r") setTool("rectangle");
+      if (key === "o") setTool("ellipse");
+      if (key === "s") setTool("sticky");
       if (key === "p") setTool("pen");
       if (key === "b") setTool("highlighter");
       if (key === "e") setTool("eraser");
@@ -538,13 +588,34 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
         onToggleSnap={() => setSnapToGrid((value) => !value)}
       />
 
+      {(tool === "pen" || tool === "highlighter") && (
+        <DrawingControls
+          tool={tool}
+          size={tool === "highlighter" ? highlighterSize : penSize}
+          color={tool === "highlighter" ? highlighterColor : penColor}
+          onSize={(value) =>
+            tool === "highlighter" ? setHighlighterSize(value) : setPenSize(value)
+          }
+          onColor={(value) =>
+            tool === "highlighter" ? setHighlighterColor(value) : setPenColor(value)
+          }
+        />
+      )}
+
       <div
         ref={canvasRef}
         className={cn(
           "canvas-grid relative flex flex-1 overflow-hidden touch-none",
           tool === "hand"
             ? "cursor-grab active:cursor-grabbing"
-            : tool === "node" || tool === "pen" || tool === "highlighter" || tool === "eraser"
+            : tool === "node" ||
+                tool === "text" ||
+                tool === "rectangle" ||
+                tool === "ellipse" ||
+                tool === "sticky" ||
+                tool === "pen" ||
+                tool === "highlighter" ||
+                tool === "eraser"
               ? "cursor-crosshair"
               : "cursor-default",
         )}
@@ -575,6 +646,15 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
         }}
         onPointerDown={(event) => {
           setContextMenu(null);
+          if (
+            (tool === "text" || tool === "rectangle" || tool === "ellipse" || tool === "sticky") &&
+            event.target === event.currentTarget
+          ) {
+            const world = screenToWorld(event.clientX, event.clientY);
+            if (!world) return;
+            addNodeAtWorld(world.x, world.y, tool);
+            return;
+          }
           if ((tool === "pen" || tool === "highlighter") && event.target === event.currentTarget) {
             const world = screenToWorld(event.clientX, event.clientY);
             if (!world) return;
@@ -586,7 +666,8 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
               board_id: boardId,
               tool,
               points: [{ x: world.x, y: world.y, pressure }],
-              size: tool === "highlighter" ? 18 : 3,
+              size: tool === "highlighter" ? highlighterSize : penSize,
+              color: tool === "highlighter" ? highlighterColor : penColor,
               created_at: now,
               updated_at: now,
             };
@@ -919,12 +1000,16 @@ function CanvasToolbar({
     { id: "hand", label: "تحريك", icon: Hand, shortcut: "H" },
     { id: "node", label: "عقدة", icon: Circle, shortcut: "N" },
     { id: "connector", label: "موصل", icon: Link2, shortcut: "L" },
+    { id: "text", label: "نص", icon: Type, shortcut: "T" },
+    { id: "rectangle", label: "مستطيل", icon: Square, shortcut: "R" },
+    { id: "ellipse", label: "شكل بيضاوي", icon: Circle, shortcut: "O" },
+    { id: "sticky", label: "ملاحظة لاصقة", icon: StickyNote, shortcut: "S" },
     { id: "pen", label: "قلم", icon: Pencil, shortcut: "P" },
     { id: "highlighter", label: "تمييز", icon: Highlighter, shortcut: "B" },
     { id: "eraser", label: "ممحاة", icon: Eraser, shortcut: "E" },
   ];
   return (
-    <div className="frost-strong absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 gap-1 rounded-2xl p-1.5 md:bottom-auto md:left-auto md:start-4 md:top-1/2 md:translate-x-0 md:-translate-y-1/2 md:flex-col">
+    <div className="frost-strong absolute bottom-4 left-1/2 z-30 flex max-w-[calc(100vw-1rem)] -translate-x-1/2 gap-1 overflow-x-auto rounded-2xl p-1.5 md:bottom-auto md:left-auto md:start-4 md:top-1/2 md:max-h-[calc(100vh-6rem)] md:max-w-none md:translate-x-0 md:-translate-y-1/2 md:flex-col md:overflow-y-auto md:overflow-x-hidden">
       {tools.map(({ id, label, icon: Icon, shortcut }) => (
         <button
           key={id}
@@ -933,7 +1018,7 @@ function CanvasToolbar({
           aria-pressed={tool === id}
           onClick={() => onTool(id)}
           className={cn(
-            "grid h-10 w-10 place-items-center rounded-xl transition",
+            "grid h-10 w-10 shrink-0 place-items-center rounded-xl transition",
             tool === id
               ? "bg-brand text-primary-foreground"
               : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -959,6 +1044,58 @@ function CanvasToolbar({
   );
 }
 
+
+function DrawingControls({
+  tool,
+  size,
+  color,
+  onSize,
+  onColor,
+}: {
+  tool: "pen" | "highlighter";
+  size: number;
+  color: CanvasColor;
+  onSize: (value: number) => void;
+  onColor: (value: CanvasColor) => void;
+}) {
+  const max = tool === "highlighter" ? 36 : 16;
+  return (
+    <div className="frost-strong absolute bottom-20 left-1/2 z-30 flex -translate-x-1/2 items-center gap-3 rounded-2xl px-3 py-2 md:bottom-4 md:left-auto md:start-20 md:translate-x-0">
+      <span className="text-xs font-medium text-muted-foreground">
+        {tool === "highlighter" ? "تمييز" : "قلم"}
+      </span>
+      <input
+        type="range"
+        min={1}
+        max={max}
+        value={size}
+        onChange={(event) => onSize(Number(event.target.value))}
+        aria-label="سمك أداة الرسم"
+        className="w-24 accent-[var(--brand)]"
+      />
+      <span className="min-w-8 text-center text-xs text-muted-foreground">{size}px</span>
+      <div className="flex items-center gap-1" role="radiogroup" aria-label="لون أداة الرسم">
+        {DRAWING_COLORS.map((item) => (
+          <button
+            key={item.value}
+            type="button"
+            role="radio"
+            aria-checked={color === item.value}
+            aria-label={item.label}
+            title={item.label}
+            onClick={() => onColor(item.value)}
+            className={cn(
+              "h-6 w-6 rounded-full border-2 border-background shadow-sm transition",
+              color === item.value && "ring-2 ring-brand ring-offset-1 ring-offset-background",
+            )}
+            style={{ backgroundColor: canvasColorVar(item.value) }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function CanvasStrokes({
   strokes,
   erasing,
@@ -979,12 +1116,15 @@ function CanvasStrokes({
               cx={point.x}
               cy={point.y}
               r={Math.max(1, stroke.size * point.pressure * 0.5)}
-              fill={stroke.tool === "highlighter" ? "var(--warning)" : "var(--ink)"}
+              fill={canvasColorVar(stroke.color)}
               opacity={stroke.tool === "highlighter" ? 0.32 : 0.9}
               className={erasing ? "cursor-crosshair" : "pointer-events-none"}
               onPointerDown={erasing ? (event) => {
                 event.stopPropagation();
                 onErase(stroke.id);
+              } : undefined}
+              onPointerEnter={erasing ? (event) => {
+                if (event.buttons > 0) onErase(stroke.id);
               } : undefined}
             />
           );
@@ -1001,7 +1141,7 @@ function CanvasStrokes({
                   y1={previous.y}
                   x2={point.x}
                   y2={point.y}
-                  stroke={stroke.tool === "highlighter" ? "var(--warning)" : "var(--ink)"}
+                  stroke={canvasColorVar(stroke.color)}
                   strokeWidth={stroke.size * (0.55 + pressure * 0.9)}
                   strokeLinecap="round"
                   opacity={stroke.tool === "highlighter" ? 0.3 : 0.92}
@@ -1009,6 +1149,9 @@ function CanvasStrokes({
                   onPointerDown={erasing ? (event) => {
                     event.stopPropagation();
                     onErase(stroke.id);
+                  } : undefined}
+                  onPointerEnter={erasing ? (event) => {
+                    if (event.buttons > 0) onErase(stroke.id);
                   } : undefined}
                 />
               );
@@ -1124,11 +1267,23 @@ function CanvasNodeCard({
       <CheckCircle2 className="h-4 w-4" />
     ) : node.kind === "milestone" ? (
       <Milestone className="h-4 w-4" />
-    ) : node.kind === "note" ? (
+    ) : node.kind === "note" || node.kind === "sticky" ? (
       <StickyNote className="h-4 w-4" />
+    ) : node.kind === "text" ? (
+      <Type className="h-4 w-4" />
+    ) : node.kind === "rectangle" ? (
+      <Square className="h-4 w-4" />
     ) : (
       <Circle className="h-4 w-4" />
     );
+
+  const isText = node.kind === "text";
+  const isShape = node.kind === "rectangle" || node.kind === "ellipse";
+  const isSticky = node.kind === "sticky" || node.kind === "note";
+  const fill =
+    node.style.fill === "transparent"
+      ? "transparent"
+      : `color-mix(in oklab, ${canvasColorVar(node.style.fill)} ${isSticky ? "30%" : "16%"}, transparent)`;
 
   return (
     <div
@@ -1148,24 +1303,51 @@ function CanvasNodeCard({
         top: node.y,
         width: node.width,
         height: node.height,
+        backgroundColor: fill,
+        borderColor: canvasColorVar(node.style.stroke),
+        borderWidth: isShape ? 2 : isSticky ? 1 : undefined,
+        borderStyle: isShape || isSticky ? "solid" : undefined,
+        borderRadius: node.kind === "ellipse" ? "9999px" : undefined,
+        boxShadow: isText ? "none" : undefined,
+        textAlign:
+          node.style.text_align === "center"
+            ? "center"
+            : node.style.text_align === "end"
+              ? "end"
+              : "start",
       }}
       className={cn(
-        "frost-strong group select-none rounded-2xl p-4 text-start shadow-frost transition-shadow",
+        "group select-none p-4 transition-shadow",
+        !isText && !isShape && !isSticky && "frost-strong rounded-2xl shadow-frost",
+        isSticky && "rounded-xl shadow-frost",
+        isShape && "flex flex-col justify-center",
+        isText && "rounded-lg",
         selected && "ring-2 ring-brand shadow-lift",
         connectorSource && "ring-2 ring-info",
       )}
     >
-      <span className="mb-3 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+      <span className={cn("mb-3 items-center gap-2 text-xs font-medium text-muted-foreground", isText ? "hidden" : "flex")}>
         {icon}
         {node.kind === "task"
           ? "مهمة"
           : node.kind === "milestone"
             ? "معلم"
-            : node.kind === "note"
+            : node.kind === "note" || node.kind === "sticky"
               ? "ملاحظة"
-              : "فكرة"}
+              : node.kind === "text"
+                ? "نص"
+                : node.kind === "rectangle"
+                  ? "مستطيل"
+                  : node.kind === "ellipse"
+                    ? "بيضاوي"
+                    : "فكرة"}
       </span>
-      <span className="block font-semibold leading-6">{node.title}</span>
+      <span
+        className={cn("block leading-6", isText || isShape ? "font-medium" : "font-semibold")}
+        style={{ fontSize: node.style.font_size }}
+      >
+        {node.title}
+      </span>
       {node.description && (
         <span className="mt-1.5 block line-clamp-3 text-xs leading-5 text-muted-foreground">
           {node.description}
@@ -1254,6 +1436,7 @@ function CanvasInspector({
           <div className="mt-6 rounded-2xl bg-muted/60 p-3 text-xs leading-6 text-muted-foreground">
             <strong className="text-foreground">اختصارات:</strong><br />
             V تحديد · H تحريك · N عقدة · L ربط<br />
+            T نص · R مستطيل · O بيضاوي · S ملاحظة<br />
             P قلم · B تمييز · E ممحاة<br />
             Ctrl/Cmd+C نسخ · Ctrl/Cmd+V لصق · Ctrl/Cmd+D تكرار<br />
             Delete حذف · G شبكة · 0 ملاءمة
@@ -1285,7 +1468,7 @@ function NodeInspector({
 
   return (
     <div>
-      <h3 className="font-semibold">خصائص العقدة</h3>
+      <h3 className="font-semibold">خصائص العنصر</h3>
       <div className="mt-5 space-y-4">
         <label className="block text-sm">
           <span className="mb-1.5 block text-xs text-muted-foreground">العنوان</span>
@@ -1317,7 +1500,10 @@ function NodeInspector({
               ["idea", "فكرة"],
               ["task", "مهمة"],
               ["milestone", "معلم"],
-              ["note", "ملاحظة"],
+              ["sticky", "ملاحظة"],
+              ["text", "نص"],
+              ["rectangle", "مستطيل"],
+              ["ellipse", "بيضاوي"],
             ] as const).map(([kind, label]) => (
               <button
                 key={kind}
@@ -1334,6 +1520,106 @@ function NodeInspector({
             ))}
           </div>
         </div>
+        <div className="space-y-3 rounded-2xl border border-border bg-muted/30 p-3">
+          <div>
+            <span className="mb-2 block text-xs text-muted-foreground">لون التعبئة</span>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                title="شفاف"
+                aria-label="تعبئة شفافة"
+                onClick={() => onChange({ style: { ...node.style, fill: "transparent" } })}
+                className={cn(
+                  "grid h-7 w-7 place-items-center rounded-full border border-border text-[10px]",
+                  node.style.fill === "transparent" && "ring-2 ring-brand",
+                )}
+              >
+                ×
+              </button>
+              {DRAWING_COLORS.map((item) => (
+                <button
+                  key={item.value}
+                  type="button"
+                  title={item.label}
+                  aria-label={`تعبئة ${item.label}`}
+                  onClick={() => onChange({ style: { ...node.style, fill: item.value } })}
+                  className={cn(
+                    "h-7 w-7 rounded-full border-2 border-background",
+                    node.style.fill === item.value && "ring-2 ring-brand ring-offset-1 ring-offset-background",
+                  )}
+                  style={{ backgroundColor: canvasColorVar(item.value) }}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <span className="mb-2 block text-xs text-muted-foreground">لون الحدود</span>
+            <div className="flex flex-wrap gap-1.5">
+              {DRAWING_COLORS.map((item) => (
+                <button
+                  key={item.value}
+                  type="button"
+                  title={item.label}
+                  aria-label={`حدود ${item.label}`}
+                  onClick={() => onChange({ style: { ...node.style, stroke: item.value } })}
+                  className={cn(
+                    "h-7 w-7 rounded-full border-2 border-background",
+                    node.style.stroke === item.value && "ring-2 ring-brand ring-offset-1 ring-offset-background",
+                  )}
+                  style={{ backgroundColor: canvasColorVar(item.value) }}
+                />
+              ))}
+            </div>
+          </div>
+
+          <label className="block">
+            <span className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
+              <span>حجم الخط</span>
+              <span>{Math.round(node.style.font_size)}px</span>
+            </span>
+            <input
+              type="range"
+              min={10}
+              max={48}
+              value={node.style.font_size}
+              onChange={(event) =>
+                onChange({
+                  style: { ...node.style, font_size: Number(event.target.value) },
+                })
+              }
+              className="w-full accent-[var(--brand)]"
+            />
+          </label>
+
+          <div>
+            <span className="mb-2 block text-xs text-muted-foreground">محاذاة النص</span>
+            <div className="grid grid-cols-3 gap-1.5">
+              {([
+                ["start", "بداية"],
+                ["center", "وسط"],
+                ["end", "نهاية"],
+              ] as const).map(([align, label]) => (
+                <button
+                  key={align}
+                  type="button"
+                  onClick={() =>
+                    onChange({ style: { ...node.style, text_align: align } })
+                  }
+                  className={cn(
+                    "rounded-lg border px-2 py-1.5 text-xs",
+                    node.style.text_align === align
+                      ? "border-brand bg-brand/10 text-brand"
+                      : "border-border hover:bg-muted",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
         <button
           onClick={onDuplicate}
           className="flex w-full items-center justify-center gap-2 rounded-xl border border-border px-3 py-2 text-sm hover:bg-muted"
@@ -1526,7 +1812,10 @@ function CanvasContextMenu({
           <ContextItem icon={Circle} label="إضافة فكرة" onClick={() => onAdd("idea")} />
           <ContextItem icon={CheckCircle2} label="إضافة مهمة" onClick={() => onAdd("task")} />
           <ContextItem icon={Milestone} label="إضافة معلم" onClick={() => onAdd("milestone")} />
-          <ContextItem icon={StickyNote} label="إضافة ملاحظة" onClick={() => onAdd("note")} />
+          <ContextItem icon={StickyNote} label="إضافة ملاحظة لاصقة" onClick={() => onAdd("sticky")} />
+          <ContextItem icon={Type} label="إضافة نص" onClick={() => onAdd("text")} />
+          <ContextItem icon={Square} label="إضافة مستطيل" onClick={() => onAdd("rectangle")} />
+          <ContextItem icon={Circle} label="إضافة شكل بيضاوي" onClick={() => onAdd("ellipse")} />
           <div className="my-1 h-px bg-border" />
         </>
       )}
