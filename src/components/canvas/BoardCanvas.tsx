@@ -48,7 +48,10 @@ import { BoardHistoryPanel } from "@/components/canvas/BoardHistoryPanel";
 import { useBoardCanvas, useSaveBoardCanvas } from "@/hooks/use-canvas";
 import { useCanvasRealtime } from "@/hooks/use-canvas-realtime";
 import { createCanvasEdge, createCanvasNode } from "@/services/canvas.service";
-import { rebaseLocalCanvasChanges } from "@/services/canvas-collaboration.service";
+import {
+  rebaseLocalCanvasChanges,
+  saveBoardViewport,
+} from "@/services/canvas-collaboration.service";
 import { getCanvasAsset, saveCanvasImage } from "@/services/canvas-assets.service";
 import { cn } from "@/lib/utils";
 import type {
@@ -321,6 +324,7 @@ export function BoardCanvas({
   const drawing = useRef<{ strokeId: string; before: BoardCanvasSnapshot } | null>(null);
   const initializedBoard = useRef<string | null>(null);
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const viewportSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const past = useRef<BoardCanvasSnapshot[]>([]);
   const future = useRef<BoardCanvasSnapshot[]>([]);
   const clipboard = useRef<{ nodes: CanvasNode[]; edges: CanvasEdge[] } | null>(null);
@@ -378,6 +382,7 @@ export function BoardCanvas({
   useEffect(() => {
     if (!snapshot || initializedBoard.current !== boardId) return;
     if (saveState === "conflict") return;
+    if (drawing.current || drag.current) return;
     if (readOnly) {
       setSaveState("saved");
       return;
@@ -482,6 +487,30 @@ export function BoardCanvas({
     };
   }, [snapshot, boardId, saveCanvas, readOnly]);
 
+
+  useEffect(() => {
+    if (!snapshot || initializedBoard.current !== boardId) return;
+    if (viewportSaveTimer.current) {
+      clearTimeout(viewportSaveTimer.current);
+    }
+    viewportSaveTimer.current = setTimeout(() => {
+      void saveBoardViewport(boardId, snapshot.viewport).catch((error) => {
+        if (import.meta.env.DEV) {
+          console.warn("[canvas] تعذر حفظ موضع العرض الشخصي.", error);
+        }
+      });
+    }, 700);
+    return () => {
+      if (viewportSaveTimer.current) {
+        clearTimeout(viewportSaveTimer.current);
+      }
+    };
+  }, [
+    boardId,
+    snapshot?.viewport.x,
+    snapshot?.viewport.y,
+    snapshot?.viewport.zoom,
+  ]);
 
   useEffect(() => {
     if (viewMode !== "canvas" || !focusNodeId || !snapshot || !canvasRef.current) return;
@@ -1443,11 +1472,17 @@ export function BoardCanvas({
             setSnapshot((current) => (current ? { ...current } : current));
             return;
           }
-          if (drag.current?.type === "pan") drag.current = null;
+          if (drag.current?.type === "pan") {
+            drag.current = null;
+            setSnapshot((current) => (current ? { ...current } : current));
+          }
         }}
         onPointerCancel={() => {
           drawing.current = null;
-          if (drag.current?.type === "pan") drag.current = null;
+          if (drag.current?.type === "pan") {
+            drag.current = null;
+            setSnapshot((current) => (current ? { ...current } : current));
+          }
         }}
       >
         <div
