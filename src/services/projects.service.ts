@@ -1,4 +1,5 @@
 import { CURRENT_USER, delay, newId, nowIso, readDb, writeDb } from "./local-db";
+import { deleteManyBoardCanvases } from "./canvas.service";
 import type { CreateProjectInput, Project, ProjectStatus } from "@/types";
 
 export async function listProjects(workspaceId?: string): Promise<Project[]> {
@@ -87,9 +88,11 @@ export async function restoreProject(id: string): Promise<void> {
 }
 
 export async function deleteProject(id: string): Promise<void> {
+  const boardIds = readDb().boards.filter((b) => b.project_id === id).map((b) => b.id);
   writeDb((db) => {
     db.projects = db.projects.filter((p) => p.id !== id);
     db.boards = db.boards.filter((b) => b.project_id !== id);
   });
+  deleteManyBoardCanvases(boardIds);
   await delay(null, 120);
 }
