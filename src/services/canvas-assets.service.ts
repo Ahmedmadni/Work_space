@@ -62,6 +62,7 @@ export async function saveCanvasImage(
 
   const db = await openDb();
   const transaction = db.transaction(STORE_NAME, "readwrite");
+  const done = txDone(transaction);
   const store = transaction.objectStore(STORE_NAME);
   const record: CanvasAssetRecord = {
     id: `asset-${crypto.randomUUID()}`,
@@ -74,7 +75,7 @@ export async function saveCanvasImage(
   };
 
   store.put(record);
-  await txDone(transaction);
+  await done;
   db.close();
   return record;
 }
@@ -90,7 +91,6 @@ export async function getCanvasAsset(id: string): Promise<CanvasAssetRecord | nu
     request.onerror = () => reject(request.error ?? new Error("Failed to load asset"));
   });
 
-  await txDone(transaction);
   db.close();
   return result;
 }
@@ -98,6 +98,7 @@ export async function getCanvasAsset(id: string): Promise<CanvasAssetRecord | nu
 export async function deleteBoardAssets(boardId: string): Promise<void> {
   const db = await openDb();
   const transaction = db.transaction(STORE_NAME, "readwrite");
+  const done = txDone(transaction);
   const store = transaction.objectStore(STORE_NAME);
   const index = store.index(BOARD_INDEX);
 
@@ -115,7 +116,7 @@ export async function deleteBoardAssets(boardId: string): Promise<void> {
     request.onerror = () => reject(request.error ?? new Error("Failed to clean board assets"));
   });
 
-  await txDone(transaction);
+  await done;
   db.close();
 }
 
