@@ -154,7 +154,8 @@ export interface CreateProjectInput {
 }
 
 export interface CreateBoardInput {
-  workspace_id: string;
+  /** للتوافق مع البيانات القديمة؛ تُشتق من المشروع إذا لم تُرسل. */
+  workspace_id?: string;
   project_id: string;
   name: string;
   description?: string;
