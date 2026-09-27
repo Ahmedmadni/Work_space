@@ -158,6 +158,7 @@ declare
   v_user_id uuid;
   v_creator_id uuid;
   v_target_role text;
+  v_existing_role text;
   v_invitation_id uuid;
 begin
   v_actor_role := public.project_current_role(p_project_id);
@@ -200,6 +201,15 @@ begin
   if v_user_id is not null then
     if v_user_id = v_creator_id then
       raise exception 'PROJECT_CREATOR_ROLE_IMMUTABLE' using errcode = '42501';
+    end if;
+
+    select pm.role into v_existing_role
+    from public.project_members pm
+    where pm.project_id = p_project_id
+      and pm.user_id = v_user_id;
+
+    if v_actor_role = 'admin' and v_existing_role = 'admin' then
+      raise exception 'ADMIN_CANNOT_MANAGE_ADMIN' using errcode = '42501';
     end if;
 
     insert into public.project_members (project_id, user_id, role)
