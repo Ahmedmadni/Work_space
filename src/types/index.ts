@@ -144,7 +144,8 @@ export interface CreateWorkspaceInput {
 }
 
 export interface CreateProjectInput {
-  workspace_id: string;
+  /** حقل توافق قديم؛ المشاريع الجديدة تُنشأ داخل حاوية نظام مخفية إذا لم يُرسل. */
+  workspace_id?: string;
   name: string;
   description?: string;
   status: ProjectStatus;
