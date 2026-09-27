@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ChevronRight, Share2 } from "lucide-react";
 import { useEffect, useRef } from "react";
 
-import { BoardCanvas } from "@/components/canvas/BoardCanvas";
+import { ProjectWorkbench } from "@/components/workbench/ProjectWorkbench";
 import { useBoard, useMarkBoardOpened } from "@/hooks/use-boards";
 import { useProject } from "@/hooks/use-projects";
 import { BOARD_TYPE_LABELS } from "@/lib/labels";
@@ -87,7 +87,14 @@ function BoardPage() {
         </div>
       </header>
 
-      <BoardCanvas boardId={boardId} initialFocusNodeId={node} />
+      {board && (
+        <ProjectWorkbench
+          projectId={projectId}
+          boardId={boardId}
+          boardName={board.name}
+          initialFocusNodeId={node}
+        />
+      )}
     </div>
   );
 }
