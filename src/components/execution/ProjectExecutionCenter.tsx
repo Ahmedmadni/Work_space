@@ -350,11 +350,9 @@ export function ProjectExecutionCenter({
         return false;
       }
 
-      if (
-        view === "mine" &&
-        item.node.assignee_user_id !== currentUserId
-      ) {
-        return false;
+      if (view === "mine") {
+        if (!currentUserId) return false;
+        if (item.node.assignee_user_id !== currentUserId) return false;
       }
       if (view === "overdue" && !item.is_overdue) return false;
       if (view === "due_week" && !item.is_upcoming) return false;
