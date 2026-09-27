@@ -108,11 +108,17 @@ function MentionChips({
 function CommentComposer({
   projectId,
   boardId,
+  targetType,
+  targetId,
+  pageNumber,
   replyTo,
   onCancelReply,
 }: {
   projectId: string;
   boardId: string;
+  targetType: "board" | "document";
+  targetId: string;
+  pageNumber?: number;
   replyTo: ProjectComment | null;
   onCancelReply: () => void;
 }) {
@@ -133,8 +139,9 @@ function CommentComposer({
       {
         body,
         boardId,
-        targetType: "board",
-        targetId: boardId,
+        targetType,
+        targetId,
+        pageNumber: targetType === "document" ? pageNumber ?? null : null,
         parentCommentId: replyTo?.id ?? null,
         mentionUserIds: mentionIds,
       },
@@ -197,7 +204,11 @@ function CommentComposer({
       <textarea
         value={body}
         onChange={(event) => setBody(event.target.value)}
-        placeholder="اكتب تعليقًا على هذه اللوحة…"
+        placeholder={
+          targetType === "document"
+            ? "اكتب تعليقًا على هذه الصفحة من المستند…"
+            : "اكتب تعليقًا على هذه اللوحة…"
+        }
         rows={3}
         maxLength={4000}
         className="w-full resize-none rounded-xl border border-border bg-card px-3 py-2.5 text-sm outline-none focus:border-brand"
@@ -291,6 +302,11 @@ function CommentItem({
             {comment.resolved_at && (
               <span className="rounded-full bg-success/10 px-1.5 py-0.5 text-[9px] font-medium text-success">
                 مغلق
+              </span>
+            )}
+            {comment.page_number && (
+              <span className="rounded-full bg-info/10 px-1.5 py-0.5 text-[9px] font-medium text-info">
+                صفحة {comment.page_number}
               </span>
             )}
           </div>
@@ -426,29 +442,40 @@ function CommentItem({
 function CommentsTab({
   projectId,
   boardId,
+  targetType,
+  targetId,
+  pageNumber,
 }: {
   projectId: string;
   boardId: string;
+  targetType: "board" | "document";
+  targetId: string;
+  pageNumber?: number;
 }) {
   const access = useProjectAccess(projectId);
   const comments = useProjectComments(projectId, {
     boardId,
-    targetType: "board",
-    targetId: boardId,
+    targetType,
+    targetId,
     limit: 150,
   });
   const currentUserId = getCurrentCollaborationUserId();
   const [replyTo, setReplyTo] = useState<ProjectComment | null>(null);
   const [showResolved, setShowResolved] = useState(false);
+  const [showAllPages, setShowAllPages] = useState(false);
 
   const all = comments.data ?? [];
-  const roots = all.filter((comment) => !comment.parent_comment_id);
+  const scoped =
+    targetType === "document" && pageNumber && !showAllPages
+      ? all.filter((comment) => comment.page_number === pageNumber)
+      : all;
+  const roots = scoped.filter((comment) => !comment.parent_comment_id);
   const visibleRoots = showResolved
     ? roots
     : roots.filter((comment) => !comment.resolved_at);
   const childrenByParent = useMemo(() => {
     const map = new Map<string, ProjectComment[]>();
-    for (const comment of all) {
+    for (const comment of scoped) {
       if (!comment.parent_comment_id) continue;
       const list = map.get(comment.parent_comment_id) ?? [];
       list.push(comment);
@@ -458,7 +485,7 @@ function CommentsTab({
       list.sort((a, b) => a.created_at.localeCompare(b.created_at));
     }
     return map;
-  }, [all]);
+  }, [scoped]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -466,14 +493,25 @@ function CommentsTab({
         <span className="text-[11px] text-muted-foreground">
           {visibleRoots.length} محادثات
         </span>
-        <button
-          type="button"
-          onClick={() => setShowResolved((value) => !value)}
-          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted"
-        >
-          {showResolved ? <Check className="h-3 w-3" /> : <Circle className="h-3 w-3" />}
-          {showResolved ? "إخفاء المغلق" : "إظهار المغلق"}
-        </button>
+        <div className="flex items-center gap-1">
+          {targetType === "document" && pageNumber && (
+            <button
+              type="button"
+              onClick={() => setShowAllPages((value) => !value)}
+              className="rounded-lg px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted"
+            >
+              {showAllPages ? "هذه الصفحة" : "كل الصفحات"}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setShowResolved((value) => !value)}
+            className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted"
+          >
+            {showResolved ? <Check className="h-3 w-3" /> : <Circle className="h-3 w-3" />}
+            {showResolved ? "إخفاء المغلق" : "إظهار المغلق"}
+          </button>
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
@@ -488,7 +526,9 @@ function CommentsTab({
               <MessageSquare className="mx-auto h-8 w-8 text-muted-foreground/50" />
               <p className="mt-3 text-sm font-medium">لا توجد تعليقات مفتوحة</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                استخدم التعليقات لمناقشة القرارات والملاحظات على هذه اللوحة.
+                {targetType === "document"
+                  ? "أضف تعليقًا نصيًا مرتبطًا بصفحة المستند الحالية."
+                  : "استخدم التعليقات لمناقشة القرارات والملاحظات على هذه اللوحة."}
               </p>
             </div>
           </div>
@@ -524,6 +564,9 @@ function CommentsTab({
         <CommentComposer
           projectId={projectId}
           boardId={boardId}
+          targetType={targetType}
+          targetId={targetId}
+          pageNumber={pageNumber}
           replyTo={replyTo}
           onCancelReply={() => setReplyTo(null)}
         />
@@ -637,14 +680,22 @@ export function ProjectCollaborationDock({
   boardId,
   presenceContextType = "board",
   presenceContextId,
+  documentPageNumber,
 }: {
   projectId: string;
   boardId: string;
   presenceContextType?: "board" | "document";
   presenceContextId?: string | null;
+  documentPageNumber?: number;
 }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<DockTab>("comments");
+  const commentTargetType =
+    presenceContextType === "document" ? "document" : "board";
+  const commentTargetId =
+    presenceContextType === "document" && presenceContextId
+      ? presenceContextId
+      : boardId;
   const presence = useProjectPresence(
     projectId,
     presenceContextType,
@@ -655,8 +706,8 @@ export function ProjectCollaborationDock({
     projectId,
     {
       boardId,
-      targetType: "board",
-      targetId: boardId,
+      targetType: commentTargetType,
+      targetId: commentTargetId,
       limit: 150,
     },
     true,
@@ -695,7 +746,9 @@ export function ProjectCollaborationDock({
             التعاون
           </SheetTitle>
           <SheetDescription>
-            تعليقات اللوحة، النشاط، ومن يعمل على المشروع الآن.
+            {commentTargetType === "document"
+              ? "تعليقات المستند الحالي، النشاط، ومن يعمل على المشروع الآن."
+              : "تعليقات اللوحة، النشاط، ومن يعمل على المشروع الآن."}
           </SheetDescription>
 
           <div className="mt-2 flex items-center gap-1.5">
@@ -751,7 +804,17 @@ export function ProjectCollaborationDock({
         </div>
 
         {tab === "comments" ? (
-          <CommentsTab projectId={projectId} boardId={boardId} />
+          <CommentsTab
+            projectId={projectId}
+            boardId={boardId}
+            targetType={commentTargetType}
+            targetId={commentTargetId}
+            pageNumber={
+              commentTargetType === "document"
+                ? documentPageNumber
+                : undefined
+            }
+          />
         ) : tab === "activity" ? (
           <ActivityTab projectId={projectId} />
         ) : (
