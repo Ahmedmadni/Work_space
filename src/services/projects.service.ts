@@ -43,8 +43,8 @@ function ensureSystemWorkspace() {
 }
 
 export async function createProject(input: CreateProjectInput): Promise<Project> {
-  if (!workspaceId) ensureSystemWorkspace();
-  const workspaceId = workspaceId ?? SYSTEM_WORKSPACE_ID;
+  if (!input.workspace_id) ensureSystemWorkspace();
+  const workspaceId = input.workspace_id ?? SYSTEM_WORKSPACE_ID;
   const project: Project = {
     id: newId("pr"),
     workspace_id: workspaceId,
