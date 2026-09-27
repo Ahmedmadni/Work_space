@@ -396,7 +396,11 @@ export function ProjectWorkbench({
               projectId={projectId}
               document={activeDocument}
               readOnly={!canEdit}
-              initialPageNumber={initialDocumentPage}
+              initialPageNumber={
+                activeDocument.id === initialDocumentId
+                  ? initialDocumentPage
+                  : undefined
+              }
               onPageChange={setActiveDocumentPage}
             />
           </div>
