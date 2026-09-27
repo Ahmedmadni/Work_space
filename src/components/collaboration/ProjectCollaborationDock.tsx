@@ -72,6 +72,7 @@ function activityLabel(item: ProjectActivity) {
     task_unassigned: "ألغى إسناد مهمة",
     task_status_changed: "غيّر حالة مهمة",
     task_due_changed: "غيّر تاريخ استحقاق مهمة",
+    task_priority_changed: "غيّر أولوية مهمة",
     document_uploaded: "رفع ملفًا",
     document_deleted: "حذف ملفًا",
     member_invited: "أرسل دعوة للمشروع",
