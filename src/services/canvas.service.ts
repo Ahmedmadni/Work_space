@@ -456,6 +456,11 @@ export async function searchCanvasNodes(
   return results.sort((a, b) => b.node.updated_at.localeCompare(a.node.updated_at));
 }
 
+export function getLocalBoardCanvasForMigration(boardId: string): BoardCanvasSnapshot {
+  const store = readStore();
+  return normalizeBoardCanvasSnapshot(boardId, store.boards[boardId]);
+}
+
 export async function getBoardCanvas(boardId: string): Promise<BoardCanvasSnapshot> {
   if (isSupabaseBackend()) {
     const remote = await supabaseRest<unknown>("rpc/get_board_canvas", {
