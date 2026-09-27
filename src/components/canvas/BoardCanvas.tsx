@@ -369,6 +369,9 @@ export function BoardCanvas({
     };
     baseSnapshotRef.current = cloneSnapshot(next);
     latestSnapshotRef.current = cloneSnapshot(next);
+    past.current = [];
+    future.current = [];
+    setHistoryVersion((value) => value + 1);
     setSnapshot(next);
   }, [loadedCanvas, boardId, snapshot, saveState]);
 
@@ -404,6 +407,14 @@ export function BoardCanvas({
               `يوجد تعارض في ${result.conflicts.length} عنصر. تعديلاتك المحلية لم تُحذف.`,
             );
             return;
+          }
+
+          const remoteRevisionAdvanced =
+            result.revision > (requestBase.revision ?? 0) + 1;
+          if (remoteRevisionAdvanced) {
+            past.current = [];
+            future.current = [];
+            setHistoryVersion((value) => value + 1);
           }
 
           const currentLocal =
@@ -1136,6 +1147,9 @@ export function BoardCanvas({
                 };
                 baseSnapshotRef.current = cloneSnapshot(accepted);
                 latestSnapshotRef.current = cloneSnapshot(accepted);
+                past.current = [];
+                future.current = [];
+                setHistoryVersion((value) => value + 1);
                 setSnapshot(accepted);
                 localEditVersion.current += 1;
                 lastAckEditVersion.current = localEditVersion.current;
