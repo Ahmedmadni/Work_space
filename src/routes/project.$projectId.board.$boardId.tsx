@@ -1,10 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ChevronRight, Share2 } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { ProjectWorkbench } from "@/components/workbench/ProjectWorkbench";
+import { ProjectShareDialog } from "@/components/collaboration/ProjectShareDialog";
 import { useBoard, useMarkBoardOpened } from "@/hooks/use-boards";
 import { useProject } from "@/hooks/use-projects";
+import { useProjectAccess } from "@/hooks/use-collaboration";
 import { BOARD_TYPE_LABELS } from "@/lib/labels";
 import { NotFoundState } from "@/components/app/shared";
 
@@ -27,6 +29,8 @@ function BoardPage() {
   const { data: board, isLoading } = useBoard(boardId);
   const project = useProject(projectId);
   const markOpened = useMarkBoardOpened();
+  const access = useProjectAccess(projectId);
+  const [shareOpen, setShareOpen] = useState(false);
   const marked = useRef<string | null>(null);
 
   const valid = !!board && board.project_id === projectId && !!project.data;
@@ -75,12 +79,18 @@ function BoardPage() {
           )}
         </div>
 
-        <div className="ms-auto flex items-center">
+        <div className="ms-auto flex items-center gap-2">
+          {access.data?.role === "viewer" && (
+            <span className="hidden rounded-lg bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground sm:inline">
+              عرض فقط
+            </span>
+          )}
           <button
-            disabled
-            title="مشاركة (قريبًا)"
-            aria-label="مشاركة"
-            className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground opacity-40"
+            type="button"
+            onClick={() => setShareOpen(true)}
+            title="مشاركة المشروع وإدارة الأعضاء"
+            aria-label="مشاركة المشروع"
+            className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
           >
             <Share2 className="h-4 w-4" />
           </button>
@@ -93,8 +103,16 @@ function BoardPage() {
           boardId={boardId}
           boardName={board.name}
           initialFocusNodeId={node}
+          canEdit={access.data?.can_edit ?? false}
         />
       )}
+
+      <ProjectShareDialog
+        projectId={projectId}
+        projectName={project.data?.name ?? board?.project_name ?? "المشروع"}
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+      />
     </div>
   );
 }
