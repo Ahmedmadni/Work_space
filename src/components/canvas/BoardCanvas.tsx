@@ -398,15 +398,24 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
   const fitView = useCallback(() => {
     if (!snapshot || !canvasRef.current) return;
     const rect = canvasRef.current.getBoundingClientRect();
-    if (!snapshot.nodes.length) {
+    const strokePoints = snapshot.strokes.flatMap((stroke) => stroke.points);
+    if (!snapshot.nodes.length && !strokePoints.length) {
       setSnapshot({ ...snapshot, viewport: { x: 0, y: 0, zoom: 1 } });
       return;
     }
     const padding = 140;
-    const minX = Math.min(...snapshot.nodes.map((n) => n.x));
-    const minY = Math.min(...snapshot.nodes.map((n) => n.y));
-    const maxX = Math.max(...snapshot.nodes.map((n) => n.x + n.width));
-    const maxY = Math.max(...snapshot.nodes.map((n) => n.y + n.height));
+    const nodeMinX = snapshot.nodes.length ? Math.min(...snapshot.nodes.map((n) => n.x)) : Infinity;
+    const nodeMinY = snapshot.nodes.length ? Math.min(...snapshot.nodes.map((n) => n.y)) : Infinity;
+    const nodeMaxX = snapshot.nodes.length ? Math.max(...snapshot.nodes.map((n) => n.x + n.width)) : -Infinity;
+    const nodeMaxY = snapshot.nodes.length ? Math.max(...snapshot.nodes.map((n) => n.y + n.height)) : -Infinity;
+    const strokeMinX = strokePoints.length ? Math.min(...strokePoints.map((point) => point.x)) : Infinity;
+    const strokeMinY = strokePoints.length ? Math.min(...strokePoints.map((point) => point.y)) : Infinity;
+    const strokeMaxX = strokePoints.length ? Math.max(...strokePoints.map((point) => point.x)) : -Infinity;
+    const strokeMaxY = strokePoints.length ? Math.max(...strokePoints.map((point) => point.y)) : -Infinity;
+    const minX = Math.min(nodeMinX, strokeMinX);
+    const minY = Math.min(nodeMinY, strokeMinY);
+    const maxX = Math.max(nodeMaxX, strokeMaxX);
+    const maxY = Math.max(nodeMaxY, strokeMaxY);
     const width = Math.max(1, maxX - minX);
     const height = Math.max(1, maxY - minY);
     const zoom = Math.min(
@@ -1459,7 +1468,7 @@ function NodeInspector({
 
   return (
     <div>
-      <h3 className="font-semibold">خصائص العقدة</h3>
+      <h3 className="font-semibold">خصائص العنصر</h3>
       <div className="mt-5 space-y-4">
         <label className="block text-sm">
           <span className="mb-1.5 block text-xs text-muted-foreground">العنوان</span>
