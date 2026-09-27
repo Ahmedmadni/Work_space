@@ -90,23 +90,24 @@ function safeFileName(name: string) {
   return normalized.slice(0, 120) || "image";
 }
 
-export async function remoteSaveCanvasImage(
+async function putRemoteCanvasImage(
   boardId: string,
   file: File,
+  options?: { assetId?: string; upsert?: boolean },
 ): Promise<RemoteCanvasAssetRecord> {
   if (!file.type.startsWith("image/")) throw new Error("Unsupported file type");
   if (file.size > MAX_IMAGE_BYTES) throw new Error("Image is too large");
 
   const session = await requireRemoteSession();
   const projectId = await boardProjectId(boardId);
-  const id = `asset-${crypto.randomUUID()}`;
+  const id = options?.assetId ?? `asset-${crypto.randomUUID()}`;
   const objectPath = `${projectId}/${boardId}/${id}/${safeFileName(file.name)}`;
 
   await storageRequest(objectPath, {
     method: "POST",
     headers: {
       "Content-Type": file.type,
-      "x-upsert": "false",
+      "x-upsert": options?.upsert ? "true" : "false",
     },
     body: file,
   });
@@ -114,6 +115,7 @@ export async function remoteSaveCanvasImage(
   try {
     const rows = await supabaseRest<AssetRow[]>("canvas_assets", {
       method: "POST",
+      query: options?.upsert ? { on_conflict: "id" } : undefined,
       body: {
         id,
         board_id: boardId,
@@ -123,7 +125,9 @@ export async function remoteSaveCanvasImage(
         size_bytes: file.size,
         created_by: session.user.id,
       },
-      prefer: "return=representation",
+      prefer: options?.upsert
+        ? "resolution=merge-duplicates,return=representation"
+        : "return=representation",
     });
     const row = rows[0];
     if (!row) throw new Error("ASSET_METADATA_CREATE_FAILED");
@@ -137,13 +141,30 @@ export async function remoteSaveCanvasImage(
       created_at: row.created_at,
     };
   } catch (error) {
-    try {
-      await storageRequest(objectPath, { method: "DELETE" });
-    } catch {
-      // لا نخفي الخطأ الأصلي إذا تعذر حذف الملف المرفوع تعويضيًا.
+    if (!options?.upsert) {
+      try {
+        await storageRequest(objectPath, { method: "DELETE" });
+      } catch {
+        // لا نخفي الخطأ الأصلي إذا تعذر حذف الملف المرفوع تعويضيًا.
+      }
     }
     throw error;
   }
+}
+
+export async function remoteSaveCanvasImage(
+  boardId: string,
+  file: File,
+): Promise<RemoteCanvasAssetRecord> {
+  return putRemoteCanvasImage(boardId, file);
+}
+
+export async function remoteMigrateCanvasImage(
+  boardId: string,
+  assetId: string,
+  file: File,
+): Promise<RemoteCanvasAssetRecord> {
+  return putRemoteCanvasImage(boardId, file, { assetId, upsert: true });
 }
 
 async function downloadAssetRow(row: AssetRow): Promise<RemoteCanvasAssetRecord> {
