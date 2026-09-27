@@ -691,15 +691,23 @@ export function ProjectCollaborationDock({
   presenceContextType = "board",
   presenceContextId,
   documentPageNumber,
+  focusCommentId,
 }: {
   projectId: string;
   boardId: string;
   presenceContextType?: "board" | "document";
   presenceContextId?: string | null;
   documentPageNumber?: number;
+  focusCommentId?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<DockTab>("comments");
+
+  useEffect(() => {
+    if (!focusCommentId) return;
+    setOpen(true);
+    setTab("comments");
+  }, [focusCommentId]);
   const commentTargetType =
     presenceContextType === "document" ? "document" : "board";
   const commentTargetId =
