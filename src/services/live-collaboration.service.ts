@@ -12,6 +12,7 @@ import type {
   ProjectCommentMention,
   ProjectPresence,
   RecordProjectActivityInput,
+  NodeReviewSummary,
 } from "@/types/live-collaboration";
 
 const STORAGE_KEY = "projectflow.live-collaboration.v1";
@@ -168,6 +169,54 @@ function addLocalActivity(
   writeStore(store);
 }
 
+export async function listBoardNodeReviewSummary(
+  projectId: string,
+  boardId: string,
+): Promise<NodeReviewSummary[]> {
+  if (isSupabaseBackend()) {
+    return supabaseRest<NodeReviewSummary[]>(
+      "rpc/list_board_node_review_summary",
+      {
+        method: "POST",
+        body: {
+          p_project_id: projectId,
+          p_board_id: boardId,
+        },
+      },
+    );
+  }
+
+  const comments = await listProjectComments(projectId, {
+    boardId,
+    targetType: "node",
+    limit: 10_000,
+  });
+  const byNode = new Map<string, NodeReviewSummary>();
+  for (const comment of comments) {
+    if (!comment.target_id) continue;
+    const current = byNode.get(comment.target_id) ?? {
+      node_id: comment.target_id,
+      open_thread_count: 0,
+      total_thread_count: 0,
+      comment_count: 0,
+      latest_comment_at: null,
+    };
+    current.comment_count += 1;
+    if (!comment.parent_comment_id) {
+      current.total_thread_count += 1;
+      if (!comment.resolved_at) current.open_thread_count += 1;
+    }
+    if (
+      !current.latest_comment_at ||
+      comment.created_at > current.latest_comment_at
+    ) {
+      current.latest_comment_at = comment.created_at;
+    }
+    byNode.set(comment.target_id, current);
+  }
+  return [...byNode.values()];
+}
+
 export async function listProjectComments(
   projectId: string,
   filters: ProjectCommentFilters = {},
@@ -288,7 +337,17 @@ export async function updateProjectComment(input: {
   comment.updated_at = new Date().toISOString();
   comment.mentions = (input.mentionUserIds ?? []).map(currentLocalMention);
   writeStore(store);
-  addLocalActivity(input.projectId, "comment_updated", "comment", input.commentId);
+  addLocalActivity(
+    input.projectId,
+    "comment_updated",
+    "comment",
+    input.commentId,
+    {
+      target_type: comment.target_type,
+      target_id: comment.target_id,
+      board_id: comment.board_id,
+    },
+  );
 }
 
 export async function setProjectCommentResolved(input: {
@@ -320,6 +379,11 @@ export async function setProjectCommentResolved(input: {
     input.resolved ? "comment_resolved" : "comment_reopened",
     "comment",
     input.commentId,
+    {
+      target_type: comment.target_type,
+      target_id: comment.target_id,
+      board_id: comment.board_id,
+    },
   );
 }
 
@@ -337,9 +401,22 @@ export async function deleteProjectComment(input: {
 
   const store = readStore();
   const bucket = projectBucket(store, input.projectId);
+  const comment = bucket.comments.find((item) => item.id === input.commentId);
   bucket.comments = bucket.comments.filter((item) => item.id !== input.commentId);
   writeStore(store);
-  addLocalActivity(input.projectId, "comment_deleted", "comment", input.commentId);
+  addLocalActivity(
+    input.projectId,
+    "comment_deleted",
+    "comment",
+    input.commentId,
+    comment
+      ? {
+          target_type: comment.target_type,
+          target_id: comment.target_id,
+          board_id: comment.board_id,
+        }
+      : {},
+  );
 }
 
 export async function listProjectActivity(

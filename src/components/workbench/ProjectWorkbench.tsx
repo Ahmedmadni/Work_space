@@ -67,6 +67,7 @@ export function ProjectWorkbench({
   boardId,
   boardName,
   initialFocusNodeId,
+  initialFocusCommentId,
   initialDocumentId,
   initialDocumentPage,
   canEdit = true,
@@ -76,6 +77,7 @@ export function ProjectWorkbench({
   boardId: string;
   boardName: string;
   initialFocusNodeId?: string;
+  initialFocusCommentId?: string;
   initialDocumentId?: string;
   initialDocumentPage?: number;
   canEdit?: boolean;
@@ -104,6 +106,11 @@ export function ProjectWorkbench({
     initialDocumentPage ?? 1,
   );
   const documents = documentsQuery.data ?? [];
+
+  useEffect(() => {
+    if (!initialFocusNodeId) return;
+    setActiveTab("board");
+  }, [initialFocusNodeId, initialFocusCommentId]);
 
   useEffect(() => {
     if (!initialDocumentId) return;
@@ -386,6 +393,7 @@ export function ProjectWorkbench({
             boardId={boardId}
             projectId={projectId}
             initialFocusNodeId={initialFocusNodeId}
+            initialFocusCommentId={initialFocusCommentId}
             readOnly={!canEdit}
           />
         </div>

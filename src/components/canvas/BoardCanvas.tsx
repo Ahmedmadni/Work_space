@@ -17,6 +17,7 @@ import {
   Link2,
   ListTree,
   Maximize,
+  MessageSquare,
   Milestone,
   MousePointer2,
   Pencil,
@@ -45,7 +46,9 @@ import {
 import { toast } from "sonner";
 
 import { BoardHistoryPanel } from "@/components/canvas/BoardHistoryPanel";
+import { NodeReviewPanel } from "@/components/collaboration/NodeReviewPanel";
 import { useBoardCanvas, useSaveBoardCanvas } from "@/hooks/use-canvas";
+import { useBoardNodeReviewSummary } from "@/hooks/use-live-collaboration";
 import { useCanvasRealtime } from "@/hooks/use-canvas-realtime";
 import { createCanvasEdge, createCanvasNode } from "@/services/canvas.service";
 import {
@@ -272,16 +275,23 @@ export function BoardCanvas({
   boardId,
   projectId,
   initialFocusNodeId,
+  initialFocusCommentId,
   readOnly = false,
 }: {
   boardId: string;
   projectId?: string;
   initialFocusNodeId?: string;
+  initialFocusCommentId?: string;
   readOnly?: boolean;
 }) {
   const { data: loadedCanvas, isLoading } = useBoardCanvas(boardId);
   const saveCanvas = useSaveBoardCanvas(boardId, projectId);
   const realtime = useCanvasRealtime(boardId, true);
+  const reviewSummary = useBoardNodeReviewSummary(
+    projectId ?? "",
+    boardId,
+    !!projectId,
+  );
 
   const [snapshot, setSnapshot] = useState<BoardCanvasSnapshot | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("canvas");
@@ -307,6 +317,7 @@ export function BoardCanvas({
   const [ownerFilter, setOwnerFilter] = useState("all");
   const [tagFilter, setTagFilter] = useState("all");
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [reviewNodeId, setReviewNodeId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!readOnly) return;
@@ -334,6 +345,7 @@ export function BoardCanvas({
   const lastCursorWorld = useRef<{ x: number; y: number } | null>(null);
   const baseSnapshotRef = useRef<BoardCanvasSnapshot | null>(null);
   const latestSnapshotRef = useRef<BoardCanvasSnapshot | null>(null);
+  const reviewDeepLinkRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!loadedCanvas || initializedBoard.current === boardId) return;
@@ -349,11 +361,18 @@ export function BoardCanvas({
       !!initialFocusNodeId && loadedCanvas.nodes.some((node) => node.id === initialFocusNodeId);
     setSelectedNodeIds(initialNodeExists ? [initialFocusNodeId!] : []);
     setSelectedEdgeId(null);
-    if (initialNodeExists) setFocusNodeId(initialFocusNodeId!);
+    if (initialNodeExists) {
+      setFocusNodeId(initialFocusNodeId!);
+      if (initialFocusCommentId) {
+        setReviewNodeId(initialFocusNodeId!);
+        reviewDeepLinkRef.current =
+          initialFocusNodeId + ":" + initialFocusCommentId;
+      }
+    }
     past.current = [];
     future.current = [];
     setHistoryVersion((v) => v + 1);
-  }, [loadedCanvas, boardId, initialFocusNodeId]);
+  }, [loadedCanvas, boardId, initialFocusNodeId, initialFocusCommentId]);
 
   useEffect(() => {
     if (
@@ -378,6 +397,27 @@ export function BoardCanvas({
     setHistoryVersion((value) => value + 1);
     setSnapshot(next);
   }, [loadedCanvas, boardId, snapshot, saveState]);
+
+  useEffect(() => {
+    if (!snapshot || !initialFocusNodeId || !initialFocusCommentId) return;
+    const key = initialFocusNodeId + ":" + initialFocusCommentId;
+    if (reviewDeepLinkRef.current === key) return;
+    if (!snapshot.nodes.some((node) => node.id === initialFocusNodeId)) return;
+
+    reviewDeepLinkRef.current = key;
+    setViewMode("canvas");
+    setSelectedNodeIds([initialFocusNodeId]);
+    setSelectedEdgeId(null);
+    setFocusNodeId(initialFocusNodeId);
+    setReviewNodeId(initialFocusNodeId);
+  }, [snapshot, initialFocusNodeId, initialFocusCommentId]);
+
+  useEffect(() => {
+    if (!reviewNodeId || !snapshot) return;
+    if (!snapshot.nodes.some((node) => node.id === reviewNodeId)) {
+      setReviewNodeId(null);
+    }
+  }, [reviewNodeId, snapshot]);
 
   useEffect(() => {
     if (!snapshot || initializedBoard.current !== boardId) return;
@@ -552,6 +592,16 @@ export function BoardCanvas({
         .sort((a, b) => a.localeCompare(b, "ar")),
     [snapshot?.nodes],
   );
+  const reviewSummaryByNode = useMemo(
+    () =>
+      new Map(
+        (reviewSummary.data ?? []).map((item) => [item.node_id, item] as const),
+      ),
+    [reviewSummary.data],
+  );
+  const reviewNode =
+    snapshot?.nodes.find((node) => node.id === reviewNodeId) ?? null;
+
   const filtersActive =
     !!searchQuery.trim() ||
     statusFilter !== "all" ||
@@ -1286,6 +1336,24 @@ export function BoardCanvas({
         }}
       />
 
+      {projectId && (
+        <NodeReviewPanel
+          open={!!reviewNode}
+          projectId={projectId}
+          boardId={boardId}
+          node={reviewNode}
+          readOnly={readOnly}
+          focusCommentId={
+            reviewNode?.id === initialFocusNodeId
+              ? initialFocusCommentId
+              : undefined
+          }
+          onOpenChange={(open) => {
+            if (!open) setReviewNodeId(null);
+          }}
+        />
+      )}
+
       <input
         ref={imageInputRef}
         type="file"
@@ -1525,6 +1593,17 @@ export function BoardCanvas({
               node={node}
               selected={selectedNodeIds.includes(node.id)}
               connectorSource={connectorSourceId === node.id}
+              reviewOpenCount={
+                reviewSummaryByNode.get(node.id)?.open_thread_count ?? 0
+              }
+              reviewTotalCount={
+                reviewSummaryByNode.get(node.id)?.total_thread_count ?? 0
+              }
+              onReviewOpen={() => {
+                setSelectedNodeIds([node.id]);
+                setSelectedEdgeId(null);
+                setReviewNodeId(node.id);
+              }}
               onContextMenu={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -1772,6 +1851,14 @@ export function BoardCanvas({
         onDuplicate={duplicateSelection}
         onAddDependency={addDependency}
         onRemoveDependency={removeDependency}
+        reviewOpenCount={
+          selectedNode
+            ? reviewSummaryByNode.get(selectedNode.id)?.open_thread_count ?? 0
+            : 0
+        }
+        onOpenReview={() => {
+          if (selectedNode) setReviewNodeId(selectedNode.id);
+        }}
       />
       )}
 
@@ -1796,6 +1883,14 @@ export function BoardCanvas({
           }}
           onDelete={() => {
             deleteSelection();
+            setContextMenu(null);
+          }}
+          onReview={() => {
+            if (contextMenu.nodeId) {
+              setSelectedNodeIds([contextMenu.nodeId]);
+              setSelectedEdgeId(null);
+              setReviewNodeId(contextMenu.nodeId);
+            }
             setContextMenu(null);
           }}
         />
@@ -2792,6 +2887,9 @@ function CanvasNodeCard({
   node,
   selected,
   connectorSource,
+  reviewOpenCount,
+  reviewTotalCount,
+  onReviewOpen,
   onSelect,
   onContextMenu,
   onDragStart,
@@ -2804,6 +2902,9 @@ function CanvasNodeCard({
   node: CanvasNode;
   selected: boolean;
   connectorSource: boolean;
+  reviewOpenCount: number;
+  reviewTotalCount: number;
+  onReviewOpen: () => void;
   onSelect: (event: ReactPointerEvent<HTMLDivElement>) => void;
   onContextMenu: (event: ReactMouseEvent<HTMLDivElement>) => void;
   onDragStart: (event: ReactPointerEvent<HTMLDivElement>) => void;
@@ -2882,6 +2983,32 @@ function CanvasNodeCard({
         connectorSource && "ring-2 ring-info",
       )}
     >
+      {reviewTotalCount > 0 && (
+        <button
+          type="button"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            onReviewOpen();
+          }}
+          title={
+            reviewOpenCount > 0
+              ? `${reviewOpenCount} مراجعات مفتوحة`
+              : "عرض المراجعات المحلولة"
+          }
+          aria-label="فتح مراجعات العنصر"
+          className={cn(
+            "pointer-events-auto absolute start-1 top-1 z-20 inline-flex min-h-7 min-w-7 items-center justify-center gap-1 rounded-full border border-background/70 px-1.5 text-[9px] font-bold shadow-sm",
+            reviewOpenCount > 0
+              ? "bg-brand text-primary-foreground"
+              : "bg-muted text-muted-foreground",
+          )}
+        >
+          <MessageSquare className="h-3 w-3" />
+          <span>{reviewOpenCount || reviewTotalCount}</span>
+        </button>
+      )}
+
       <span className={cn("mb-3 items-center gap-2 text-xs font-medium text-muted-foreground", isText || isImage ? "hidden" : "flex")}>
         {icon}
         {node.kind === "task"
@@ -2993,6 +3120,8 @@ function CanvasInspector({
   onDuplicate,
   onAddDependency,
   onRemoveDependency,
+  reviewOpenCount,
+  onOpenReview,
 }: {
   selectedNode: CanvasNode | null | undefined;
   selectedNodesCount: number;
@@ -3005,6 +3134,8 @@ function CanvasInspector({
   onDuplicate: () => void;
   onAddDependency: (sourceNodeId: string, targetNodeId: string) => void;
   onRemoveDependency: (edgeId: string) => void;
+  reviewOpenCount: number;
+  onOpenReview: () => void;
 }) {
   return (
     <aside className="hidden w-72 shrink-0 overflow-y-auto border-s border-border bg-card p-5 lg:block">
@@ -3017,6 +3148,8 @@ function CanvasInspector({
           onDuplicate={onDuplicate}
           onAddDependency={onAddDependency}
           onRemoveDependency={onRemoveDependency}
+          reviewOpenCount={reviewOpenCount}
+          onOpenReview={onOpenReview}
         />
       ) : selectedNodesCount > 1 ? (
         <>
@@ -3074,6 +3207,8 @@ function NodeInspector({
   onDuplicate,
   onAddDependency,
   onRemoveDependency,
+  reviewOpenCount,
+  onOpenReview,
 }: {
   node: CanvasNode;
   snapshot: BoardCanvasSnapshot;
@@ -3082,6 +3217,8 @@ function NodeInspector({
   onDuplicate: () => void;
   onAddDependency: (sourceNodeId: string, targetNodeId: string) => void;
   onRemoveDependency: (edgeId: string) => void;
+  reviewOpenCount: number;
+  onOpenReview: () => void;
 }) {
   const [title, setTitle] = useState(node.title);
   const [description, setDescription] = useState(node.description ?? "");
@@ -3116,7 +3253,22 @@ function NodeInspector({
 
   return (
     <div>
-      <h3 className="font-semibold">خصائص العنصر</h3>
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="font-semibold">خصائص العنصر</h3>
+        <button
+          type="button"
+          onClick={onOpenReview}
+          className="relative inline-flex items-center gap-1.5 rounded-lg border border-border px-2 py-1.5 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+        >
+          <MessageSquare className="h-3.5 w-3.5" />
+          مراجعة
+          {reviewOpenCount > 0 && (
+            <span className="rounded-full bg-brand/10 px-1.5 text-[9px] font-semibold text-brand">
+              {reviewOpenCount}
+            </span>
+          )}
+        </button>
+      </div>
       <div className="mt-5 space-y-4">
         <label className="block text-sm">
           <span className="mb-1.5 block text-xs text-muted-foreground">العنوان</span>
@@ -3787,6 +3939,7 @@ function CanvasContextMenu({
   onPaste,
   onDuplicate,
   onDelete,
+  onReview,
 }: {
   state: NonNullable<ContextMenuState>;
   hasSelection: boolean;
@@ -3797,6 +3950,7 @@ function CanvasContextMenu({
   onPaste: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  onReview: () => void;
 }) {
   useEffect(() => {
     const close = () => onClose();
@@ -3815,6 +3969,16 @@ function CanvasContextMenu({
       className="frost-strong fixed z-50 min-w-52 rounded-2xl p-1.5 shadow-lift"
       style={{ left: Math.min(state.x, window.innerWidth - 230), top: Math.min(state.y, window.innerHeight - 310) }}
     >
+      {state.nodeId && (
+        <>
+          <ContextItem
+            icon={MessageSquare}
+            label="مراجعات وتعليقات العنصر"
+            onClick={onReview}
+          />
+          <div className="my-1 h-px bg-border" />
+        </>
+      )}
       {!state.nodeId && (
         <>
           <ContextItem icon={Circle} label="إضافة فكرة" onClick={() => onAdd("idea")} />
