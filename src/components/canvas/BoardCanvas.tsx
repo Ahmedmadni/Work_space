@@ -1035,6 +1035,58 @@ function CanvasToolbar({
   );
 }
 
+
+function DrawingControls({
+  tool,
+  size,
+  color,
+  onSize,
+  onColor,
+}: {
+  tool: "pen" | "highlighter";
+  size: number;
+  color: CanvasColor;
+  onSize: (value: number) => void;
+  onColor: (value: CanvasColor) => void;
+}) {
+  const max = tool === "highlighter" ? 36 : 16;
+  return (
+    <div className="frost-strong absolute bottom-20 left-1/2 z-30 flex -translate-x-1/2 items-center gap-3 rounded-2xl px-3 py-2 md:bottom-4 md:left-auto md:start-20 md:translate-x-0">
+      <span className="text-xs font-medium text-muted-foreground">
+        {tool === "highlighter" ? "تمييز" : "قلم"}
+      </span>
+      <input
+        type="range"
+        min={1}
+        max={max}
+        value={size}
+        onChange={(event) => onSize(Number(event.target.value))}
+        aria-label="سمك أداة الرسم"
+        className="w-24 accent-[var(--brand)]"
+      />
+      <span className="min-w-8 text-center text-xs text-muted-foreground">{size}px</span>
+      <div className="flex items-center gap-1" role="radiogroup" aria-label="لون أداة الرسم">
+        {DRAWING_COLORS.map((item) => (
+          <button
+            key={item.value}
+            type="button"
+            role="radio"
+            aria-checked={color === item.value}
+            aria-label={item.label}
+            title={item.label}
+            onClick={() => onColor(item.value)}
+            className={cn(
+              "h-6 w-6 rounded-full border-2 border-background shadow-sm transition",
+              color === item.value && "ring-2 ring-brand ring-offset-1 ring-offset-background",
+            )}
+            style={{ backgroundColor: canvasColorVar(item.value) }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function CanvasStrokes({
   strokes,
   erasing,
@@ -1206,11 +1258,23 @@ function CanvasNodeCard({
       <CheckCircle2 className="h-4 w-4" />
     ) : node.kind === "milestone" ? (
       <Milestone className="h-4 w-4" />
-    ) : node.kind === "note" ? (
+    ) : node.kind === "note" || node.kind === "sticky" ? (
       <StickyNote className="h-4 w-4" />
+    ) : node.kind === "text" ? (
+      <Type className="h-4 w-4" />
+    ) : node.kind === "rectangle" ? (
+      <Square className="h-4 w-4" />
     ) : (
       <Circle className="h-4 w-4" />
     );
+
+  const isText = node.kind === "text";
+  const isShape = node.kind === "rectangle" || node.kind === "ellipse";
+  const isSticky = node.kind === "sticky" || node.kind === "note";
+  const fill =
+    node.style.fill === "transparent"
+      ? "transparent"
+      : `color-mix(in oklab, ${canvasColorVar(node.style.fill)} ${isSticky ? "30%" : "16%"}, transparent)`;
 
   return (
     <div
@@ -1230,24 +1294,51 @@ function CanvasNodeCard({
         top: node.y,
         width: node.width,
         height: node.height,
+        backgroundColor: fill,
+        borderColor: canvasColorVar(node.style.stroke),
+        borderWidth: isShape ? 2 : isSticky ? 1 : undefined,
+        borderStyle: isShape || isSticky ? "solid" : undefined,
+        borderRadius: node.kind === "ellipse" ? "9999px" : undefined,
+        boxShadow: isText ? "none" : undefined,
+        textAlign:
+          node.style.text_align === "center"
+            ? "center"
+            : node.style.text_align === "end"
+              ? "end"
+              : "start",
       }}
       className={cn(
-        "frost-strong group select-none rounded-2xl p-4 text-start shadow-frost transition-shadow",
+        "group select-none p-4 transition-shadow",
+        !isText && !isShape && !isSticky && "frost-strong rounded-2xl shadow-frost",
+        isSticky && "rounded-xl shadow-frost",
+        isShape && "flex flex-col justify-center",
+        isText && "rounded-lg",
         selected && "ring-2 ring-brand shadow-lift",
         connectorSource && "ring-2 ring-info",
       )}
     >
-      <span className="mb-3 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+      <span className={cn("mb-3 items-center gap-2 text-xs font-medium text-muted-foreground", isText ? "hidden" : "flex")}>
         {icon}
         {node.kind === "task"
           ? "مهمة"
           : node.kind === "milestone"
             ? "معلم"
-            : node.kind === "note"
+            : node.kind === "note" || node.kind === "sticky"
               ? "ملاحظة"
-              : "فكرة"}
+              : node.kind === "text"
+                ? "نص"
+                : node.kind === "rectangle"
+                  ? "مستطيل"
+                  : node.kind === "ellipse"
+                    ? "بيضاوي"
+                    : "فكرة"}
       </span>
-      <span className="block font-semibold leading-6">{node.title}</span>
+      <span
+        className={cn("block leading-6", isText || isShape ? "font-medium" : "font-semibold")}
+        style={{ fontSize: node.style.font_size }}
+      >
+        {node.title}
+      </span>
       {node.description && (
         <span className="mt-1.5 block line-clamp-3 text-xs leading-5 text-muted-foreground">
           {node.description}
@@ -1609,7 +1700,10 @@ function CanvasContextMenu({
           <ContextItem icon={Circle} label="إضافة فكرة" onClick={() => onAdd("idea")} />
           <ContextItem icon={CheckCircle2} label="إضافة مهمة" onClick={() => onAdd("task")} />
           <ContextItem icon={Milestone} label="إضافة معلم" onClick={() => onAdd("milestone")} />
-          <ContextItem icon={StickyNote} label="إضافة ملاحظة" onClick={() => onAdd("note")} />
+          <ContextItem icon={StickyNote} label="إضافة ملاحظة لاصقة" onClick={() => onAdd("sticky")} />
+          <ContextItem icon={Type} label="إضافة نص" onClick={() => onAdd("text")} />
+          <ContextItem icon={Square} label="إضافة مستطيل" onClick={() => onAdd("rectangle")} />
+          <ContextItem icon={Circle} label="إضافة شكل بيضاوي" onClick={() => onAdd("ellipse")} />
           <div className="my-1 h-px bg-border" />
         </>
       )}
