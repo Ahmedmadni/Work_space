@@ -185,6 +185,35 @@ export interface CanvasNodeSearchMatch {
   node: CanvasNode;
 }
 
+export interface ProjectExecutionItem {
+  board_id: string;
+  node: CanvasNode;
+  dependency_total: number;
+  dependency_done: number;
+  waiting_on: Array<{ id: string; title: string }>;
+  is_overdue: boolean;
+  is_upcoming: boolean;
+  is_critical: boolean;
+  is_unassigned: boolean;
+  dependency_ready: boolean;
+  waiting_on_dependencies: boolean;
+}
+
+export interface ProjectExecutionSummary {
+  total: number;
+  completed: number;
+  in_progress: number;
+  blocked: number;
+  overdue: number;
+  upcoming: number;
+  critical: number;
+  unassigned: number;
+  dependency_ready: number;
+  waiting_on_dependencies: number;
+  average_progress: number;
+  items: ProjectExecutionItem[];
+}
+
 export interface WorkspaceWithStats extends Workspace {
   projects_count: number;
   boards_count: number;
