@@ -298,6 +298,13 @@ begin
   where node_id = p_node_id
     and board_id = p_board_id;
 
+  if p_assignee_user_id is not null then
+    update public.canvas_nodes
+    set owner_label = null
+    where id = p_node_id
+      and board_id = p_board_id;
+  end if;
+
   if p_assignee_user_id is null then
     delete from public.canvas_node_assignments
     where node_id = p_node_id
