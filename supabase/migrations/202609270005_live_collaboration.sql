@@ -226,6 +226,9 @@ begin
     from public.project_comments c
     where c.id = p_parent_comment_id
       and c.project_id = p_project_id
+      and c.target_type = p_target_type
+      and c.target_id is not distinct from p_target_id
+      and c.page_number is not distinct from p_page_number
   ) then
     raise exception 'COMMENT_PARENT_INVALID' using errcode = '22023';
   end if;
