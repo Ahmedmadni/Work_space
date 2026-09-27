@@ -66,6 +66,25 @@ function formatLocalDate(value: string | null) {
   }).format(new Date(Date.UTC(year!, month! - 1, day!)));
 }
 
+function localDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function isDueThisWeek(item: ProjectExecutionItem) {
+  if (!item.node.due_date || item.node.status === "done") return false;
+  const today = new Date();
+  today.setHours(12, 0, 0, 0);
+  const end = new Date(today);
+  const daysUntilSaturday = (6 - today.getDay() + 7) % 7;
+  end.setDate(today.getDate() + daysUntilSaturday);
+  const todayKey = localDateKey(today);
+  const endKey = localDateKey(end);
+  return item.node.due_date >= todayKey && item.node.due_date <= endKey;
+}
+
 function statusLabel(status: CanvasNodeStatus) {
   return STATUS_OPTIONS.find((item) => item.value === status)?.label ?? status;
 }
@@ -294,7 +313,7 @@ export function ProjectExecutionCenter({
         : 0,
       team: openItems.length,
       overdue: openItems.filter((item) => item.is_overdue).length,
-      due_week: openItems.filter((item) => item.is_upcoming).length,
+      due_week: openItems.filter(isDueThisWeek).length,
       blocked: openItems.filter((item) => item.node.status === "blocked")
         .length,
       unassigned: openItems.filter((item) => item.is_unassigned).length,
@@ -325,7 +344,7 @@ export function ProjectExecutionCenter({
             blocked: tasks.filter(
               (item) => item.node.status === "blocked",
             ).length,
-            dueWeek: tasks.filter((item) => item.is_upcoming).length,
+            dueWeek: tasks.filter(isDueThisWeek).length,
             progress,
           };
         })
@@ -355,7 +374,7 @@ export function ProjectExecutionCenter({
         if (item.node.assignee_user_id !== currentUserId) return false;
       }
       if (view === "overdue" && !item.is_overdue) return false;
-      if (view === "due_week" && !item.is_upcoming) return false;
+      if (view === "due_week" && !isDueThisWeek(item)) return false;
       if (view === "blocked" && item.node.status !== "blocked") {
         return false;
       }
