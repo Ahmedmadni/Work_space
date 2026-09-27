@@ -319,6 +319,8 @@ export function ProjectCard({ project: p, boards }: { project: Project; boards?:
 
 export function BoardCard({ board: b }: { board: BoardWithContext }) {
   const navigate = useNavigate();
+  const access = useProjectAccess(b.project_id);
+  const canEdit = access.data?.can_edit ?? false;
   const fav = useToggleFavorite();
   const [edit, setEdit] = useState(false);
   const [del, setDel] = useState(false);
@@ -337,12 +339,14 @@ export function BoardCard({ board: b }: { board: BoardWithContext }) {
           <p className="mt-3 text-xs text-muted-foreground">آخر تعديل {relativeTime(b.updated_at)}</p>
         </div>
       </Link>
-      <div className="frost absolute end-2 top-2 flex rounded-xl">
-        <button aria-label={b.is_favorite ? "إزالة من المفضلة" : "إضافة للمفضلة"} onClick={() => fav.mutate(b.id)} className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground hover:text-warning">
-          <Star className={cn("h-4 w-4", b.is_favorite && "fill-warning text-warning")} />
-        </button>
-        <ActionsMenu onOpen={() => void navigate({ to: "/workspace/$workspaceId/project/$projectId/board/$boardId", params })} onEdit={() => setEdit(true)} onArchive={() => archive.mutate(b.id)} onDelete={() => setDel(true)} />
-      </div>
+      {canEdit && (
+        <div className="frost absolute end-2 top-2 flex rounded-xl">
+          <button aria-label={b.is_favorite ? "إزالة من المفضلة" : "إضافة للمفضلة"} onClick={() => fav.mutate(b.id)} className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground hover:text-warning">
+            <Star className={cn("h-4 w-4", b.is_favorite && "fill-warning text-warning")} />
+          </button>
+          <ActionsMenu onOpen={() => void navigate({ to: "/workspace/$workspaceId/project/$projectId/board/$boardId", params })} onEdit={() => setEdit(true)} onArchive={() => archive.mutate(b.id)} onDelete={() => setDel(true)} />
+        </div>
+      )}
       <EditEntityDialog open={edit} onOpenChange={setEdit} title="تعديل اللوحة" initialName={b.name} initialDescription={b.description} pending={update.isPending}
         onSave={(v, done) => update.mutate({ id: b.id, name: v.name, description: v.description }, { onSuccess: done })} />
       <ConfirmDialog open={del} onOpenChange={setDel} title={`حذف «${b.name}»؟`} description="ستُحذف اللوحة نهائيًا ولا يمكن استعادتها." onConfirm={() => remove.mutate(b.id)} />
