@@ -1117,7 +1117,7 @@ function CanvasInspector({
           <div className="mt-6 rounded-2xl bg-muted/60 p-3 text-xs leading-6 text-muted-foreground">
             <strong className="text-foreground">اختصارات:</strong><br />
             V تحديد · H تحريك · N عقدة · L ربط<br />
-            Ctrl/Cmd+C نسخ · V لصق · D تكرار<br />
+            Ctrl/Cmd+C نسخ · Ctrl/Cmd+V لصق · Ctrl/Cmd+D تكرار<br />
             Delete حذف · G شبكة · 0 ملاءمة
           </div>
         </>
