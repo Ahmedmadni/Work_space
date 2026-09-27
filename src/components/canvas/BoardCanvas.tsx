@@ -441,6 +441,19 @@ export function BoardCanvas({
 
           setConflictSnapshot(null);
           setConflictCount(0);
+
+          if (
+            result.applied_count === 0 &&
+            localEditVersion.current === requestEditVersion
+          ) {
+            baseSnapshotRef.current = {
+              ...cloneSnapshot(result.snapshot),
+              viewport: currentLocal.viewport,
+            };
+            setSaveState("saved");
+            return;
+          }
+
           latestSnapshotRef.current = cloneSnapshot(rebased.snapshot);
           setSnapshot(rebased.snapshot);
           setSaveState(
@@ -456,7 +469,7 @@ export function BoardCanvas({
     return () => {
       if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
     };
-  }, [snapshot, boardId, saveCanvas, readOnly, saveState]);
+  }, [snapshot, boardId, saveCanvas, readOnly]);
 
 
   useEffect(() => {
