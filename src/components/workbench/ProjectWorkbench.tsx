@@ -121,18 +121,20 @@ export function ProjectWorkbench({
     if (activeTab === documentId) setActiveTab("board");
   };
 
-  const onUpload = async (file: File) => {
-    const document = await uploadDocument.mutateAsync(file);
-    openDocument(document.id);
+  const onUpload = (file: File) => {
+    uploadDocument.mutate(file, {
+      onSuccess: (document) => openDocument(document.id),
+    });
   };
 
-  const onDelete = async (document: ProjectDocument) => {
+  const onDelete = (document: ProjectDocument) => {
     const confirmed = window.confirm(
       `حذف «${document.file_name}» وكل التعليقات المحفوظة عليه؟`,
     );
     if (!confirmed) return;
-    await deleteDocument.mutateAsync(document.id);
-    closeDocument(document.id);
+    deleteDocument.mutate(document.id, {
+      onSuccess: () => closeDocument(document.id),
+    });
   };
 
   const openDocuments = openDocumentIds
@@ -266,7 +268,7 @@ export function ProjectWorkbench({
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem
                           className="gap-2 text-danger focus:text-danger"
-                          onSelect={() => void onDelete(document)}
+                          onSelect={() => onDelete(document)}
                         >
                           <Trash2 className="h-4 w-4" />
                           حذف الملف
@@ -297,7 +299,7 @@ export function ProjectWorkbench({
         onChange={(event) => {
           const file = event.target.files?.[0];
           event.currentTarget.value = "";
-          if (file) void onUpload(file);
+          if (file) onUpload(file);
         }}
       />
 
