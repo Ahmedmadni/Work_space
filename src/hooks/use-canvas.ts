@@ -29,11 +29,13 @@ export function useSaveBoardCanvas(boardId: string, projectId?: string) {
   const qc = useQueryClient();
   return useMutation({
     scope: { id: `canvas-save:${boardId}` },
-    mutationFn: async (snapshot: BoardCanvasSnapshot) => {
-      const base =
-        qc.getQueryData<BoardCanvasSnapshot>(["canvas", boardId]) ?? null;
-      return saveCollaborativeBoardCanvas(snapshot, base);
-    },
+    mutationFn: async ({
+      snapshot,
+      baseSnapshot,
+    }: {
+      snapshot: BoardCanvasSnapshot;
+      baseSnapshot: BoardCanvasSnapshot;
+    }) => saveCollaborativeBoardCanvas(snapshot, baseSnapshot),
     onSuccess: (result) => {
       const snapshot = result.snapshot;
       qc.setQueryData(["canvas", boardId], snapshot);
