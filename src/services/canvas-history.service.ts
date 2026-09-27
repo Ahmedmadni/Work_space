@@ -3,11 +3,7 @@ import {
   normalizeBoardCanvasSnapshot,
   saveBoardCanvas,
 } from "./canvas.service";
-import {
-  deleteBoardAssets,
-  exportBoardAssets,
-  importBoardAssets,
-} from "./canvas-assets.service";
+import { exportBoardAssets, importBoardAssets } from "./canvas-assets.service";
 import type {
   BoardCanvasSnapshot,
   CanvasBoardBackup,
@@ -223,26 +219,13 @@ export async function importBoardBackup(
 
   const imported = normalizeBoardCanvasSnapshot(boardId, backup.snapshot);
   const assetIdMap = await importBoardAssets(boardId, backup.assets);
-  const remapped = normalizeBoardCanvasSnapshot(boardId, {
+  const finalSnapshot = normalizeBoardCanvasSnapshot(boardId, {
     ...imported,
     nodes: imported.nodes.map((node) => ({
       ...node,
       asset_id: node.asset_id ? assetIdMap.get(node.asset_id) ?? null : null,
     })),
     updated_at: new Date().toISOString(),
-  });
-
-  await deleteBoardAssets(boardId);
-  const reimportMap = await importBoardAssets(boardId, backup.assets);
-  const finalSnapshot = normalizeBoardCanvasSnapshot(boardId, {
-    ...remapped,
-    nodes: remapped.nodes.map((node) => {
-      const original = imported.nodes.find((item) => item.id === node.id);
-      return {
-        ...node,
-        asset_id: original?.asset_id ? reimportMap.get(original.asset_id) ?? null : null,
-      };
-    }),
   });
 
   const saved = await saveBoardCanvas(finalSnapshot);
