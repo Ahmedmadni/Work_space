@@ -15,7 +15,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import {
   DropdownMenu,
@@ -115,7 +115,7 @@ function CommentComposer({
   onCancelReply,
 }: {
   projectId: string;
-  boardId: string;
+  boardId: string | null;
   targetType: "board" | "document";
   targetId: string;
   pageNumber?: number;
@@ -454,7 +454,7 @@ function CommentsTab({
 }) {
   const access = useProjectAccess(projectId);
   const comments = useProjectComments(projectId, {
-    boardId,
+    boardId: targetType === "document" ? null : boardId,
     targetType,
     targetId,
     limit: 150,
@@ -463,6 +463,11 @@ function CommentsTab({
   const [replyTo, setReplyTo] = useState<ProjectComment | null>(null);
   const [showResolved, setShowResolved] = useState(false);
   const [showAllPages, setShowAllPages] = useState(false);
+
+  useEffect(() => {
+    setReplyTo(null);
+    setShowAllPages(false);
+  }, [targetId, targetType, pageNumber]);
 
   const all = comments.data ?? [];
   const scoped =
@@ -563,7 +568,7 @@ function CommentsTab({
       {access.data?.can_edit ? (
         <CommentComposer
           projectId={projectId}
-          boardId={boardId}
+          boardId={targetType === "document" ? null : boardId}
           targetType={targetType}
           targetId={targetId}
           pageNumber={pageNumber}
@@ -705,7 +710,7 @@ export function ProjectCollaborationDock({
   const comments = useProjectComments(
     projectId,
     {
-      boardId,
+      boardId: commentTargetType === "document" ? null : boardId,
       targetType: commentTargetType,
       targetId: commentTargetId,
       limit: 150,
