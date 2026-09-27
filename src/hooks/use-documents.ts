@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
+import { recordProjectActivity } from "@/services/live-collaboration.service";
+
 import {
   deleteProjectDocument,
   getProjectDocumentBlob,
@@ -46,6 +48,17 @@ export function useUploadProjectDocument(projectId: string) {
       void queryClient.invalidateQueries({
         queryKey: ["project-documents", projectId],
       });
+      void recordProjectActivity({
+        projectId,
+        action: "document_uploaded",
+        entityType: "document",
+        entityId: document.id,
+        metadata: {
+          file_name: document.file_name,
+          mime_type: document.mime_type,
+          size_bytes: document.size_bytes,
+        },
+      }).catch(() => {});
       toast.success(`تم رفع «${document.file_name}»`);
     },
     onError: (error) =>
@@ -59,10 +72,16 @@ export function useDeleteProjectDocument(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (documentId: string) => deleteProjectDocument(documentId),
-    onSuccess: () => {
+    onSuccess: (_, documentId) => {
       void queryClient.invalidateQueries({
         queryKey: ["project-documents", projectId],
       });
+      void recordProjectActivity({
+        projectId,
+        action: "document_deleted",
+        entityType: "document",
+        entityId: documentId,
+      }).catch(() => {});
       toast.success("تم حذف المستند.");
     },
     onError: () => toast.error("تعذر حذف المستند."),
