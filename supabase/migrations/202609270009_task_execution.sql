@@ -259,6 +259,7 @@ declare
   v_old_assignee uuid;
   v_node_title text;
   v_assignee_name text;
+  v_revision bigint;
 begin
   if not public.can_edit_project(p_project_id) then
     raise exception 'TASK_ASSIGN_DENIED' using errcode = '42501';
@@ -368,6 +369,34 @@ begin
         'old_assignee_user_id', v_old_assignee,
         'assignee_user_id', p_assignee_user_id,
         'title', v_node_title
+      )
+    );
+
+    update public.boards
+    set
+      canvas_revision = canvas_revision + 1,
+      updated_at = now()
+    where id = p_board_id
+      and project_id = p_project_id
+    returning canvas_revision into v_revision;
+
+    insert into public.board_collaboration_events (
+      board_id,
+      revision,
+      actor_user_id,
+      client_id,
+      operations
+    )
+    values (
+      p_board_id,
+      v_revision,
+      auth.uid(),
+      gen_random_uuid(),
+      jsonb_build_array(
+        jsonb_build_object(
+          'op', 'node_assignment',
+          'id', p_node_id
+        )
       )
     );
   end if;
