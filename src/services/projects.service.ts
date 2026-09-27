@@ -22,10 +22,32 @@ export async function getProject(id: string): Promise<Project | null> {
   return delay(db.projects.find((p) => p.id === id) ?? null);
 }
 
+const SYSTEM_WORKSPACE_ID = "ws-system";
+
+function ensureSystemWorkspace() {
+  writeDb((db) => {
+    if (db.workspaces.some((w) => w.id === SYSTEM_WORKSPACE_ID)) return;
+    const now = nowIso();
+    db.workspaces.push({
+      id: SYSTEM_WORKSPACE_ID,
+      name: "النظام",
+      description: "حاوية داخلية مخفية للمشاريع المباشرة.",
+      icon: "م",
+      color: "brand",
+      created_by: CURRENT_USER.id,
+      created_at: now,
+      updated_at: now,
+      archived_at: null,
+    });
+  });
+}
+
 export async function createProject(input: CreateProjectInput): Promise<Project> {
+  if (!workspaceId) ensureSystemWorkspace();
+  const workspaceId = workspaceId ?? SYSTEM_WORKSPACE_ID;
   const project: Project = {
     id: newId("pr"),
-    workspace_id: input.workspace_id,
+    workspace_id: workspaceId,
     name: input.name.trim(),
     description: input.description?.trim() || null,
     status: input.status,
@@ -39,7 +61,7 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
 
   writeDb((db) => {
     db.projects.unshift(project);
-    const ws = db.workspaces.find((w) => w.id === input.workspace_id);
+    const ws = db.workspaces.find((w) => w.id === workspaceId);
     if (ws) ws.updated_at = project.updated_at;
   });
 
