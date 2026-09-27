@@ -23,7 +23,8 @@ export type CanvasNodeKind =
   | "sticky"
   | "text"
   | "rectangle"
-  | "ellipse";
+  | "ellipse"
+  | "image";
 export type CanvasEdgeKind = "relationship" | "dependency";
 export type CanvasStrokeTool = "pen" | "highlighter";
 export type CanvasColor = "ink" | "brand" | "warning" | "info" | "danger" | "success";
@@ -124,6 +125,8 @@ export interface CanvasNode {
   height: number;
   title: string;
   description: string | null;
+  /** مرجع ملف الصورة في مخزن الأصول المحلي/Storage المستقبلي. */
+  asset_id: string | null;
   style: CanvasNodeStyle;
   created_at: string;
   updated_at: string;
