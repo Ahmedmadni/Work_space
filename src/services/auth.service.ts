@@ -1,6 +1,7 @@
 import { BACKEND_CONFIG, isSupabaseBackend } from "@/lib/backend-config";
 
 const SESSION_KEY = "projectflow.supabase.session.v1";
+let refreshInFlight: Promise<RemoteAuthSession | null> | null = null;
 
 export interface RemoteAuthUser {
   id: string;
@@ -168,22 +169,32 @@ export async function signUpWithPassword(
 }
 
 export async function refreshRemoteSession(): Promise<RemoteAuthSession | null> {
-  const current = readStoredSession();
-  if (!current) return null;
+  if (refreshInFlight) return refreshInFlight;
+
+  refreshInFlight = (async () => {
+    const current = readStoredSession();
+    if (!current) return null;
+    try {
+      const payload = await authRequest<SupabaseAuthResponse>(
+        "token?grant_type=refresh_token",
+        {
+          method: "POST",
+          body: JSON.stringify({ refresh_token: current.refresh_token }),
+        },
+      );
+      const session = sessionFromResponse(payload);
+      writeStoredSession(session);
+      return session;
+    } catch {
+      writeStoredSession(null);
+      return null;
+    }
+  })();
+
   try {
-    const payload = await authRequest<SupabaseAuthResponse>(
-      "token?grant_type=refresh_token",
-      {
-        method: "POST",
-        body: JSON.stringify({ refresh_token: current.refresh_token }),
-      },
-    );
-    const session = sessionFromResponse(payload);
-    writeStoredSession(session);
-    return session;
-  } catch {
-    writeStoredSession(null);
-    return null;
+    return await refreshInFlight;
+  } finally {
+    refreshInFlight = null;
   }
 }
 
