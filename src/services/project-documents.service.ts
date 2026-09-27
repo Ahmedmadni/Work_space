@@ -55,8 +55,17 @@ function transactionDone(transaction: IDBTransaction): Promise<void> {
 }
 
 function publicDocument(record: LocalProjectDocumentRecord): ProjectDocument {
-  const { blob: _blob, ...document } = record;
-  return document;
+  return {
+    id: record.id,
+    project_id: record.project_id,
+    file_name: record.file_name,
+    mime_type: record.mime_type,
+    size_bytes: record.size_bytes,
+    page_count: record.page_count,
+    created_by: record.created_by,
+    created_at: record.created_at,
+    updated_at: record.updated_at,
+  };
 }
 
 function validateFile(file: File) {
