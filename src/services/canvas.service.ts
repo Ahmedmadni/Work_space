@@ -172,6 +172,14 @@ function normalizeNode(value: unknown, boardId: string): CanvasNode | null {
     start_date: normalizeLocalDate(raw.start_date),
     due_date: normalizeLocalDate(raw.due_date),
     owner: typeof raw.owner === "string" && raw.owner.trim() ? raw.owner.trim().slice(0, 80) : null,
+    assignee_user_id:
+      typeof raw.assignee_user_id === "string" && raw.assignee_user_id.trim()
+        ? raw.assignee_user_id
+        : null,
+    assignee_name:
+      typeof raw.assignee_name === "string" && raw.assignee_name.trim()
+        ? raw.assignee_name.trim().slice(0, 120)
+        : null,
     tags: normalizeTags(raw.tags),
     asset_id: typeof raw.asset_id === "string" ? raw.asset_id : null,
     style: normalizeNodeStyle(raw.style, kind),
@@ -406,7 +414,7 @@ export async function getProjectExecutionSummary(
           node.due_date <= upcomingEnd &&
           active,
         is_critical: node.priority === "critical" && active,
-        is_unassigned: !node.owner && active,
+        is_unassigned: !node.assignee_user_id && !node.owner && active,
         dependency_ready:
           dependencies.length > 0 &&
           dependencyDone === dependencies.length &&
@@ -566,6 +574,8 @@ export function createCanvasNode(
     start_date: null,
     due_date: null,
     owner: null,
+    assignee_user_id: null,
+    assignee_name: null,
     tags: [],
     asset_id: null,
     style: defaultNodeStyle(kind),
