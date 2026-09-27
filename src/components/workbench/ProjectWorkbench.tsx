@@ -67,11 +67,13 @@ export function ProjectWorkbench({
   boardId,
   boardName,
   initialFocusNodeId,
+  canEdit = true,
 }: {
   projectId: string;
   boardId: string;
   boardName: string;
   initialFocusNodeId?: string;
+  canEdit?: boolean;
 }) {
   const documentsQuery = useProjectDocuments(projectId);
   const uploadDocument = useUploadProjectDocument(projectId);
@@ -125,12 +127,14 @@ export function ProjectWorkbench({
   };
 
   const onUpload = (file: File) => {
+    if (!canEdit) return;
     uploadDocument.mutate(file, {
       onSuccess: (document) => openDocument(document.id),
     });
   };
 
   const onDelete = (document: ProjectDocument) => {
+    if (!canEdit) return;
     const confirmed = window.confirm(
       `حذف «${document.file_name}» وكل التعليقات المحفوظة عليه؟`,
     );
@@ -198,6 +202,12 @@ export function ProjectWorkbench({
         })}
 
         <div className="flex shrink-0 items-center gap-1 px-1.5">
+          {!canEdit && (
+            <span className="me-1 rounded-lg bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground">
+              عرض فقط
+            </span>
+          )}
+          {canEdit && (
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
@@ -207,6 +217,7 @@ export function ProjectWorkbench({
           >
             <FilePlus2 className="h-4 w-4" />
           </button>
+          )}
 
           <DropdownMenu dir="rtl">
             <DropdownMenuTrigger asChild>
@@ -258,6 +269,7 @@ export function ProjectWorkbench({
                         </p>
                       </div>
                     </DropdownMenuItem>
+                    {canEdit && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <button
@@ -278,17 +290,22 @@ export function ProjectWorkbench({
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
+                    )}
                   </div>
                 );
               })}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={() => fileInputRef.current?.click()}
-                className="cursor-pointer gap-2"
-              >
-                <FilePlus2 className="h-4 w-4" />
-                رفع ملف جديد
-              </DropdownMenuItem>
+              {canEdit && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onSelect={() => fileInputRef.current?.click()}
+                    className="cursor-pointer gap-2"
+                  >
+                    <FilePlus2 className="h-4 w-4" />
+                    رفع ملف جديد
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -297,6 +314,7 @@ export function ProjectWorkbench({
       <input
         ref={fileInputRef}
         type="file"
+        disabled={!canEdit}
         accept="application/pdf,image/png,image/jpeg,image/webp,image/gif"
         className="hidden"
         onChange={(event) => {
@@ -318,12 +336,17 @@ export function ProjectWorkbench({
           <BoardCanvas
             boardId={boardId}
             initialFocusNodeId={initialFocusNodeId}
+            readOnly={!canEdit}
           />
         </div>
 
         {activeDocument && (
           <div className="absolute inset-0 z-10">
-            <DocumentViewer projectId={projectId} document={activeDocument} />
+            <DocumentViewer
+              projectId={projectId}
+              document={activeDocument}
+              readOnly={!canEdit}
+            />
           </div>
         )}
       </div>
