@@ -140,6 +140,30 @@ export async function importBoardAssets(
   const idMap = new Map<string, string>();
   if (!assets.length) return idMap;
 
+  if (isSupabaseBackend()) {
+    for (const asset of assets) {
+      if (
+        !asset ||
+        typeof asset.id !== "string" ||
+        typeof asset.data_url !== "string" ||
+        !asset.data_url.startsWith("data:image/")
+      ) {
+        continue;
+      }
+      const response = await fetch(asset.data_url);
+      const blob = await response.blob();
+      if (!blob.type.startsWith("image/") || blob.size > MAX_IMAGE_BYTES) continue;
+      const file = new File(
+        [blob],
+        typeof asset.name === "string" && asset.name ? asset.name : "image",
+        { type: blob.type },
+      );
+      const created = await remoteSaveCanvasImage(boardId, file);
+      idMap.set(asset.id, created.id);
+    }
+    return idMap;
+  }
+
   const prepared: Array<{ oldId: string; record: CanvasAssetRecord }> = [];
   for (const asset of assets) {
     if (
