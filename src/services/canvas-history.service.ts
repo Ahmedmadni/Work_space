@@ -141,6 +141,14 @@ function contentSignature(snapshot: BoardCanvasSnapshot): string {
   });
 }
 
+export function listLocalBoardVersionsForMigration(boardId: string): CanvasBoardVersion[] {
+  const store = readStore();
+  return (store.boards[boardId] ?? []).map((version) => ({
+    ...version,
+    snapshot: cloneSnapshot(version.snapshot),
+  }));
+}
+
 export async function listBoardVersions(boardId: string): Promise<CanvasBoardVersion[]> {
   if (isSupabaseBackend()) {
     const rows = await supabaseRest<RemoteVersionRow[]>("board_versions", {

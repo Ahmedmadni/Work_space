@@ -302,6 +302,17 @@ function load(raw: string): Database {
 
 let memory: Database | null = null;
 
+export function readPersistedDbForMigration(): Database | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    return raw ? load(raw) : null;
+  } catch (error) {
+    warnDev("تعذرت قراءة البيانات المحلية للترحيل.", error);
+    return null;
+  }
+}
+
 export function readDb(): Database {
   if (typeof window === "undefined") return seed(); // على الخادم: بيانات مؤقتة لا تُحفظ
   if (memory) return memory;

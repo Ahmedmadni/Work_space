@@ -90,6 +90,24 @@ export async function saveCanvasImage(
   return record;
 }
 
+export async function listLocalBoardAssetsForMigration(
+  boardId: string,
+): Promise<CanvasAssetRecord[]> {
+  const db = await openDb();
+  const transaction = db.transaction(STORE_NAME, "readonly");
+  const store = transaction.objectStore(STORE_NAME);
+  const index = store.index(BOARD_INDEX);
+
+  const rows = await new Promise<CanvasAssetRecord[]>((resolve, reject) => {
+    const request = index.getAll(IDBKeyRange.only(boardId));
+    request.onsuccess = () => resolve((request.result as CanvasAssetRecord[] | undefined) ?? []);
+    request.onerror = () => reject(request.error ?? new Error("Failed to list local migration assets"));
+  });
+
+  db.close();
+  return rows;
+}
+
 export async function listBoardAssets(boardId: string): Promise<CanvasAssetRecord[]> {
   if (isSupabaseBackend()) return remoteListBoardAssets(boardId);
   const db = await openDb();
