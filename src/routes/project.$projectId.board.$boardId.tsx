@@ -111,7 +111,7 @@ function BoardPage() {
             presenceContextType={liveContext.type}
             presenceContextId={liveContext.id}
             documentPageNumber={liveContext.pageNumber}
-            focusCommentId={comment}
+            focusCommentId={node ? undefined : comment}
           />
           {access.data?.role === "viewer" && (
             <span className="hidden rounded-lg bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground sm:inline">
@@ -136,6 +136,7 @@ function BoardPage() {
           boardId={boardId}
           boardName={board.name}
           initialFocusNodeId={node}
+          initialFocusCommentId={comment}
           initialDocumentId={doc}
           initialDocumentPage={page}
           canEdit={access.data?.can_edit ?? false}
