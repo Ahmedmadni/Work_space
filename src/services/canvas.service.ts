@@ -386,8 +386,7 @@ export async function getProjectExecutionSummary(
         dependency_ready:
           dependencies.length > 0 &&
           dependencyDone === dependencies.length &&
-          active &&
-          node.status !== "blocked",
+          (node.status === "idea" || node.status === "planned"),
         waiting_on_dependencies: waitingOn.length > 0 && active,
       });
     }
