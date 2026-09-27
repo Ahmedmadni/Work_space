@@ -136,9 +136,11 @@ function ToolButton({
 export function DocumentViewer({
   projectId,
   document,
+  readOnly = false,
 }: {
   projectId: string;
   document: ProjectDocument;
+  readOnly?: boolean;
 }) {
   const blobQuery = useProjectDocumentBlob(document.id);
   const [pageNumber, setPageNumber] = useState(1);
@@ -171,6 +173,14 @@ export function DocumentViewer({
   const [, setDraftVersion] = useState(0);
 
   const isPdf = document.mime_type === "application/pdf";
+
+  useEffect(() => {
+    if (!readOnly) return;
+    setTool("view");
+    drawingRef.current = null;
+    setUndoStack([]);
+    setRedoStack([]);
+  }, [readOnly]);
 
   useEffect(() => {
     setPageNumber(1);
@@ -318,6 +328,7 @@ export function DocumentViewer({
   }, [color, size, tool]);
 
   const persist = (next: DocumentAnnotation[], previous = annotations) => {
+    if (readOnly) return;
     setUndoStack((stack) => [...stack.slice(-29), previous]);
     setRedoStack([]);
     setAnnotations(next);
@@ -325,6 +336,7 @@ export function DocumentViewer({
   };
 
   const undo = () => {
+    if (readOnly) return;
     const previous = undoStack.at(-1);
     if (!previous) return;
     setUndoStack((stack) => stack.slice(0, -1));
@@ -334,6 +346,7 @@ export function DocumentViewer({
   };
 
   const redo = () => {
+    if (readOnly) return;
     const next = redoStack.at(-1);
     if (!next) return;
     setRedoStack((stack) => stack.slice(0, -1));
@@ -343,7 +356,7 @@ export function DocumentViewer({
   };
 
   const onPointerDown = (event: ReactPointerEvent<SVGSVGElement>) => {
-    if (tool === "view" || tool === "eraser") return;
+    if (readOnly || tool === "view" || tool === "eraser") return;
     const point = normalizedPoint(event, event.currentTarget);
     event.currentTarget.setPointerCapture(event.pointerId);
     if (tool === "rectangle") {
@@ -408,7 +421,7 @@ export function DocumentViewer({
   };
 
   const erase = (id: string) => {
-    if (tool !== "eraser") return;
+    if (readOnly || tool !== "eraser") return;
     persist(annotations.filter((annotation) => annotation.id !== id));
   };
 
@@ -519,6 +532,7 @@ export function DocumentViewer({
   return (
     <div className="flex h-full min-h-0 flex-col bg-muted/20">
       <div className="frost hairline-b z-20 flex min-h-12 flex-wrap items-center gap-1 px-2 py-1.5">
+        {!readOnly && (
         <div className="flex items-center gap-0.5">
           <ToolButton active={tool === "view"} label="عرض وتحريك" onClick={() => setTool("view")}>
             <MousePointer2 className="h-4 w-4" />
@@ -548,7 +562,10 @@ export function DocumentViewer({
             <Eraser className="h-4 w-4" />
           </ToolButton>
         </div>
+        )}
 
+        {!readOnly && (
+        <>
         <span className="mx-1 h-6 w-px bg-border" />
 
         <ToolButton label="تراجع" onClick={undo}>
@@ -579,6 +596,14 @@ export function DocumentViewer({
             aria-label="سُمك الرسم"
             className="w-20"
           />
+        )}
+        </>
+        )}
+
+        {readOnly && (
+          <span className="rounded-lg bg-muted px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground">
+            عرض فقط
+          </span>
         )}
 
         <div className="ms-auto flex items-center gap-1">
@@ -679,7 +704,7 @@ export function DocumentViewer({
           <svg
             viewBox={`0 0 ${displayWidth} ${displayHeight}`}
             className={`absolute inset-0 h-full w-full ${
-              tool === "view"
+              readOnly || tool === "view"
                 ? "pointer-events-none"
                 : tool === "eraser"
                   ? "cursor-crosshair"
@@ -700,7 +725,11 @@ export function DocumentViewer({
         <span>{document.file_name}</span>
         <span>·</span>
         <span>
-          {saveAnnotations.isPending ? "جارٍ حفظ التعليقات…" : "التعليقات محفوظة"}
+          {readOnly
+            ? "عرض فقط"
+            : saveAnnotations.isPending
+              ? "جارٍ حفظ التعليقات…"
+              : "التعليقات محفوظة"}
         </span>
         {annotationsQuery.isLoading && <span>· جارٍ تحميل التعليقات…</span>}
       </div>

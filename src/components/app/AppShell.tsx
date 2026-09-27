@@ -37,6 +37,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useProject, useProjects } from "@/hooks/use-projects";
+import { useProjectAccess } from "@/hooks/use-collaboration";
 import { useCurrentUser } from "@/hooks/use-auth";
 import type { Profile } from "@/types";
 import { cn } from "@/lib/utils";
@@ -219,6 +220,8 @@ function Breadcrumbs() {
 
 function QuickCreate() {
   const params = useParams({ strict: false }) as { projectId?: string };
+  const access = useProjectAccess(params.projectId ?? "");
+  const canCreateBoard = !!params.projectId && (access.data?.can_edit ?? false);
   const [dlg, setDlg] = useState<null | "pr" | "bd">(null);
 
   return (
@@ -233,10 +236,18 @@ function QuickCreate() {
         <DropdownMenuContent align="end" className="w-48">
           <DropdownMenuLabel>إنشاء جديد</DropdownMenuLabel>
           <DropdownMenuItem onSelect={() => setDlg("pr")}>مشروع</DropdownMenuItem>
-          {params.projectId && (
+          {canCreateBoard && (
             <DropdownMenuItem onSelect={() => setDlg("bd")}>
               لوحة داخل المشروع
             </DropdownMenuItem>
+          )}
+          {params.projectId && !canCreateBoard && access.data?.role === "viewer" && (
+            <>
+              <DropdownMenuSeparator />
+              <p className="px-2 py-1.5 text-xs text-muted-foreground">
+                صلاحيتك في هذا المشروع للعرض فقط.
+              </p>
+            </>
           )}
           {!params.projectId && (
             <>
@@ -254,7 +265,7 @@ function QuickCreate() {
         onOpenChange={(open) => setDlg(open ? "pr" : null)}
       />
 
-      {params.projectId && (
+      {canCreateBoard && params.projectId && (
         <CreateBoardDialog
           projectId={params.projectId}
           open={dlg === "bd"}

@@ -263,9 +263,11 @@ const DRAWING_COLORS: Array<{ value: CanvasColor; label: string }> = [
 export function BoardCanvas({
   boardId,
   initialFocusNodeId,
+  readOnly = false,
 }: {
   boardId: string;
   initialFocusNodeId?: string;
+  readOnly?: boolean;
 }) {
   const { data: loadedCanvas, isLoading } = useBoardCanvas(boardId);
   const saveCanvas = useSaveBoardCanvas(boardId);
@@ -291,6 +293,16 @@ export function BoardCanvas({
   const [ownerFilter, setOwnerFilter] = useState("all");
   const [tagFilter, setTagFilter] = useState("all");
   const [historyOpen, setHistoryOpen] = useState(false);
+
+  useEffect(() => {
+    if (!readOnly) return;
+    setTool("hand");
+    setSelectedNodeIds([]);
+    setSelectedEdgeId(null);
+    setConnectorSourceId(null);
+    setContextMenu(null);
+    setHistoryOpen(false);
+  }, [readOnly]);
 
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
@@ -318,6 +330,10 @@ export function BoardCanvas({
 
   useEffect(() => {
     if (!snapshot || initializedBoard.current !== boardId) return;
+    if (readOnly) {
+      setSaveState("saved");
+      return;
+    }
     setSaveState("saving");
     if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
     autosaveTimer.current = setTimeout(() => {
@@ -329,7 +345,7 @@ export function BoardCanvas({
     return () => {
       if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
     };
-  }, [snapshot, boardId, saveCanvas]);
+  }, [snapshot, boardId, saveCanvas, readOnly]);
 
 
   useEffect(() => {
@@ -427,6 +443,7 @@ export function BoardCanvas({
     snapshot?.edges.find((edge) => edge.id === selectedEdgeId) ?? null;
 
   const commit = useCallback((next: BoardCanvasSnapshot, recordHistory = true) => {
+    if (readOnly) return;
     if (recordHistory && snapshot) {
       past.current.push(cloneSnapshot(snapshot));
       if (past.current.length > 80) past.current.shift();
@@ -434,7 +451,7 @@ export function BoardCanvas({
       setHistoryVersion((v) => v + 1);
     }
     setSnapshot(next);
-  }, [snapshot]);
+  }, [snapshot, readOnly]);
 
   const updateNode = useCallback(
     (nodeId: string, patch: Partial<CanvasNode>, recordHistory = true) => {
@@ -833,6 +850,22 @@ export function BoardCanvas({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (readOnly && !isEditableTarget(event.target)) {
+        const key = event.key.toLowerCase();
+        const editShortcut =
+          key === "delete" ||
+          key === "backspace" ||
+          key === "n" ||
+          key === "c" && (event.ctrlKey || event.metaKey) ||
+          key === "v" && (event.ctrlKey || event.metaKey) ||
+          key === "d" && (event.ctrlKey || event.metaKey) ||
+          key === "z" && (event.ctrlKey || event.metaKey) ||
+          key === "y" && (event.ctrlKey || event.metaKey);
+        if (editShortcut) {
+          event.preventDefault();
+          return;
+        }
+      }
       if (isEditableTarget(event.target)) return;
       const mod = event.ctrlKey || event.metaKey;
       const key = event.key.toLowerCase();
@@ -922,6 +955,7 @@ export function BoardCanvas({
     redo,
     fitView,
     setZoom,
+    readOnly,
   ]);
 
   if (isLoading || !snapshot) {
@@ -935,6 +969,12 @@ export function BoardCanvas({
   return (
     <div className="relative flex flex-1 overflow-hidden">
       <ViewSwitcher value={viewMode} onChange={setViewMode} />
+      {readOnly && (
+        <div className="frost-strong absolute end-3 top-3 z-40 rounded-xl px-3 py-2 text-[11px] font-medium text-muted-foreground shadow-frost">
+          عرض فقط
+        </div>
+      )}
+      {!readOnly && (
       <button
         type="button"
         onClick={() => setHistoryOpen(true)}
@@ -944,6 +984,7 @@ export function BoardCanvas({
       >
         <History className="h-4 w-4" />
       </button>
+      )}
       <BoardFilterBar
         query={searchQuery}
         status={statusFilter}
@@ -969,7 +1010,7 @@ export function BoardCanvas({
         }}
       />
 
-      {viewMode === "canvas" && (
+      {viewMode === "canvas" && !readOnly && (
       <CanvasToolbar
         tool={tool}
         snapToGrid={snapToGrid}
@@ -985,7 +1026,7 @@ export function BoardCanvas({
       />
       )}
 
-      {viewMode === "canvas" && (tool === "pen" || tool === "highlighter") && (
+      {viewMode === "canvas" && !readOnly && (tool === "pen" || tool === "highlighter") && (
         <DrawingControls
           tool={tool}
           size={tool === "highlighter" ? highlighterSize : penSize}
@@ -1021,6 +1062,7 @@ export function BoardCanvas({
       <input
         ref={imageInputRef}
         type="file"
+        disabled={readOnly}
         accept="image/png,image/jpeg,image/webp,image/gif"
         className="hidden"
         onChange={(event) => {
@@ -1049,6 +1091,7 @@ export function BoardCanvas({
         )}
         onContextMenu={(event) => {
           event.preventDefault();
+          if (readOnly) return;
           const world = screenToWorld(event.clientX, event.clientY);
           if (!world) return;
           setContextMenu({
@@ -1068,12 +1111,23 @@ export function BoardCanvas({
           });
         }}
         onDoubleClick={(event) => {
+          if (readOnly) return;
           if (event.target === event.currentTarget) {
             addNodeAtScreen(event.clientX, event.clientY);
           }
         }}
         onPointerDown={(event) => {
           setContextMenu(null);
+          if (readOnly) {
+            event.currentTarget.setPointerCapture(event.pointerId);
+            drag.current = {
+              type: "pan",
+              pointerX: event.clientX,
+              pointerY: event.clientY,
+              start: snapshot.viewport,
+            };
+            return;
+          }
           if (
             (tool === "text" || tool === "rectangle" || tool === "ellipse" || tool === "sticky") &&
             event.target === event.currentTarget
@@ -1173,7 +1227,8 @@ export function BoardCanvas({
         }}
       >
         <div
-          className="absolute left-0 top-0"
+          className={cn("absolute left-0 top-0", readOnly && "pointer-events-none")}
+
           style={{
             transform: `translate(${snapshot.viewport.x}px, ${snapshot.viewport.y}px) scale(${snapshot.viewport.zoom})`,
             transformOrigin: "0 0",
@@ -1335,19 +1390,30 @@ export function BoardCanvas({
             setTagFilter("all");
           }} />
         ) : !snapshot.nodes.length && !snapshot.strokes.length ? (
-          <EmptyCanvas
-            onAdd={() => {
-              const rect = canvasRef.current?.getBoundingClientRect();
-              if (rect) addNodeAtScreen(rect.left + rect.width / 2, rect.top + rect.height / 2);
-            }}
-          />
+          readOnly ? (
+            <div className="pointer-events-none absolute inset-0 grid place-items-center p-8">
+              <div className="frost max-w-md rounded-3xl p-7 text-center shadow-frost">
+                <h2 className="text-lg font-semibold">اللوحة فارغة</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  لديك صلاحية مشاهدة فقط، ولا توجد عناصر في هذه اللوحة بعد.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <EmptyCanvas
+              onAdd={() => {
+                const rect = canvasRef.current?.getBoundingClientRect();
+                if (rect) addNodeAtScreen(rect.left + rect.width / 2, rect.top + rect.height / 2);
+              }}
+            />
+          )
         ) : null}
 
         <ZoomControls
           zoom={snapshot.viewport.zoom}
           saveState={saveState}
-          canUndo={past.current.length > 0}
-          canRedo={future.current.length > 0}
+          canUndo={!readOnly && past.current.length > 0}
+          canRedo={!readOnly && future.current.length > 0}
           onZoomOut={() => setZoom(snapshot.viewport.zoom * 0.9)}
           onZoomIn={() => setZoom(snapshot.viewport.zoom * 1.1)}
           onFit={fitView}
@@ -1365,6 +1431,7 @@ export function BoardCanvas({
             setViewMode("canvas");
           }}
           onStatusChange={(nodeId, status) => {
+            if (readOnly) return;
             const node = snapshot.nodes.find((item) => item.id === nodeId);
             if (!node || node.status === status) return;
             updateNode(nodeId, {
@@ -1383,6 +1450,7 @@ export function BoardCanvas({
             setViewMode("canvas");
           }}
           onStatusChange={(nodeId, status) => {
+            if (readOnly) return;
             const node = snapshot.nodes.find((item) => item.id === nodeId);
             if (!node || node.status === status) return;
             updateNode(nodeId, {
@@ -1403,7 +1471,7 @@ export function BoardCanvas({
         />
       )}
 
-      {viewMode === "canvas" && (selectedNodeIds.length > 0 || selectedEdgeId) && (
+      {viewMode === "canvas" && !readOnly && (selectedNodeIds.length > 0 || selectedEdgeId) && (
         <div className="frost-strong absolute end-3 top-3 z-30 flex items-center gap-1 rounded-xl p-1 lg:hidden">
           {selectedNodeIds.length > 0 && (
             <button
@@ -1426,7 +1494,7 @@ export function BoardCanvas({
         </div>
       )}
 
-      {viewMode === "canvas" && (
+      {viewMode === "canvas" && !readOnly && (
       <CanvasInspector
         selectedNode={selectedNode}
         selectedNodesCount={selectedNodes.length}
@@ -1442,7 +1510,7 @@ export function BoardCanvas({
       />
       )}
 
-      {viewMode === "canvas" && contextMenu && (
+      {viewMode === "canvas" && !readOnly && contextMenu && (
         <CanvasContextMenu
           state={contextMenu}
           hasSelection={selectedNodeIds.length > 0 || !!selectedEdgeId}
