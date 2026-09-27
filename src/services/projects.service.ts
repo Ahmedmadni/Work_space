@@ -1,3 +1,14 @@
+import { isSupabaseBackend } from "@/lib/backend-config";
+import {
+  remoteArchiveProject,
+  remoteCreateProject,
+  remoteDeleteProject,
+  remoteGetProject,
+  remoteListArchivedProjects,
+  remoteListProjects,
+  remoteRestoreProject,
+  remoteUpdateProject,
+} from "./remote-projects.service";
 import { CURRENT_USER, delay, newId, nowIso, readDb, writeDb } from "./local-db";
 import { deleteManyBoardCanvases } from "./canvas.service";
 import { deleteManyBoardAssets } from "./canvas-assets.service";
@@ -5,6 +16,7 @@ import { deleteManyBoardHistories } from "./canvas-history.service";
 import type { CreateProjectInput, Project, ProjectStatus } from "@/types";
 
 export async function listProjects(workspaceId?: string): Promise<Project[]> {
+  if (isSupabaseBackend()) return remoteListProjects();
   const db = readDb();
   const rows = db.projects
     .filter((p) => !p.archived_at && (!workspaceId || p.workspace_id === workspaceId))
@@ -13,11 +25,13 @@ export async function listProjects(workspaceId?: string): Promise<Project[]> {
 }
 
 export async function listArchivedProjects(): Promise<Project[]> {
+  if (isSupabaseBackend()) return remoteListArchivedProjects();
   const db = readDb();
   return delay(db.projects.filter((p) => p.archived_at));
 }
 
 export async function getProject(id: string): Promise<Project | null> {
+  if (isSupabaseBackend()) return remoteGetProject(id);
   const db = readDb();
   return delay(db.projects.find((p) => p.id === id) ?? null);
 }
@@ -43,6 +57,7 @@ function ensureSystemWorkspace() {
 }
 
 export async function createProject(input: CreateProjectInput): Promise<Project> {
+  if (isSupabaseBackend()) return remoteCreateProject(input);
   if (!input.workspace_id) ensureSystemWorkspace();
   const workspaceId = input.workspace_id ?? SYSTEM_WORKSPACE_ID;
   const project: Project = {
@@ -72,6 +87,7 @@ export async function updateProject(
   id: string,
   patch: { name?: string; description?: string | null; status?: ProjectStatus },
 ): Promise<void> {
+  if (isSupabaseBackend()) return remoteUpdateProject(id, patch);
   writeDb((db) => {
     const project = db.projects.find((p) => p.id === id);
     if (!project) return;
@@ -84,6 +100,7 @@ export async function updateProject(
 }
 
 export async function archiveProject(id: string): Promise<void> {
+  if (isSupabaseBackend()) return remoteArchiveProject(id);
   writeDb((db) => {
     const project = db.projects.find((p) => p.id === id);
     if (project) {
@@ -98,6 +115,7 @@ export async function archiveProject(id: string): Promise<void> {
 }
 
 export async function restoreProject(id: string): Promise<void> {
+  if (isSupabaseBackend()) return remoteRestoreProject(id);
   writeDb((db) => {
     const project = db.projects.find((p) => p.id === id);
     if (project) {
@@ -110,6 +128,7 @@ export async function restoreProject(id: string): Promise<void> {
 }
 
 export async function deleteProject(id: string): Promise<void> {
+  if (isSupabaseBackend()) return remoteDeleteProject(id);
   const boardIds = readDb().boards.filter((b) => b.project_id === id).map((b) => b.id);
   writeDb((db) => {
     db.projects = db.projects.filter((p) => p.id !== id);
