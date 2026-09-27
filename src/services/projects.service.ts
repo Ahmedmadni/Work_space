@@ -6,8 +6,6 @@ export async function listProjects(workspaceId?: string): Promise<Project[]> {
   const db = readDb();
   const rows = db.projects
     .filter((p) => !p.archived_at && (!workspaceId || p.workspace_id === workspaceId))
-    // مشاريع المساحات المؤرشفة لا تظهر في القوائم النشطة
-    .filter((p) => !db.workspaces.find((w) => w.id === p.workspace_id)?.archived_at)
     .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
   return delay(rows);
 }
@@ -22,10 +20,32 @@ export async function getProject(id: string): Promise<Project | null> {
   return delay(db.projects.find((p) => p.id === id) ?? null);
 }
 
+const SYSTEM_WORKSPACE_ID = "ws-system";
+
+function ensureSystemWorkspace() {
+  writeDb((db) => {
+    if (db.workspaces.some((w) => w.id === SYSTEM_WORKSPACE_ID)) return;
+    const now = nowIso();
+    db.workspaces.push({
+      id: SYSTEM_WORKSPACE_ID,
+      name: "النظام",
+      description: "حاوية داخلية مخفية للمشاريع المباشرة.",
+      icon: "م",
+      color: "brand",
+      created_by: CURRENT_USER.id,
+      created_at: now,
+      updated_at: now,
+      archived_at: null,
+    });
+  });
+}
+
 export async function createProject(input: CreateProjectInput): Promise<Project> {
+  if (!input.workspace_id) ensureSystemWorkspace();
+  const workspaceId = input.workspace_id ?? SYSTEM_WORKSPACE_ID;
   const project: Project = {
     id: newId("pr"),
-    workspace_id: input.workspace_id,
+    workspace_id: workspaceId,
     name: input.name.trim(),
     description: input.description?.trim() || null,
     status: input.status,
@@ -39,7 +59,7 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
 
   writeDb((db) => {
     db.projects.unshift(project);
-    const ws = db.workspaces.find((w) => w.id === input.workspace_id);
+    const ws = db.workspaces.find((w) => w.id === workspaceId);
     if (ws) ws.updated_at = project.updated_at;
   });
 

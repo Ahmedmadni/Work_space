@@ -19,11 +19,9 @@ export async function listBoards(filter?: {
   sort?: "updated" | "opened";
 }): Promise<BoardWithContext[]> {
   const db = readDb();
-  // اللوحات النشطة فقط: ليست مؤرشفة ولا يتبع مشروعًا أو مساحة مؤرشفة.
+  // اللوحات النشطة فقط: ليست مؤرشفة وتتبع مشروعًا نشطًا.
   const activeProjects = new Set(
-    db.projects
-      .filter((p) => !p.archived_at && !db.workspaces.find((w) => w.id === p.workspace_id)?.archived_at)
-      .map((p) => p.id),
+    db.projects.filter((p) => !p.archived_at).map((p) => p.id),
   );
   let rows = db.boards.filter((b) => !b.archived_at && activeProjects.has(b.project_id));
   if (filter?.workspaceId) rows = rows.filter((b) => b.workspace_id === filter.workspaceId);
@@ -47,9 +45,13 @@ export async function getBoard(id: string): Promise<BoardWithContext | null> {
 }
 
 export async function createBoard(input: CreateBoardInput): Promise<Board> {
+  const db = readDb();
+  const project = db.projects.find((p) => p.id === input.project_id);
+  if (!project) throw new Error("Project not found");
+  const workspaceId = input.workspace_id ?? project.workspace_id;
   const board: Board = {
     id: newId("bd"),
-    workspace_id: input.workspace_id,
+    workspace_id: workspaceId,
     project_id: input.project_id,
     name: input.name.trim(),
     description: input.description?.trim() || null,
@@ -64,9 +66,9 @@ export async function createBoard(input: CreateBoardInput): Promise<Board> {
 
   writeDb((db) => {
     db.boards.unshift(board);
-    const project = db.projects.find((p) => p.id === input.project_id);
-    if (project) project.updated_at = board.updated_at;
-    const ws = db.workspaces.find((w) => w.id === input.workspace_id);
+    const projectRow = db.projects.find((p) => p.id === input.project_id);
+    if (projectRow) projectRow.updated_at = board.updated_at;
+    const ws = db.workspaces.find((w) => w.id === workspaceId);
     if (ws) ws.updated_at = board.updated_at;
   });
 

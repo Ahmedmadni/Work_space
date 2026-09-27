@@ -168,7 +168,7 @@ export function CreateWorkspaceDialog(props: OpenProps) {
   );
 }
 
-export function CreateProjectDialog({ workspaceId, ...props }: OpenProps & { workspaceId: string }) {
+export function CreateProjectDialog(props: OpenProps) {
   const [open, setOpen] = useOpen(props);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -195,11 +195,11 @@ export function CreateProjectDialog({ workspaceId, ...props }: OpenProps & { wor
             setError(err);
             if (err) return;
             m.mutate(
-              { workspace_id: workspaceId, name: name.trim(), description, status, icon, color },
+              { name: name.trim(), description, status, icon, color },
               {
                 onSuccess: (p) => {
                   setOpen(false);
-                  void navigate({ to: "/workspace/$workspaceId/project/$projectId", params: { workspaceId, projectId: p.id } });
+                  void navigate({ to: "/project/$projectId", params: { projectId: p.id } });
                 },
               },
             );
@@ -234,11 +234,10 @@ function StatusPicker({ value, onChange }: { value: ProjectStatus; onChange: (s:
 }
 
 export function CreateBoardDialog({
-  workspaceId,
   projectId,
   defaultType = "blank",
   ...props
-}: OpenProps & { workspaceId: string; projectId: string; defaultType?: BoardType }) {
+}: OpenProps & { projectId: string; defaultType?: BoardType }) {
   const [open, setOpen] = useOpen(props);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -263,13 +262,13 @@ export function CreateBoardDialog({
             setError(err);
             if (err) return;
             m.mutate(
-              { workspace_id: workspaceId, project_id: projectId, name: name.trim(), description, board_type: type },
+              { project_id: projectId, name: name.trim(), description, board_type: type },
               {
                 onSuccess: (b) => {
                   setOpen(false);
                   void navigate({
-                    to: "/workspace/$workspaceId/project/$projectId/board/$boardId",
-                    params: { workspaceId, projectId, boardId: b.id },
+                    to: "/project/$projectId/board/$boardId",
+                    params: { projectId, boardId: b.id },
                   });
                 },
               },

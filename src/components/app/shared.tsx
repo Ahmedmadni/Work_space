@@ -124,7 +124,7 @@ export function ErrorState({ message = "حدث خطأ أثناء تحميل ال
   );
 }
 
-export function NotFoundState({ backTo = "/" as const }: { backTo?: "/" | "/workspaces" }) {
+export function NotFoundState({ backTo = "/" as const }: { backTo?: "/" | "/workspaces" | "/projects" }) {
   return (
     <EmptyState
       icon={SearchX}
@@ -291,10 +291,10 @@ export function ProjectCard({ project: p, boards }: { project: Project; boards?:
   const update = useUpdateProject();
   const archive = useArchiveProject();
   const remove = useDeleteProject();
-  const params = { workspaceId: p.workspace_id, projectId: p.id };
+  const params = { projectId: p.id };
   return (
     <div className={cn(cardBase, "p-5")}>
-      <Link to="/workspace/$workspaceId/project/$projectId" params={params} className="block">
+      <Link to="/project/$projectId" params={params} className="block">
         <div className="flex items-start gap-3 pe-10">
           <Glyph icon={p.icon} color={p.color} />
           <StatusBadge status={p.status} />
@@ -325,10 +325,10 @@ export function BoardCard({ board: b }: { board: BoardWithContext }) {
   const update = useUpdateBoard();
   const archive = useArchiveBoard();
   const remove = useDeleteBoard();
-  const params = { workspaceId: b.workspace_id, projectId: b.project_id, boardId: b.id };
+  const params = { projectId: b.project_id, boardId: b.id };
   return (
     <div className={cn(cardBase, "overflow-hidden")}>
-      <Link to="/workspace/$workspaceId/project/$projectId/board/$boardId" params={params} className="block">
+      <Link to="/project/$projectId/board/$boardId" params={params} className="block">
         <BoardPreview type={b.board_type} className="h-28 border-b border-border" />
         <div className="p-4">
           <p className="text-xs font-medium text-brand">{BOARD_TYPE_LABELS[b.board_type]}</p>
