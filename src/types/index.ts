@@ -138,8 +138,12 @@ export interface CanvasNode {
   /** تواريخ محلية بصيغة YYYY-MM-DD لعرض Roadmap دون مشاكل مناطق زمنية. */
   start_date: string | null;
   due_date: string | null;
-  /** المالك الحالي كاسم حر مؤقتًا؛ سيُستبدل بمعرّف مستخدم عند تفعيل الحسابات. */
+  /** اسم العرض للمالك. يبقى متوافقًا مع البيانات القديمة، ويُشتق من المستخدم عند وجود Assignee حقيقي. */
   owner: string | null;
+  /** المكلّف الحقيقي من أعضاء المشروع. */
+  assignee_user_id: string | null;
+  /** اسم عرض المكلّف الحقيقي، إن وجد. */
+  assignee_name: string | null;
   /** وسوم نصية قصيرة للبحث والتصفية عبر اللوحات. */
   tags: string[];
   /** مرجع ملف الصورة في مخزن الأصول المحلي/Storage المستقبلي. */
@@ -237,6 +241,18 @@ export interface ProjectExecutionItem {
   is_unassigned: boolean;
   dependency_ready: boolean;
   waiting_on_dependencies: boolean;
+}
+
+export interface CanvasNodeWatcher {
+  user_id: string;
+  full_name: string;
+  email: string;
+  created_at: string;
+}
+
+export interface CanvasNodeAssignment {
+  assignee_user_id: string | null;
+  assignee_name: string | null;
 }
 
 export interface ProjectExecutionSummary {
