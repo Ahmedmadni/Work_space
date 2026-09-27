@@ -206,7 +206,7 @@ function seed(): Database {
 }
 
 /** رقم نسخة بنية البيانات المحفوظة. ارفعه وأضف دالة ترحيل عند تغيير البنية. */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 interface StoredEnvelope {
   schemaVersion: number;
@@ -217,6 +217,22 @@ interface StoredEnvelope {
 const MIGRATIONS: Record<number, (db: Database) => Database> = {
   // v1 → v2: إضافة last_opened_at للوحات (يُطبَّع تلقائيًا في normalize).
   1: (db) => db,
+  // v2 → v3: إلغاء تأثير أرشفة Workspace على الواجهة وتحويله إلى أرشفة المشاريع التابعة.
+  2: (db) => {
+    const archivedWorkspaceIds = new Set(
+      db.workspaces.filter((workspace) => workspace.archived_at).map((workspace) => workspace.id),
+    );
+    for (const project of db.projects) {
+      if (!archivedWorkspaceIds.has(project.workspace_id) || project.archived_at) continue;
+      if (project.status !== "archived") project.previous_status = project.status;
+      project.archived_at =
+        db.workspaces.find((workspace) => workspace.id === project.workspace_id)?.archived_at ??
+        nowIso();
+      project.status = "archived";
+    }
+    for (const workspace of db.workspaces) workspace.archived_at = null;
+    return db;
+  },
 };
 
 function warnDev(message: string, error?: unknown) {
