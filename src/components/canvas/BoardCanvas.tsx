@@ -1301,6 +1301,11 @@ function KanbanView({
                     key={node.id}
                     draggable
                     onDragStart={(event) => {
+                      const target = event.target as HTMLElement;
+                      if (target.closest("select, button")) {
+                        event.preventDefault();
+                        return;
+                      }
                       event.dataTransfer.effectAllowed = "move";
                       event.dataTransfer.setData("application/x-projectflow-node", node.id);
                       event.dataTransfer.setData("text/plain", node.id);
