@@ -36,7 +36,7 @@ export interface CanvasRemoteEvent {
   revision: number;
   actor_user_id: string | null;
   client_id: string;
-  operations: CanvasOperation[] | Array<{ op: "snapshot_replaced" }>;
+  operations: Array<{ op: string; id?: string }>;
   created_at: string;
 }
 
