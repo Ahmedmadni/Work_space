@@ -1,7 +1,6 @@
 import { Link, useParams } from "@tanstack/react-router";
 import {
   Archive,
-  Bell,
   ChevronLeft,
   Clock,
   FolderKanban,
@@ -44,6 +43,7 @@ import { cn } from "@/lib/utils";
 import { isSupabaseBackend } from "@/lib/backend-config";
 import { Glyph } from "./shared";
 import { CreateBoardDialog, CreateProjectDialog } from "./dialogs";
+import { NotificationCenterButton } from "@/components/notifications/NotificationCenterButton";
 
 const NAV = [
   { to: "/", label: "الرئيسية", icon: Home },
@@ -344,18 +344,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
               <QuickCreate />
 
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    disabled
-                    aria-label="الإشعارات"
-                    className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground opacity-50"
-                  >
-                    <Bell className="h-4 w-4" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>الإشعارات قريبًا</TooltipContent>
-              </Tooltip>
+              <NotificationCenterButton />
 
               <button
                 onClick={toggleDark}
