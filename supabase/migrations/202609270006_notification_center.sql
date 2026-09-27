@@ -177,6 +177,13 @@ begin
     from public.projects
     where id = old.project_id;
 
+    -- During ON DELETE CASCADE from projects, the parent may already be gone.
+    -- Skip the personal removal notification in that case so project deletion
+    -- can never be blocked by the notification FK.
+    if v_project_name is null then
+      return old;
+    end if;
+
     perform public.enqueue_user_notification(
       old.user_id,
       old.project_id,
@@ -201,7 +208,7 @@ $projectflow$;
 
 drop trigger if exists project_members_notify_change on public.project_members;
 create trigger project_members_notify_change
-after insert or update of role or delete on public.project_members
+after insert or update or delete on public.project_members
 for each row execute function public.notify_project_member_change();
 
 create or replace function public.notify_comment_reply()
