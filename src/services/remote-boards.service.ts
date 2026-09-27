@@ -69,12 +69,12 @@ export async function remoteListBoards(filter?: {
         filter?.sort === "opened"
           ? "last_opened_at.desc.nullslast,updated_at.desc"
           : "updated_at.desc",
-      ...(filter?.limit ? { limit: filter.limit } : {}),
     },
   });
-  return rows
+  const visible = rows
     .filter((row) => names.has(row.project_id))
     .map((row) => mapBoard(row, names.get(row.project_id)));
+  return filter?.limit ? visible.slice(0, filter.limit) : visible;
 }
 
 export async function remoteListArchivedBoards(): Promise<BoardWithContext[]> {
