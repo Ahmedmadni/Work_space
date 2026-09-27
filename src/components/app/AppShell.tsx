@@ -280,7 +280,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             collapsed ? "w-[68px]" : "w-64",
           )}
         >
-          <SidebarBody collapsed={collapsed} />
+          <SidebarBody collapsed={collapsed} user={user} />
         </aside>
 
         <Sheet open={mobile} onOpenChange={setMobile}>
