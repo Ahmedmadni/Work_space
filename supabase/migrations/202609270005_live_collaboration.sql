@@ -413,6 +413,10 @@ begin
     raise exception 'COMMENT_NOT_FOUND' using errcode = 'P0002';
   end if;
 
+  if not public.can_edit_project(v_project_id) then
+    raise exception 'COMMENT_UPDATE_DENIED' using errcode = '42501';
+  end if;
+
   if v_created_by <> auth.uid() and not public.can_manage_project(v_project_id) then
     raise exception 'COMMENT_UPDATE_DENIED' using errcode = '42501';
   end if;
@@ -539,6 +543,10 @@ begin
 
   if v_project_id is null then
     return;
+  end if;
+
+  if not public.can_edit_project(v_project_id) then
+    raise exception 'COMMENT_DELETE_DENIED' using errcode = '42501';
   end if;
 
   if v_created_by <> auth.uid() and not public.can_manage_project(v_project_id) then
