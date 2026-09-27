@@ -229,7 +229,7 @@ function normalizeStroke(value: unknown, boardId: string): CanvasStroke | null {
   };
 }
 
-function normalizeSnapshot(boardId: string, value: unknown): BoardCanvasSnapshot {
+export function normalizeBoardCanvasSnapshot(boardId: string, value: unknown): BoardCanvasSnapshot {
   if (!value || typeof value !== "object") {
     return { board_id: boardId, nodes: [], edges: [], strokes: [], viewport: DEFAULT_VIEWPORT, updated_at: null };
   }
@@ -270,7 +270,7 @@ function readStore(): CanvasStore {
     }
     const boards: Record<string, BoardCanvasSnapshot> = {};
     for (const [boardId, snapshot] of Object.entries(parsed.boards)) {
-      boards[boardId] = normalizeSnapshot(boardId, snapshot);
+      boards[boardId] = normalizeBoardCanvasSnapshot(boardId, snapshot);
     }
     return { version: 1, boards };
   } catch {
@@ -346,7 +346,7 @@ export async function getProjectExecutionSummary(
   const items: ProjectExecutionItem[] = [];
 
   for (const boardId of boardIds) {
-    const snapshot = normalizeSnapshot(boardId, store.boards[boardId]);
+    const snapshot = normalizeBoardCanvasSnapshot(boardId, store.boards[boardId]);
     const semanticNodes = snapshot.nodes.filter((node) => isSemanticKind(node.kind));
     const nodeMap = new Map(semanticNodes.map((node) => [node.id, node] as const));
 
@@ -432,7 +432,7 @@ export async function searchCanvasNodes(
   const results: CanvasNodeSearchMatch[] = [];
 
   for (const boardId of boardIds) {
-    const snapshot = normalizeSnapshot(boardId, store.boards[boardId]);
+    const snapshot = normalizeBoardCanvasSnapshot(boardId, store.boards[boardId]);
     for (const node of snapshot.nodes) {
       if (!nodeMatchesFilters(node, filters)) continue;
       results.push({ board_id: boardId, node });
@@ -444,12 +444,12 @@ export async function searchCanvasNodes(
 
 export async function getBoardCanvas(boardId: string): Promise<BoardCanvasSnapshot> {
   const store = readStore();
-  return normalizeSnapshot(boardId, store.boards[boardId]);
+  return normalizeBoardCanvasSnapshot(boardId, store.boards[boardId]);
 }
 
 export async function saveBoardCanvas(snapshot: BoardCanvasSnapshot): Promise<BoardCanvasSnapshot> {
   const store = readStore();
-  const normalized = normalizeSnapshot(snapshot.board_id, {
+  const normalized = normalizeBoardCanvasSnapshot(snapshot.board_id, {
     ...snapshot,
     updated_at: new Date().toISOString(),
   });
