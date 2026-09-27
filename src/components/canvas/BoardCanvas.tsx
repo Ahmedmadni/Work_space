@@ -806,6 +806,7 @@ export function BoardCanvas({
     const previous = past.current.pop();
     if (!previous) return;
     future.current.push(cloneSnapshot(snapshot));
+    localEditVersion.current += 1;
     setSnapshot(previous);
     setSelectedNodeIds([]);
     setSelectedEdgeId(null);
@@ -818,6 +819,7 @@ export function BoardCanvas({
     const next = future.current.pop();
     if (!next) return;
     past.current.push(cloneSnapshot(snapshot));
+    localEditVersion.current += 1;
     setSnapshot(next);
     setSelectedNodeIds([]);
     setSelectedEdgeId(null);
@@ -1222,7 +1224,14 @@ export function BoardCanvas({
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}
         onReplaceSnapshot={(nextSnapshot) => {
-          setSnapshot(cloneSnapshot(nextSnapshot));
+          const accepted = cloneSnapshot(nextSnapshot);
+          baseSnapshotRef.current = cloneSnapshot(accepted);
+          latestSnapshotRef.current = cloneSnapshot(accepted);
+          localEditVersion.current += 1;
+          lastAckEditVersion.current = localEditVersion.current;
+          setConflictSnapshot(null);
+          setConflictCount(0);
+          setSnapshot(accepted);
           setSelectedNodeIds([]);
           setSelectedEdgeId(null);
           setConnectorSourceId(null);
