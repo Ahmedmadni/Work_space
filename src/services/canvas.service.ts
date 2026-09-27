@@ -111,7 +111,12 @@ function readStore(): CanvasStore {
 
 function writeStore(store: CanvasStore) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+  } catch (error) {
+    if (import.meta.env.DEV) console.warn("[canvas] تعذر حفظ بيانات اللوحة.", error);
+    throw error;
+  }
 }
 
 export async function getBoardCanvas(boardId: string): Promise<BoardCanvasSnapshot> {
@@ -167,4 +172,27 @@ export function createCanvasEdge(
     created_at: now,
     updated_at: now,
   };
+}
+
+
+/** تنظيف بيانات لوحة بعد حذفها نهائيًا. */
+export function deleteBoardCanvas(boardId: string): void {
+  const store = readStore();
+  if (!(boardId in store.boards)) return;
+  delete store.boards[boardId];
+  writeStore(store);
+}
+
+/** تنظيف بيانات عدة لوحات عند حذف مشروع أو مساحة نهائيًا. */
+export function deleteManyBoardCanvases(boardIds: string[]): void {
+  if (!boardIds.length) return;
+  const store = readStore();
+  let changed = false;
+  for (const boardId of boardIds) {
+    if (boardId in store.boards) {
+      delete store.boards[boardId];
+      changed = true;
+    }
+  }
+  if (changed) writeStore(store);
 }
