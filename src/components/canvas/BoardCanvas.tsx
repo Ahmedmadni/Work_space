@@ -262,15 +262,17 @@ const DRAWING_COLORS: Array<{ value: CanvasColor; label: string }> = [
 
 export function BoardCanvas({
   boardId,
+  projectId,
   initialFocusNodeId,
   readOnly = false,
 }: {
   boardId: string;
+  projectId?: string;
   initialFocusNodeId?: string;
   readOnly?: boolean;
 }) {
   const { data: loadedCanvas, isLoading } = useBoardCanvas(boardId);
-  const saveCanvas = useSaveBoardCanvas(boardId);
+  const saveCanvas = useSaveBoardCanvas(boardId, projectId);
 
   const [snapshot, setSnapshot] = useState<BoardCanvasSnapshot | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("canvas");
