@@ -635,13 +635,22 @@ function PresenceTab({
 export function ProjectCollaborationDock({
   projectId,
   boardId,
+  presenceContextType = "board",
+  presenceContextId,
 }: {
   projectId: string;
   boardId: string;
+  presenceContextType?: "board" | "document";
+  presenceContextId?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<DockTab>("comments");
-  const presence = useProjectPresence(projectId, "board", boardId, true);
+  const presence = useProjectPresence(
+    projectId,
+    presenceContextType,
+    presenceContextId ?? boardId,
+    true,
+  );
   const comments = useProjectComments(
     projectId,
     {
