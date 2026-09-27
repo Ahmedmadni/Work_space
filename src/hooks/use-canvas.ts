@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { recordProjectActivity } from "@/services/live-collaboration.service";
 import {
   getBoardCanvas,
   getProjectExecutionSummary,
@@ -22,7 +23,9 @@ export function useBoardCanvas(boardId: string) {
   });
 }
 
-export function useSaveBoardCanvas(boardId: string) {
+const boardActivityAt = new Map<string, number>();
+
+export function useSaveBoardCanvas(boardId: string, projectId?: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (snapshot: BoardCanvasSnapshot) => saveBoardCanvas(snapshot),
@@ -30,6 +33,25 @@ export function useSaveBoardCanvas(boardId: string) {
       qc.setQueryData(["canvas", boardId], snapshot);
       void qc.invalidateQueries({ queryKey: ["canvas-search"] });
       void qc.invalidateQueries({ queryKey: ["project-execution-summary"] });
+      if (projectId) {
+        const last = boardActivityAt.get(boardId) ?? 0;
+        if (Date.now() - last >= 60_000) {
+          boardActivityAt.set(boardId, Date.now());
+          void recordProjectActivity({
+            projectId,
+            action: "board_updated",
+            entityType: "board",
+            entityId: boardId,
+            metadata: {
+              node_count: snapshot.nodes.length,
+              edge_count: snapshot.edges.length,
+              stroke_count: snapshot.strokes.length,
+            },
+          }).catch((error) => {
+            if (import.meta.env.DEV) console.warn("[activity] تعذر تسجيل تحديث اللوحة.", error);
+          });
+        }
+      }
       void maybeCreateAutoCheckpoint(snapshot)
         .then((version) => {
           if (version) void qc.invalidateQueries({ queryKey: ["canvas-versions", boardId] });
