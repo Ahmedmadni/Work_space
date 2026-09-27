@@ -170,8 +170,9 @@ export async function remoteDeleteBoardAssets(boardId: string): Promise<void> {
       await storageRequest(row.object_path, { method: "DELETE" });
     } catch (error) {
       if (import.meta.env.DEV) {
-        console.warn("[storage] تعذر حذف ملف من Storage.", error);
+        console.warn("[storage] تعذر حذف ملف من Storage؛ تم إيقاف الحذف لمنع ملف يتيم.", error);
       }
+      throw error;
     }
   }
 
