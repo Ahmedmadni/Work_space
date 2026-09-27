@@ -111,6 +111,14 @@ function normalizeNode(value: unknown, boardId: string): CanvasNode | null {
   if (typeof raw.id !== "string") return null;
   const now = new Date().toISOString();
   const kind = normalizeNodeKind(raw.kind);
+  const minHeight =
+    kind === "sticky" || kind === "note"
+      ? 170
+      : kind === "idea" || kind === "task"
+        ? 140
+        : kind === "milestone"
+          ? 130
+          : 72;
   return {
     id: raw.id,
     board_id: boardId,
@@ -118,7 +126,7 @@ function normalizeNode(value: unknown, boardId: string): CanvasNode | null {
     x: safeNumber(raw.x, 0),
     y: safeNumber(raw.y, 0),
     width: Math.max(140, safeNumber(raw.width, 220)),
-    height: Math.max(72, safeNumber(raw.height, 110)),
+    height: Math.max(minHeight, safeNumber(raw.height, minHeight)),
     title: typeof raw.title === "string" ? raw.title : "فكرة جديدة",
     description: typeof raw.description === "string" ? raw.description : null,
     status: normalizeNodeStatus(raw.status, kind),
@@ -269,16 +277,16 @@ export function createCanvasNode(
   const now = new Date().toISOString();
   const size =
     kind === "milestone"
-      ? { width: 180, height: 100 }
+      ? { width: 180, height: 130 }
       : kind === "sticky" || kind === "note"
-        ? { width: 210, height: 170 }
+        ? { width: 210, height: 180 }
         : kind === "text"
           ? { width: 260, height: 80 }
           : kind === "image"
             ? { width: 320, height: 220 }
             : kind === "rectangle" || kind === "ellipse"
               ? { width: 220, height: 140 }
-            : { width: 220, height: 110 };
+            : { width: 220, height: kind === "idea" || kind === "task" ? 140 : 110 };
   const title =
     kind === "task"
       ? "مهمة جديدة"
