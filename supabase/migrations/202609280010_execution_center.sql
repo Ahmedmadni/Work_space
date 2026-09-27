@@ -35,12 +35,15 @@ begin
     raise exception 'INVALID_TASK_EXPECTED_VERSION' using errcode = '22023';
   end if;
 
-  if p_set_status and p_status not in (
-    'idea',
-    'planned',
-    'in_progress',
-    'done',
-    'blocked'
+  if p_set_status and (
+    p_status is null
+    or p_status not in (
+      'idea',
+      'planned',
+      'in_progress',
+      'done',
+      'blocked'
+    )
   ) then
     raise exception 'INVALID_TASK_STATUS' using errcode = '22023';
   end if;
@@ -311,3 +314,228 @@ execute function public.cleanup_downgraded_project_member_tasks();
 
 revoke all on function public.cleanup_downgraded_project_member_tasks()
   from public;
+
+
+-- Real assignees are canonical. Once a node has a real assignee, canvas autosaves
+-- must never repopulate owner_label from the compatibility "owner" field.
+create or replace function public.prevent_legacy_owner_for_assigned_node()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $projectflow$
+begin
+  if exists (
+    select 1
+    from public.canvas_node_assignments a
+    where a.node_id = new.id
+      and a.board_id = new.board_id
+      and a.assignee_user_id is not null
+  ) then
+    new.owner_label := null;
+  end if;
+  return new;
+end;
+$projectflow$;
+
+drop trigger if exists canvas_nodes_prevent_legacy_owner
+  on public.canvas_nodes;
+create trigger canvas_nodes_prevent_legacy_owner
+before insert or update of owner_label on public.canvas_nodes
+for each row
+execute function public.prevent_legacy_owner_for_assigned_node();
+
+revoke all on function public.prevent_legacy_owner_for_assigned_node()
+  from public;
+
+-- Override the Phase 16 assignment RPC so explicit unassignment also clears
+-- any pre-Phase-16 free-text owner instead of letting it reappear.
+create or replace function public.set_canvas_node_assignee(
+  p_project_id text,
+  p_board_id text,
+  p_node_id text,
+  p_assignee_user_id uuid default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, auth
+as $projectflow$
+declare
+  v_old_assignee uuid;
+  v_node_title text;
+  v_assignee_name text;
+  v_revision bigint;
+begin
+  if not public.can_edit_project(p_project_id) then
+    raise exception 'TASK_ASSIGN_DENIED' using errcode = '42501';
+  end if;
+
+  select n.title into v_node_title
+  from public.canvas_nodes n
+  join public.boards b on b.id = n.board_id
+  where n.id = p_node_id
+    and n.board_id = p_board_id
+    and b.project_id = p_project_id;
+
+  if v_node_title is null then
+    raise exception 'TASK_NODE_NOT_FOUND' using errcode = 'P0002';
+  end if;
+
+  if p_assignee_user_id is not null and not exists (
+    select 1
+    from public.projects p
+    where p.id = p_project_id
+      and (
+        p.created_by = p_assignee_user_id
+        or exists (
+          select 1
+          from public.project_members pm
+          where pm.project_id = p_project_id
+            and pm.user_id = p_assignee_user_id
+            and pm.role in ('owner','admin','editor')
+        )
+      )
+  ) then
+    raise exception 'TASK_ASSIGNEE_NOT_IN_PROJECT' using errcode = '22023';
+  end if;
+
+  select assignee_user_id into v_old_assignee
+  from public.canvas_node_assignments
+  where node_id = p_node_id
+    and board_id = p_board_id;
+
+  update public.canvas_nodes
+  set owner_label = null
+  where id = p_node_id
+    and board_id = p_board_id;
+
+  if p_assignee_user_id is null then
+    delete from public.canvas_node_assignments
+    where node_id = p_node_id
+      and board_id = p_board_id;
+  else
+    insert into public.canvas_node_assignments (
+      node_id,
+      board_id,
+      assignee_user_id,
+      updated_by,
+      updated_at
+    )
+    values (
+      p_node_id,
+      p_board_id,
+      p_assignee_user_id,
+      auth.uid(),
+      now()
+    )
+    on conflict (node_id) do update
+    set
+      board_id = excluded.board_id,
+      assignee_user_id = excluded.assignee_user_id,
+      updated_by = auth.uid(),
+      updated_at = now();
+  end if;
+
+  if p_assignee_user_id is distinct from v_old_assignee then
+    if p_assignee_user_id is not null and p_assignee_user_id <> auth.uid() then
+      perform public.enqueue_user_notification(
+        p_assignee_user_id,
+        p_project_id,
+        'task_assigned',
+        auth.uid(),
+        null,
+        p_board_id,
+        null,
+        null,
+        jsonb_build_object(
+          'target_type', 'node',
+          'target_id', p_node_id,
+          'title', v_node_title
+        ),
+        'task_assigned:' || p_node_id || ':' ||
+          p_assignee_user_id::text || ':' ||
+          extract(epoch from now())::bigint::text
+      );
+    end if;
+
+    insert into public.project_activity (
+      project_id,
+      actor_user_id,
+      action,
+      entity_type,
+      entity_id,
+      metadata
+    )
+    values (
+      p_project_id,
+      auth.uid(),
+      case
+        when p_assignee_user_id is null then 'task_unassigned'
+        else 'task_assigned'
+      end,
+      'node',
+      p_node_id,
+      jsonb_build_object(
+        'board_id', p_board_id,
+        'old_assignee_user_id', v_old_assignee,
+        'assignee_user_id', p_assignee_user_id,
+        'title', v_node_title
+      )
+    );
+
+    update public.boards
+    set
+      canvas_revision = canvas_revision + 1,
+      updated_at = now()
+    where id = p_board_id
+      and project_id = p_project_id
+    returning canvas_revision into v_revision;
+
+    insert into public.board_collaboration_events (
+      board_id,
+      revision,
+      actor_user_id,
+      client_id,
+      operations
+    )
+    values (
+      p_board_id,
+      v_revision,
+      auth.uid(),
+      gen_random_uuid(),
+      jsonb_build_array(
+        jsonb_build_object(
+          'op', 'node_assignment',
+          'id', p_node_id
+        )
+      )
+    );
+  end if;
+
+  if p_assignee_user_id is not null then
+    select coalesce(
+      nullif(pr.full_name, ''),
+      nullif(split_part(coalesce(u.email, ''), '@', 1), ''),
+      'مستخدم'
+    )
+    into v_assignee_name
+    from auth.users u
+    left join public.profiles pr on pr.id = u.id
+    where u.id = p_assignee_user_id;
+  end if;
+
+  return jsonb_build_object(
+    'assignee_user_id', p_assignee_user_id,
+    'assignee_name', v_assignee_name
+  );
+end;
+$projectflow$;
+
+
+revoke all on function public.set_canvas_node_assignee(
+  text, text, text, uuid
+) from public;
+grant execute on function public.set_canvas_node_assignee(
+  text, text, text, uuid
+) to authenticated;
