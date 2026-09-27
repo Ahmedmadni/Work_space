@@ -22,15 +22,21 @@ import {
   Pencil,
   Highlighter,
   Eraser,
+  Filter,
   Image as ImageIcon,
   Plus,
   Redo2,
+  Search,
   Scissors,
   StickyNote,
+  Tag,
   Type,
   Square,
   Trash2,
   Undo2,
+  Unlink2,
+  UserRound,
+  X,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
@@ -178,6 +184,71 @@ function formatLocalDate(value: string | null) {
   }).format(new Date(Date.UTC(year!, month! - 1, day!)));
 }
 
+function wouldCreateDependencyCycle(
+  snapshot: BoardCanvasSnapshot,
+  sourceNodeId: string,
+  targetNodeId: string,
+) {
+  const adjacency = new Map<string, string[]>();
+  for (const edge of snapshot.edges) {
+    if (edge.kind !== "dependency") continue;
+    const list = adjacency.get(edge.source_node_id) ?? [];
+    list.push(edge.target_node_id);
+    adjacency.set(edge.source_node_id, list);
+  }
+
+  const stack = [targetNodeId];
+  const visited = new Set<string>();
+  while (stack.length) {
+    const current = stack.pop()!;
+    if (current === sourceNodeId) return true;
+    if (visited.has(current)) continue;
+    visited.add(current);
+    for (const next of adjacency.get(current) ?? []) stack.push(next);
+  }
+  return false;
+}
+
+function matchesBoardFilters(
+  node: CanvasNode,
+  query: string,
+  status: "all" | CanvasNodeStatus,
+  priority: "all" | "none" | CanvasPriority,
+  owner: string,
+  tag: string,
+) {
+  const normalizedQuery = query.trim().toLocaleLowerCase("ar");
+  if (normalizedQuery) {
+    const haystack = [
+      node.title,
+      node.description ?? "",
+      node.owner ?? "",
+      node.tags.join(" "),
+    ]
+      .join(" ")
+      .toLocaleLowerCase("ar");
+    if (!haystack.includes(normalizedQuery)) return false;
+  }
+
+  if (status !== "all" && (!isSemanticNode(node) || node.status !== status)) return false;
+  if (
+    priority !== "all" &&
+    (!isSemanticNode(node) ||
+      (priority === "none" ? node.priority !== null : node.priority !== priority))
+  ) {
+    return false;
+  }
+  if (
+    owner !== "all" &&
+    (!isSemanticNode(node) ||
+      (owner === "unassigned" ? node.owner !== null : node.owner !== owner))
+  ) {
+    return false;
+  }
+  if (tag !== "all" && (!isSemanticNode(node) || !node.tags.includes(tag))) return false;
+  return true;
+}
+
 const DRAWING_COLORS: Array<{ value: CanvasColor; label: string }> = [
   { value: "ink", label: "حبر" },
   { value: "brand", label: "الهوية" },
@@ -206,6 +277,11 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
   const [penColor, setPenColor] = useState<CanvasColor>("ink");
   const [highlighterSize, setHighlighterSize] = useState(18);
   const [highlighterColor, setHighlighterColor] = useState<CanvasColor>("warning");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | CanvasNodeStatus>("all");
+  const [priorityFilter, setPriorityFilter] = useState<"all" | "none" | CanvasPriority>("all");
+  const [ownerFilter, setOwnerFilter] = useState("all");
+  const [tagFilter, setTagFilter] = useState("all");
 
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
@@ -266,6 +342,60 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
     );
     setFocusNodeId(null);
   }, [viewMode, focusNodeId, snapshot?.nodes]);
+
+
+  const boardOwners = useMemo(
+    () =>
+      [...new Set((snapshot?.nodes ?? []).map((node) => node.owner).filter((value): value is string => !!value))]
+        .sort((a, b) => a.localeCompare(b, "ar")),
+    [snapshot?.nodes],
+  );
+  const boardTags = useMemo(
+    () =>
+      [...new Set((snapshot?.nodes ?? []).flatMap((node) => node.tags))]
+        .sort((a, b) => a.localeCompare(b, "ar")),
+    [snapshot?.nodes],
+  );
+  const filtersActive =
+    !!searchQuery.trim() ||
+    statusFilter !== "all" ||
+    priorityFilter !== "all" ||
+    ownerFilter !== "all" ||
+    tagFilter !== "all";
+
+  const visibleNodes = useMemo(
+    () =>
+      (snapshot?.nodes ?? []).filter((node) =>
+        matchesBoardFilters(
+          node,
+          searchQuery,
+          statusFilter,
+          priorityFilter,
+          ownerFilter,
+          tagFilter,
+        ),
+      ),
+    [snapshot?.nodes, searchQuery, statusFilter, priorityFilter, ownerFilter, tagFilter],
+  );
+  const visibleNodeIds = useMemo(
+    () => new Set(visibleNodes.map((node) => node.id)),
+    [visibleNodes],
+  );
+  const filteredSnapshot = useMemo(
+    () =>
+      snapshot
+        ? {
+            ...snapshot,
+            nodes: visibleNodes,
+            edges: snapshot.edges.filter(
+              (edge) =>
+                visibleNodeIds.has(edge.source_node_id) &&
+                visibleNodeIds.has(edge.target_node_id),
+            ),
+          }
+        : null,
+    [snapshot, visibleNodes, visibleNodeIds],
+  );
 
   const selectedNodes = useMemo(
     () => snapshot?.nodes.filter((node) => selectedNodeIds.includes(node.id)) ?? [],
