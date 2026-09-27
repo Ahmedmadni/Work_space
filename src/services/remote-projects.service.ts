@@ -1,5 +1,6 @@
 import { requireRemoteSession } from "@/services/auth.service";
 import { supabaseRest } from "@/services/supabase-rest";
+import { remoteDeleteBoardAssets } from "@/services/remote-canvas-assets.service";
 import type { CreateProjectInput, Project, ProjectStatus } from "@/types";
 
 interface ProjectRow {
@@ -154,6 +155,12 @@ export async function remoteRestoreProject(id: string): Promise<void> {
 }
 
 export async function remoteDeleteProject(id: string): Promise<void> {
+  const boards = await supabaseRest<Array<{ id: string }>>("boards", {
+    query: { select: "id", project_id: `eq.${id}` },
+  });
+  for (const board of boards) {
+    await remoteDeleteBoardAssets(board.id);
+  }
   await supabaseRest("projects", {
     method: "DELETE",
     query: { id: `eq.${id}` },
