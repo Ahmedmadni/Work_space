@@ -1418,6 +1418,177 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
 }
 
 
+
+function BoardFilterBar({
+  query,
+  status,
+  priority,
+  owner,
+  tag,
+  owners,
+  tags,
+  resultCount,
+  totalCount,
+  active,
+  onQuery,
+  onStatus,
+  onPriority,
+  onOwner,
+  onTag,
+  onClear,
+}: {
+  query: string;
+  status: "all" | CanvasNodeStatus;
+  priority: "all" | "none" | CanvasPriority;
+  owner: string;
+  tag: string;
+  owners: string[];
+  tags: string[];
+  resultCount: number;
+  totalCount: number;
+  active: boolean;
+  onQuery: (value: string) => void;
+  onStatus: (value: "all" | CanvasNodeStatus) => void;
+  onPriority: (value: "all" | "none" | CanvasPriority) => void;
+  onOwner: (value: string) => void;
+  onTag: (value: string) => void;
+  onClear: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="absolute start-3 top-3 z-50">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        aria-label="بحث وتصفية عناصر اللوحة"
+        title="بحث وتصفية"
+        className={cn(
+          "frost-strong relative grid h-10 w-10 place-items-center rounded-xl shadow-frost",
+          active ? "text-brand" : "text-muted-foreground",
+        )}
+      >
+        <Filter className="h-4 w-4" />
+        {active && (
+          <span className="absolute -end-1 -top-1 grid min-h-4 min-w-4 place-items-center rounded-full bg-brand px-1 text-[9px] font-bold text-primary-foreground">
+            {resultCount}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="frost-strong absolute start-0 top-12 w-[min(360px,calc(100vw-1.5rem))] rounded-2xl p-3 shadow-lift">
+          <div className="relative">
+            <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              autoFocus
+              value={query}
+              onChange={(event) => onQuery(event.target.value)}
+              placeholder="ابحث في العنوان، الوصف، المالك أو الوسوم…"
+              className="w-full rounded-xl border border-border bg-background py-2.5 pe-3 ps-9 text-sm outline-none focus:border-brand"
+            />
+          </div>
+
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <label className="text-[10px] text-muted-foreground">
+              الحالة
+              <select
+                value={status}
+                onChange={(event) => onStatus(event.target.value as "all" | CanvasNodeStatus)}
+                className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-2 text-xs text-foreground"
+              >
+                <option value="all">كل الحالات</option>
+                {NODE_STATUS_OPTIONS.map((item) => (
+                  <option key={item.value} value={item.value}>{item.label}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="text-[10px] text-muted-foreground">
+              الأولوية
+              <select
+                value={priority}
+                onChange={(event) =>
+                  onPriority(event.target.value as "all" | "none" | CanvasPriority)
+                }
+                className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-2 text-xs text-foreground"
+              >
+                <option value="all">كل الأولويات</option>
+                <option value="none">بدون أولوية</option>
+                {PRIORITY_OPTIONS.map((item) => (
+                  <option key={item.value} value={item.value}>{item.label}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="text-[10px] text-muted-foreground">
+              المالك
+              <select
+                value={owner}
+                onChange={(event) => onOwner(event.target.value)}
+                className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-2 text-xs text-foreground"
+              >
+                <option value="all">كل المالكين</option>
+                <option value="unassigned">غير معيّن</option>
+                {owners.map((item) => <option key={item} value={item}>{item}</option>)}
+              </select>
+            </label>
+
+            <label className="text-[10px] text-muted-foreground">
+              الوسم
+              <select
+                value={tag}
+                onChange={(event) => onTag(event.target.value)}
+                className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-2 text-xs text-foreground"
+              >
+                <option value="all">كل الوسوم</option>
+                {tags.map((item) => <option key={item} value={item}>{item}</option>)}
+              </select>
+            </label>
+          </div>
+
+          <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3">
+            <span className="text-xs text-muted-foreground">
+              {active ? `${resultCount} من ${totalCount}` : `${totalCount} عنصر`}
+            </span>
+            {active && (
+              <button
+                type="button"
+                onClick={onClear}
+                className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-danger hover:bg-danger/10"
+              >
+                <X className="h-3.5 w-3.5" /> مسح الفلاتر
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FilteredCanvasEmpty({ onClear }: { onClear: () => void }) {
+  return (
+    <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-8">
+      <div className="frost pointer-events-auto max-w-sm rounded-3xl p-6 text-center shadow-frost">
+        <Search className="mx-auto h-7 w-7 text-brand" />
+        <h3 className="mt-3 font-semibold">لا توجد عناصر مطابقة</h3>
+        <p className="mt-2 text-sm text-muted-foreground">
+          غيّر عبارة البحث أو الفلاتر لإظهار عناصر أخرى.
+        </p>
+        <button
+          type="button"
+          onClick={onClear}
+          className="mt-4 rounded-xl border border-border px-3 py-2 text-sm hover:bg-muted"
+        >
+          مسح الفلاتر
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ViewSwitcher({
   value,
   onChange,
@@ -1573,6 +1744,19 @@ function KanbanView({
                       </p>
                     )}
 
+                    {(node.owner || node.tags.length > 0) && (
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+                        {node.owner && (
+                          <span className="inline-flex items-center gap-1">
+                            <UserRound className="h-3 w-3" /> {node.owner}
+                          </span>
+                        )}
+                        {node.tags.slice(0, 2).map((tag) => (
+                          <span key={tag} className="rounded-full bg-muted px-1.5 py-0.5">#{tag}</span>
+                        ))}
+                      </div>
+                    )}
+
                     {node.due_date && (
                       <p className="mt-2 flex items-center gap-1 text-[10px] text-muted-foreground">
                         <CalendarRange className="h-3 w-3" />
@@ -1706,6 +1890,12 @@ function OutlineView({
                   {node.description && (
                     <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
                       {node.description}
+                    </p>
+                  )}
+                  {(node.owner || node.tags.length > 0) && (
+                    <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+                      {node.owner && <span>{node.owner}</span>}
+                      {node.tags.slice(0, 3).map((tag) => <span key={tag}>#{tag}</span>)}
                     </p>
                   )}
                   {node.due_date && (
@@ -2137,19 +2327,24 @@ function CanvasEdges({
               fill="none"
               className={cn(
                 "pointer-events-none",
-                selectedEdgeId === edge.id ? "stroke-brand" : "stroke-muted-foreground/65",
+                selectedEdgeId === edge.id
+                  ? "stroke-brand"
+                  : edge.kind === "dependency"
+                    ? "stroke-warning"
+                    : "stroke-muted-foreground/65",
               )}
-              strokeWidth={selectedEdgeId === edge.id ? 3 : 2}
+              strokeWidth={selectedEdgeId === edge.id ? 3 : edge.kind === "dependency" ? 2.5 : 2}
+              strokeDasharray={edge.kind === "dependency" ? "8 6" : undefined}
               markerEnd="url(#canvas-arrow)"
             />
-            {edge.label && (
+            {(edge.label || edge.kind === "dependency") && (
               <text
                 x={(x1 + x2) / 2}
                 y={(y1 + y2) / 2 - 8}
                 textAnchor="middle"
                 className="pointer-events-none fill-muted-foreground text-[12px]"
               >
-                {edge.label}
+                {edge.label ?? "يعتمد على"}
               </text>
             )}
           </g>
@@ -2350,6 +2545,22 @@ function CanvasNodeCard({
               <span className="ms-auto text-muted-foreground">{Math.round(node.progress)}%</span>
             )}
           </div>
+          {(node.owner || node.tags.length > 0) && (
+            <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+              {node.owner && (
+                <span className="inline-flex items-center gap-1">
+                  <UserRound className="h-3 w-3" />
+                  {node.owner}
+                </span>
+              )}
+              {node.tags.slice(0, 2).map((tag) => (
+                <span key={tag} className="rounded-full bg-muted px-1.5 py-0.5">
+                  #{tag}
+                </span>
+              ))}
+              {node.tags.length > 2 && <span>+{node.tags.length - 2}</span>}
+            </div>
+          )}
           {node.due_date && (
             <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
               <CalendarRange className="h-3 w-3" />
