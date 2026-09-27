@@ -635,7 +635,7 @@ export function NodeReviewPanel({
                         currentUserId={currentUserId}
                         canEdit={canEdit}
                         canManage={canManage}
-                        onReply={setReplyTo}
+                        onReply={() => setReplyTo(comment)}
                         child
                         focused={child.id === focusCommentId}
                       />
