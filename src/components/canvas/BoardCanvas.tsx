@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import {
   CheckCircle2,
   Circle,
@@ -411,9 +419,7 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
       }
       setSelectedNodeIds((current) => {
         if (!additive) return [nodeId];
-        return current.includes(nodeId)
-          ? current.filter((id) => id !== nodeId)
-          : [...current, nodeId];
+        return current.includes(nodeId) ? current : [...current, nodeId];
       });
     },
     [snapshot, tool, connectorSourceId, boardId, commit],
@@ -647,7 +653,9 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
 
                 let ids = selectedNodeIds;
                 if (!ids.includes(node.id)) {
-                  ids = [node.id];
+                  ids = event.shiftKey || event.ctrlKey || event.metaKey
+                    ? [...ids, node.id]
+                    : [node.id];
                   setSelectedNodeIds(ids);
                 }
                 const origins: Record<string, { x: number; y: number }> = {};
@@ -751,7 +759,6 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
           saveState={saveState}
           canUndo={past.current.length > 0}
           canRedo={future.current.length > 0}
-          historyVersion={historyVersion}
           onZoomOut={() => setZoom(snapshot.viewport.zoom * 0.9)}
           onZoomIn={() => setZoom(snapshot.viewport.zoom * 1.1)}
           onFit={fitView}
@@ -759,6 +766,29 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
           onRedo={redo}
         />
       </div>
+
+      {(selectedNodeIds.length > 0 || selectedEdgeId) && (
+        <div className="frost-strong absolute end-3 top-3 z-30 flex items-center gap-1 rounded-xl p-1 lg:hidden">
+          {selectedNodeIds.length > 0 && (
+            <button
+              onClick={duplicateSelection}
+              aria-label="تكرار المحدد"
+              title="تكرار"
+              className="grid h-9 w-9 place-items-center rounded-lg hover:bg-muted"
+            >
+              <Copy className="h-4 w-4" />
+            </button>
+          )}
+          <button
+            onClick={deleteSelection}
+            aria-label="حذف المحدد"
+            title="حذف"
+            className="grid h-9 w-9 place-items-center rounded-lg text-danger hover:bg-danger/10"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       <CanvasInspector
         selectedNode={selectedNode}
@@ -944,13 +974,13 @@ function CanvasNodeCard({
   node: CanvasNode;
   selected: boolean;
   connectorSource: boolean;
-  onSelect: (event: React.PointerEvent<HTMLDivElement>) => void;
-  onContextMenu: (event: React.MouseEvent<HTMLDivElement>) => void;
-  onDragStart: (event: React.PointerEvent<HTMLDivElement>) => void;
-  onDragMove: (event: React.PointerEvent<HTMLDivElement>) => void;
+  onSelect: (event: ReactPointerEvent<HTMLDivElement>) => void;
+  onContextMenu: (event: ReactMouseEvent<HTMLDivElement>) => void;
+  onDragStart: (event: ReactPointerEvent<HTMLDivElement>) => void;
+  onDragMove: (event: ReactPointerEvent<HTMLDivElement>) => void;
   onDragEnd: () => void;
-  onResizeStart: (event: React.PointerEvent<HTMLButtonElement>) => void;
-  onResizeMove: (event: React.PointerEvent<HTMLButtonElement>) => void;
+  onResizeStart: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+  onResizeMove: (event: ReactPointerEvent<HTMLButtonElement>) => void;
   onResizeEnd: () => void;
 }) {
   const icon =
@@ -1285,7 +1315,6 @@ function ZoomControls({
   saveState: "saved" | "saving" | "error";
   canUndo: boolean;
   canRedo: boolean;
-  historyVersion: number;
   onZoomOut: () => void;
   onZoomIn: () => void;
   onFit: () => void;
