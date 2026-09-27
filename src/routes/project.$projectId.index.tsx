@@ -27,8 +27,12 @@ import {
 } from "@/components/app/shared";
 import { CreateBoardDialog } from "@/components/app/dialogs";
 import { ProjectShareDialog } from "@/components/collaboration/ProjectShareDialog";
+import { ProjectExecutionCenter } from "@/components/execution/ProjectExecutionCenter";
 import { useProject } from "@/hooks/use-projects";
-import { useProjectAccess } from "@/hooks/use-collaboration";
+import {
+  useProjectAccess,
+  useProjectCollaborators,
+} from "@/hooks/use-collaboration";
 import { useProjectPresence } from "@/hooks/use-live-collaboration";
 import { useBoards } from "@/hooks/use-boards";
 import { useCanvasNodeSearch, useProjectExecutionSummary } from "@/hooks/use-canvas";
@@ -401,6 +405,7 @@ function ProjectDetail() {
   const project = useProject(projectId);
   const boards = useBoards({ projectId });
   const access = useProjectAccess(projectId);
+  const collaborators = useProjectCollaborators(projectId);
   const presence = useProjectPresence(projectId, "project", null, true);
   const currentTaskUserId = useCurrentTaskUserId();
   const [shareOpen, setShareOpen] = useState(false);
@@ -530,12 +535,14 @@ function ProjectDetail() {
         />
       )}
 
-      {execution.data && currentTaskUserId && (
-        <MyTasksPanel
-          summary={execution.data}
-          boardMap={boardMap}
+      {execution.data && (
+        <ProjectExecutionCenter
           projectId={projectId}
+          summary={execution.data}
+          boards={boards.data ?? []}
+          collaborators={collaborators.data ?? []}
           currentUserId={currentTaskUserId}
+          canEdit={!!access.data?.can_edit}
         />
       )}
 

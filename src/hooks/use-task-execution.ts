@@ -6,10 +6,15 @@ import {
   listCanvasNodeWatchers,
   setCanvasNodeAssignee,
   setCanvasNodeWatching,
+  updateCanvasNodeExecution,
 } from "@/services/task-execution.service";
 import type {
   BoardCanvasSnapshot,
   CanvasNodeAssignment,
+  CanvasNodeExecutionUpdate,
+  CanvasNodeStatus,
+  CanvasPriority,
+  ProjectExecutionSummary,
 } from "@/types";
 
 export function useCanvasNodeWatchers(
@@ -96,6 +101,29 @@ export function useSetCanvasNodeAssignee(
               }
             : current,
       );
+      queryClient.setQueriesData<ProjectExecutionSummary>(
+        { queryKey: ["project-execution-summary"] },
+        (current) =>
+          current
+            ? {
+                ...current,
+                items: current.items.map((item) =>
+                  item.board_id === boardId && item.node.id === nodeId
+                    ? {
+                        ...item,
+                        node: {
+                          ...item.node,
+                          assignee_user_id: assignment.assignee_user_id,
+                          assignee_name: assignment.assignee_name,
+                          owner: assignment.assignee_name,
+                        },
+                        is_unassigned: !assignment.assignee_user_id,
+                      }
+                    : item,
+                ),
+              }
+            : current,
+      );
       void queryClient.invalidateQueries({
         queryKey: ["project-execution-summary"],
       });
@@ -112,6 +140,103 @@ export function useSetCanvasNodeAssignee(
       toast.error(
         error instanceof Error ? error.message : "تعذر تحديث المسؤول.",
       ),
+  });
+}
+
+export function useUpdateCanvasNodeExecution(
+  projectId: string,
+  boardId: string,
+  nodeId: string,
+) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: {
+      expectedVersion: number;
+      status?: CanvasNodeStatus;
+      priority?: CanvasPriority | null;
+    }) =>
+      updateCanvasNodeExecution({
+        projectId,
+        boardId,
+        nodeId,
+        ...input,
+      }),
+    onSuccess: (update: CanvasNodeExecutionUpdate) => {
+      queryClient.setQueryData<BoardCanvasSnapshot>(
+        ["canvas", boardId],
+        (current) =>
+          current
+            ? {
+                ...current,
+                ...(update.revision !== undefined
+                  ? {
+                      revision: Math.max(
+                        current.revision ?? 0,
+                        update.revision,
+                      ),
+                    }
+                  : {}),
+                nodes: current.nodes.map((node) =>
+                  node.id === nodeId
+                    ? {
+                        ...node,
+                        version: update.version,
+                        status: update.status,
+                        priority: update.priority,
+                        progress: update.progress,
+                        updated_at: update.updated_at,
+                      }
+                    : node,
+                ),
+              }
+            : current,
+      );
+
+      queryClient.setQueriesData<ProjectExecutionSummary>(
+        { queryKey: ["project-execution-summary"] },
+        (current) =>
+          current
+            ? {
+                ...current,
+                items: current.items.map((item) =>
+                  item.board_id === boardId && item.node.id === nodeId
+                    ? {
+                        ...item,
+                        node: {
+                          ...item.node,
+                          version: update.version,
+                          status: update.status,
+                          priority: update.priority,
+                          progress: update.progress,
+                          updated_at: update.updated_at,
+                        },
+                      }
+                    : item,
+                ),
+              }
+            : current,
+      );
+      void queryClient.invalidateQueries({
+        queryKey: ["project-execution-summary"],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["canvas-search"],
+      });
+    },
+    onError: (error) => {
+      void queryClient.invalidateQueries({
+        queryKey: ["canvas", boardId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["project-execution-summary"],
+      });
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "تعذر تحديث المهمة.",
+      );
+    },
   });
 }
 
