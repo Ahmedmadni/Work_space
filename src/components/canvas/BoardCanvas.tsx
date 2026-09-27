@@ -48,6 +48,7 @@ import { BoardHistoryPanel } from "@/components/canvas/BoardHistoryPanel";
 import { useBoardCanvas, useSaveBoardCanvas } from "@/hooks/use-canvas";
 import { useCanvasRealtime } from "@/hooks/use-canvas-realtime";
 import { createCanvasEdge, createCanvasNode } from "@/services/canvas.service";
+import { rebaseLocalCanvasChanges } from "@/services/canvas-collaboration.service";
 import { getCanvasAsset, saveCanvasImage } from "@/services/canvas-assets.service";
 import { cn } from "@/lib/utils";
 import type {
@@ -327,11 +328,15 @@ export function BoardCanvas({
   const lastAckEditVersion = useRef(0);
   const cursorBroadcastAt = useRef(0);
   const lastCursorWorld = useRef<{ x: number; y: number } | null>(null);
+  const baseSnapshotRef = useRef<BoardCanvasSnapshot | null>(null);
+  const latestSnapshotRef = useRef<BoardCanvasSnapshot | null>(null);
 
   useEffect(() => {
     if (!loadedCanvas || initializedBoard.current === boardId) return;
     initializedBoard.current = boardId;
     setSnapshot(cloneSnapshot(loadedCanvas));
+    baseSnapshotRef.current = cloneSnapshot(loadedCanvas);
+    latestSnapshotRef.current = cloneSnapshot(loadedCanvas);
     localEditVersion.current = 0;
     lastAckEditVersion.current = 0;
     setConflictSnapshot(null);
@@ -358,18 +363,18 @@ export function BoardCanvas({
       return;
     }
 
-    setSnapshot((current) =>
-      current
-        ? {
-            ...cloneSnapshot(loadedCanvas),
-            viewport: current.viewport,
-          }
-        : current,
-    );
+    const next = {
+      ...cloneSnapshot(loadedCanvas),
+      viewport: snapshot.viewport,
+    };
+    baseSnapshotRef.current = cloneSnapshot(next);
+    latestSnapshotRef.current = cloneSnapshot(next);
+    setSnapshot(next);
   }, [loadedCanvas, boardId, snapshot, saveState]);
 
   useEffect(() => {
     if (!snapshot || initializedBoard.current !== boardId) return;
+    if (saveState === "conflict") return;
     if (readOnly) {
       setSaveState("saved");
       return;
@@ -378,9 +383,20 @@ export function BoardCanvas({
     if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
     autosaveTimer.current = setTimeout(() => {
       const requestEditVersion = localEditVersion.current;
-      saveCanvas.mutate(snapshot, {
+      const requestSnapshot = cloneSnapshot(snapshot);
+      const requestBase = cloneSnapshot(
+        baseSnapshotRef.current ?? snapshot,
+      );
+
+      saveCanvas.mutate(
+        {
+          snapshot: requestSnapshot,
+          baseSnapshot: requestBase,
+        },
+        {
         onSuccess: (result) => {
           if (result.conflicts.length) {
+            baseSnapshotRef.current = cloneSnapshot(result.snapshot);
             setConflictSnapshot(cloneSnapshot(result.snapshot));
             setConflictCount(result.conflicts.length);
             setSaveState("conflict");
@@ -390,34 +406,57 @@ export function BoardCanvas({
             return;
           }
 
+          const currentLocal =
+            latestSnapshotRef.current ?? requestSnapshot;
+          const rebased =
+            localEditVersion.current === requestEditVersion
+              ? {
+                  snapshot: {
+                    ...cloneSnapshot(result.snapshot),
+                    viewport: currentLocal.viewport,
+                  },
+                  conflicts: [],
+                }
+              : rebaseLocalCanvasChanges(
+                  result.snapshot,
+                  requestSnapshot,
+                  currentLocal,
+                );
+
+          baseSnapshotRef.current = cloneSnapshot(result.snapshot);
           lastAckEditVersion.current = Math.max(
             lastAckEditVersion.current,
             requestEditVersion,
           );
+
+          if (rebased.conflicts.length) {
+            setConflictSnapshot(cloneSnapshot(result.snapshot));
+            setConflictCount(rebased.conflicts.length);
+            setSaveState("conflict");
+            toast.error(
+              `وصل تعديل متزامن على ${rebased.conflicts.length} عنصر أثناء عملك. لم نحذف تعديلاتك المحلية.`,
+            );
+            return;
+          }
+
           setConflictSnapshot(null);
           setConflictCount(0);
-
-          if (localEditVersion.current === requestEditVersion) {
-            setSnapshot((current) =>
-              current
-                ? {
-                    ...cloneSnapshot(result.snapshot),
-                    viewport: current.viewport,
-                  }
-                : current,
-            );
-            setSaveState("saved");
-          } else {
-            setSaveState("saving");
-          }
+          latestSnapshotRef.current = cloneSnapshot(rebased.snapshot);
+          setSnapshot(rebased.snapshot);
+          setSaveState(
+            localEditVersion.current === requestEditVersion
+              ? "saved"
+              : "saving",
+          );
         },
         onError: () => setSaveState("error"),
-      });
+      },
+      );
     }, 450);
     return () => {
       if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
     };
-  }, [snapshot, boardId, saveCanvas, readOnly]);
+  }, [snapshot, boardId, saveCanvas, readOnly, saveState]);
 
 
   useEffect(() => {
@@ -443,6 +482,10 @@ export function BoardCanvas({
     setFocusNodeId(null);
   }, [viewMode, focusNodeId, snapshot]);
 
+
+  useEffect(() => {
+    latestSnapshotRef.current = snapshot;
+  }, [snapshot]);
 
   const boardOwners = useMemo(
     () =>
@@ -1072,10 +1115,13 @@ export function BoardCanvas({
               type="button"
               onClick={() => {
                 const localViewport = snapshot?.viewport;
-                setSnapshot({
+                const accepted = {
                   ...cloneSnapshot(conflictSnapshot),
                   viewport: localViewport ?? conflictSnapshot.viewport,
-                });
+                };
+                baseSnapshotRef.current = cloneSnapshot(accepted);
+                latestSnapshotRef.current = cloneSnapshot(accepted);
+                setSnapshot(accepted);
                 localEditVersion.current += 1;
                 lastAckEditVersion.current = localEditVersion.current;
                 setConflictSnapshot(null);
