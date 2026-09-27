@@ -397,6 +397,15 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
     [snapshot, visibleNodes, visibleNodeIds],
   );
 
+
+  useEffect(() => {
+    if (!filtersActive || !selectedNodeIds.length) return;
+    const remaining = selectedNodeIds.filter((id) => visibleNodeIds.has(id));
+    if (remaining.length === selectedNodeIds.length) return;
+    setSelectedNodeIds(remaining);
+    if (!remaining.length) setSelectedEdgeId(null);
+  }, [filtersActive, visibleNodeIds, selectedNodeIds]);
+
   const selectedNodes = useMemo(
     () => snapshot?.nodes.filter((node) => selectedNodeIds.includes(node.id)) ?? [],
     [snapshot, selectedNodeIds],
@@ -442,6 +451,37 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
           edge.id === edgeId ? { ...edge, ...patch, updated_at: now } : edge,
         ),
       });
+    },
+    [snapshot, commit],
+  );
+
+
+  const addDependency = useCallback(
+    (sourceNodeId: string, targetNodeId: string) => {
+      if (!snapshot || sourceNodeId === targetNodeId) return;
+      const duplicate = snapshot.edges.some(
+        (edge) =>
+          edge.kind === "dependency" &&
+          edge.source_node_id === sourceNodeId &&
+          edge.target_node_id === targetNodeId,
+      );
+      if (duplicate) return;
+      if (wouldCreateDependencyCycle(snapshot, sourceNodeId, targetNodeId)) {
+        toast.error("لا يمكن إضافة هذا الاعتماد لأنه سيُنشئ دورة اعتماد مغلقة.");
+        return;
+      }
+      const edge = createCanvasEdge(boardId, sourceNodeId, targetNodeId);
+      edge.kind = "dependency";
+      edge.label = "يعتمد على";
+      commit({ ...snapshot, edges: [...snapshot.edges, edge] });
+    },
+    [snapshot, boardId, commit],
+  );
+
+  const removeDependency = useCallback(
+    (edgeId: string) => {
+      if (!snapshot) return;
+      commit({ ...snapshot, edges: snapshot.edges.filter((edge) => edge.id !== edgeId) });
     },
     [snapshot, commit],
   );
@@ -868,6 +908,30 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
   return (
     <div className="relative flex flex-1 overflow-hidden">
       <ViewSwitcher value={viewMode} onChange={setViewMode} />
+      <BoardFilterBar
+        query={searchQuery}
+        status={statusFilter}
+        priority={priorityFilter}
+        owner={ownerFilter}
+        tag={tagFilter}
+        owners={boardOwners}
+        tags={boardTags}
+        resultCount={visibleNodes.length}
+        totalCount={snapshot.nodes.length}
+        active={filtersActive}
+        onQuery={setSearchQuery}
+        onStatus={setStatusFilter}
+        onPriority={setPriorityFilter}
+        onOwner={setOwnerFilter}
+        onTag={setTagFilter}
+        onClear={() => {
+          setSearchQuery("");
+          setStatusFilter("all");
+          setPriorityFilter("all");
+          setOwnerFilter("all");
+          setTagFilter("all");
+        }}
+      />
 
       {viewMode === "canvas" && (
       <CanvasToolbar
@@ -1074,7 +1138,7 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
           />
 
           <CanvasEdges
-            snapshot={snapshot}
+            snapshot={filteredSnapshot ?? snapshot}
             selectedEdgeId={selectedEdgeId}
             onSelect={(edgeId) => {
               setSelectedEdgeId(edgeId);
@@ -1082,7 +1146,7 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
             }}
           />
 
-          {snapshot.nodes.map((node) => (
+          {visibleNodes.map((node) => (
             <CanvasNodeCard
               key={node.id}
               node={node}
@@ -1208,14 +1272,22 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
           ))}
         </div>
 
-        {!snapshot.nodes.length && !snapshot.strokes.length && (
+        {filtersActive && !visibleNodes.length ? (
+          <FilteredCanvasEmpty onClear={() => {
+            setSearchQuery("");
+            setStatusFilter("all");
+            setPriorityFilter("all");
+            setOwnerFilter("all");
+            setTagFilter("all");
+          }} />
+        ) : !snapshot.nodes.length && !snapshot.strokes.length ? (
           <EmptyCanvas
             onAdd={() => {
               const rect = canvasRef.current?.getBoundingClientRect();
               if (rect) addNodeAtScreen(rect.left + rect.width / 2, rect.top + rect.height / 2);
             }}
           />
-        )}
+        ) : null}
 
         <ZoomControls
           zoom={snapshot.viewport.zoom}
@@ -1231,7 +1303,7 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
       </div>
       ) : viewMode === "kanban" ? (
         <KanbanView
-          snapshot={snapshot}
+          snapshot={filteredSnapshot ?? snapshot}
           onOpen={(nodeId) => {
             setSelectedNodeIds([nodeId]);
             setSelectedEdgeId(null);
@@ -1249,7 +1321,7 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
         />
       ) : viewMode === "outline" ? (
         <OutlineView
-          snapshot={snapshot}
+          snapshot={filteredSnapshot ?? snapshot}
           onOpen={(nodeId) => {
             setSelectedNodeIds([nodeId]);
             setSelectedEdgeId(null);
@@ -1267,7 +1339,7 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
         />
       ) : (
         <RoadmapView
-          snapshot={snapshot}
+          snapshot={filteredSnapshot ?? snapshot}
           onOpen={(nodeId) => {
             setSelectedNodeIds([nodeId]);
             setSelectedEdgeId(null);
@@ -1311,6 +1383,8 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
         onEdgeChange={(patch) => selectedEdge && updateEdge(selectedEdge.id, patch)}
         onDelete={deleteSelection}
         onDuplicate={duplicateSelection}
+        onAddDependency={addDependency}
+        onRemoveDependency={removeDependency}
       />
       )}
 
