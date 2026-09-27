@@ -62,15 +62,34 @@ function ProjectDetail() {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | CanvasNodeStatus>("all");
   const [priority, setPriority] = useState<"all" | CanvasPriority>("all");
+  const [owner, setOwner] = useState("all");
+  const [tag, setTag] = useState("all");
 
   const boardIds = useMemo(() => boards.data?.map((board) => board.id) ?? [], [boards.data]);
-  const filtersActive = !!query.trim() || status !== "all" || priority !== "all";
+  const facetSearch = useCanvasNodeSearch(boardIds, {}, boardIds.length > 0);
+  const owners = useMemo(
+    () =>
+      [...new Set((facetSearch.data ?? []).map((match) => match.node.owner).filter((value): value is string => !!value))]
+        .sort((a, b) => a.localeCompare(b, "ar")),
+    [facetSearch.data],
+  );
+  const tags = useMemo(
+    () =>
+      [...new Set((facetSearch.data ?? []).flatMap((match) => match.node.tags))]
+        .sort((a, b) => a.localeCompare(b, "ar")),
+    [facetSearch.data],
+  );
+
+  const filtersActive =
+    !!query.trim() || status !== "all" || priority !== "all" || owner !== "all" || tag !== "all";
   const nodeSearch = useCanvasNodeSearch(
     boardIds,
     {
       query,
       status: status === "all" ? null : status,
       priority: priority === "all" ? null : priority,
+      owner: owner === "all" ? null : owner,
+      tag: tag === "all" ? null : tag,
     },
     filtersActive,
   );
@@ -159,6 +178,24 @@ function ProjectDetail() {
                 <option key={item.value} value={item.value}>{item.label}</option>
               ))}
             </select>
+            <select
+              value={owner}
+              onChange={(event) => setOwner(event.target.value)}
+              className="rounded-xl border border-border bg-background px-3 py-2.5 text-xs"
+              aria-label="تصفية حسب المالك"
+            >
+              <option value="all">كل المالكين</option>
+              {owners.map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+            <select
+              value={tag}
+              onChange={(event) => setTag(event.target.value)}
+              className="rounded-xl border border-border bg-background px-3 py-2.5 text-xs"
+              aria-label="تصفية حسب الوسم"
+            >
+              <option value="all">كل الوسوم</option>
+              {tags.map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
             {filtersActive && (
               <button
                 type="button"
@@ -166,6 +203,8 @@ function ProjectDetail() {
                   setQuery("");
                   setStatus("all");
                   setPriority("all");
+                  setOwner("all");
+                  setTag("all");
                 }}
                 className="inline-flex items-center gap-1 rounded-xl px-3 py-2.5 text-xs text-danger hover:bg-danger/10"
               >
