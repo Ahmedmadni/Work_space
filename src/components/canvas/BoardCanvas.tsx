@@ -8,6 +8,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import {
+  CalendarRange,
   CheckCircle2,
   Circle,
   Columns3,
@@ -51,7 +52,7 @@ import type {
   CanvasViewport,
 } from "@/types";
 
-type ViewMode = "canvas" | "kanban" | "outline";
+type ViewMode = "canvas" | "kanban" | "outline" | "roadmap";
 
 type Tool =
   | "select"
@@ -157,6 +158,23 @@ function priorityClass(priority: CanvasPriority) {
   if (priority === "high") return "bg-warning/15 text-warning";
   if (priority === "medium") return "bg-info/15 text-info";
   return "bg-success/15 text-success";
+}
+
+
+function localDateToDay(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return Math.floor(Date.UTC(year!, month! - 1, day!) / 86_400_000);
+}
+
+function formatLocalDate(value: string | null) {
+  if (!value) return "—";
+  const [year, month, day] = value.split("-").map(Number);
+  return new Intl.DateTimeFormat("ar-SA", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(year!, month! - 1, day!)));
 }
 
 const DRAWING_COLORS: Array<{ value: CanvasColor; label: string }> = [
@@ -1098,7 +1116,7 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
             });
           }}
         />
-      ) : (
+      ) : viewMode === "outline" ? (
         <OutlineView
           snapshot={snapshot}
           onOpen={(nodeId) => {
@@ -1114,6 +1132,16 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
               status,
               progress: status === "done" ? 100 : node.progress === 100 ? 0 : node.progress,
             });
+          }}
+        />
+      ) : (
+        <RoadmapView
+          snapshot={snapshot}
+          onOpen={(nodeId) => {
+            setSelectedNodeIds([nodeId]);
+            setSelectedEdgeId(null);
+            setFocusNodeId(nodeId);
+            setViewMode("canvas");
           }}
         />
       )}
@@ -1200,6 +1228,7 @@ function ViewSwitcher({
     { value: "canvas", label: "اللوحة", icon: MousePointer2 },
     { value: "kanban", label: "كانبان", icon: Columns3 },
     { value: "outline", label: "المخطط", icon: ListTree },
+    { value: "roadmap", label: "الخط الزمني", icon: CalendarRange },
   ];
 
   return (
@@ -1511,6 +1540,146 @@ function OutlineView({
               </div>
             ))}
           </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+function RoadmapView({
+  snapshot,
+  onOpen,
+}: {
+  snapshot: BoardCanvasSnapshot;
+  onOpen: (nodeId: string) => void;
+}) {
+  const semanticNodes = snapshot.nodes.filter(isSemanticNode);
+  const dated = semanticNodes.filter((node) => node.start_date || node.due_date);
+  const undated = semanticNodes.filter((node) => !node.start_date && !node.due_date);
+
+  const points = dated.flatMap((node) =>
+    [node.start_date, node.due_date].filter((value): value is string => !!value),
+  );
+
+  if (!semanticNodes.length) {
+    return (
+      <div className="flex flex-1 items-center justify-center px-6 pt-16">
+        <div className="max-w-md rounded-2xl border border-dashed border-border bg-card p-8 text-center">
+          <CalendarRange className="mx-auto h-8 w-8 text-brand" />
+          <h3 className="mt-3 font-semibold">لا توجد عناصر للخط الزمني بعد</h3>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            أضف مهامًا أو معالم أو أفكارًا، ثم عيّن تاريخ البداية أو الاستحقاق من خصائص العنصر.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const minDay = points.length ? Math.min(...points.map(localDateToDay)) : 0;
+  const maxDay = points.length ? Math.max(...points.map(localDateToDay)) : minDay + 13;
+  const totalDays = Math.max(14, maxDay - minDay + 1);
+
+  return (
+    <div className="flex flex-1 flex-col overflow-hidden bg-background pt-16">
+      <div className="px-4 pb-3 text-xs text-muted-foreground sm:px-6">
+        الخط الزمني يستخدم نفس عناصر اللوحة. حدّد تاريخ البداية والاستحقاق من Inspector ليظهر العنصر هنا.
+      </div>
+
+      <div className="flex-1 overflow-auto px-4 pb-6 sm:px-6">
+        {dated.length ? (
+          <div className="min-w-[850px] overflow-hidden rounded-2xl border border-border bg-card">
+            <div className="grid grid-cols-[240px_minmax(580px,1fr)] border-b border-border bg-muted/30">
+              <div className="border-e border-border px-4 py-3 text-xs font-semibold">العنصر</div>
+              <div className="flex items-center justify-between px-4 py-3 text-[10px] text-muted-foreground">
+                <span>{formatLocalDate(points.sort()[0] ?? null)}</span>
+                <span>{formatLocalDate(points.sort().at(-1) ?? null)}</span>
+              </div>
+            </div>
+
+            {dated.map((node, index) => {
+              const rawStart = node.start_date ?? node.due_date!;
+              const rawEnd = node.due_date ?? node.start_date!;
+              const startDay = Math.min(localDateToDay(rawStart), localDateToDay(rawEnd));
+              const endDay = Math.max(localDateToDay(rawStart), localDateToDay(rawEnd));
+              const left = ((startDay - minDay) / totalDays) * 100;
+              const width = Math.max(1.5, ((endDay - startDay + 1) / totalDays) * 100);
+
+              return (
+                <div
+                  key={node.id}
+                  className={cn(
+                    "grid min-h-16 grid-cols-[240px_minmax(580px,1fr)]",
+                    index > 0 && "border-t border-border",
+                  )}
+                >
+                  <button
+                    type="button"
+                    onClick={() => onOpen(node.id)}
+                    className="border-e border-border px-4 py-3 text-start hover:bg-muted/50"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-muted-foreground">{semanticKindLabel(node)}</span>
+                      {node.priority && (
+                        <span className={cn("rounded-full px-1.5 py-0.5 text-[9px]", priorityClass(node.priority))}>
+                          {PRIORITY_OPTIONS.find((item) => item.value === node.priority)?.label}
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 truncate text-sm font-semibold">{node.title}</p>
+                    <p className="mt-1 text-[10px] text-muted-foreground">
+                      {formatLocalDate(node.start_date)} ← {formatLocalDate(node.due_date)}
+                    </p>
+                  </button>
+
+                  <div className="relative bg-[linear-gradient(to_right,var(--border)_1px,transparent_1px)] bg-[size:7.14%_100%] px-4 py-3">
+                    <button
+                      type="button"
+                      onClick={() => onOpen(node.id)}
+                      title={node.title}
+                      className={cn(
+                        "absolute top-1/2 h-7 -translate-y-1/2 overflow-hidden rounded-lg px-2 text-start text-[10px] font-medium shadow-sm",
+                        statusClass(node.status),
+                      )}
+                      style={{
+                        left: `${Math.max(0, Math.min(98, left))}%`,
+                        width: `${Math.min(100 - left, width)}%`,
+                        minWidth: "24px",
+                      }}
+                    >
+                      <span className="block truncate">{node.title}</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
+            لا توجد عناصر مؤرخة حتى الآن.
+          </div>
+        )}
+
+        {undated.length > 0 && (
+          <section className="mt-5 rounded-2xl border border-border bg-card p-4">
+            <div className="flex items-center gap-2">
+              <CalendarRange className="h-4 w-4 text-muted-foreground" />
+              <h3 className="text-sm font-semibold">بدون تاريخ</h3>
+              <span className="text-xs text-muted-foreground">{undated.length}</span>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {undated.map((node) => (
+                <button
+                  key={node.id}
+                  type="button"
+                  onClick={() => onOpen(node.id)}
+                  className="rounded-xl border border-border bg-background px-3 py-2 text-xs hover:bg-muted"
+                >
+                  {node.title}
+                </button>
+              ))}
+            </div>
+          </section>
         )}
       </div>
     </div>
@@ -1962,6 +2131,12 @@ function CanvasNodeCard({
               <span className="ms-auto text-muted-foreground">{Math.round(node.progress)}%</span>
             )}
           </div>
+          {node.due_date && (
+            <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+              <CalendarRange className="h-3 w-3" />
+              <span>الاستحقاق {formatLocalDate(node.due_date)}</span>
+            </div>
+          )}
           {(node.progress > 0 || node.status === "in_progress" || node.status === "done") && (
             <div className="h-1.5 overflow-hidden rounded-full bg-muted">
               <div
@@ -2232,6 +2407,31 @@ function NodeInspector({
                 className="w-full accent-[var(--brand)]"
               />
             </label>
+
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block">
+                <span className="mb-1.5 block text-xs text-muted-foreground">تاريخ البداية</span>
+                <input
+                  type="date"
+                  value={node.start_date ?? ""}
+                  onChange={(event) =>
+                    onChange({ start_date: event.target.value || null })
+                  }
+                  className="w-full rounded-lg border border-border bg-background px-2 py-2 text-xs"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-xs text-muted-foreground">الاستحقاق</span>
+                <input
+                  type="date"
+                  value={node.due_date ?? ""}
+                  onChange={(event) =>
+                    onChange({ due_date: event.target.value || null })
+                  }
+                  className="w-full rounded-lg border border-border bg-background px-2 py-2 text-xs"
+                />
+              </label>
+            </div>
           </div>
         )}
 
