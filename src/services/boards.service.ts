@@ -19,11 +19,9 @@ export async function listBoards(filter?: {
   sort?: "updated" | "opened";
 }): Promise<BoardWithContext[]> {
   const db = readDb();
-  // اللوحات النشطة فقط: ليست مؤرشفة ولا يتبع مشروعًا أو مساحة مؤرشفة.
+  // اللوحات النشطة فقط: ليست مؤرشفة وتتبع مشروعًا نشطًا.
   const activeProjects = new Set(
-    db.projects
-      .filter((p) => !p.archived_at && !db.workspaces.find((w) => w.id === p.workspace_id)?.archived_at)
-      .map((p) => p.id),
+    db.projects.filter((p) => !p.archived_at).map((p) => p.id),
   );
   let rows = db.boards.filter((b) => !b.archived_at && activeProjects.has(b.project_id));
   if (filter?.workspaceId) rows = rows.filter((b) => b.workspace_id === filter.workspaceId);
