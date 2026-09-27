@@ -22,7 +22,7 @@ import { CreateProjectDialog } from "@/components/app/dialogs";
 import { useProjects } from "@/hooks/use-projects";
 import { useBoards } from "@/hooks/use-boards";
 import { useProjectExecutionSummary } from "@/hooks/use-canvas";
-import { CURRENT_USER } from "@/services/local-db";
+import { useCurrentUser } from "@/hooks/use-auth";
 import { arabicNumber, greeting, longDate } from "@/lib/format";
 import type { BoardWithContext, Project, ProjectExecutionSummary } from "@/types";
 
@@ -255,6 +255,7 @@ function ExecutionCenter({
 }
 
 function Dashboard() {
+  const { user } = useCurrentUser();
   const projects = useProjects();
   const recentBoards = useBoards({ limit: 6, sort: "opened" });
   const allBoards = useBoards();
@@ -286,7 +287,7 @@ function Dashboard() {
       <section className="canvas-grid relative overflow-hidden rounded-3xl border border-border bg-card p-6 shadow-[var(--shadow-frost)] sm:p-8">
         <p className="text-sm text-muted-foreground">{longDate()}</p>
         <h1 className="mt-2 text-3xl font-bold text-foreground">
-          {greeting()}، {CURRENT_USER.full_name.split(" ")[0]}
+          {greeting()}، {user?.full_name.split(" ")[0] ?? "مرحبًا"}
         </h1>
         <p className="mt-2 max-w-xl text-muted-foreground">
           تابع التنفيذ عبر مشاريعك، ثم انتقل مباشرة إلى العنصر الذي يحتاج تدخلك.
