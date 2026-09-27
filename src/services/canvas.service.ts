@@ -4,6 +4,8 @@ import type {
   CanvasColor,
   CanvasNode,
   CanvasNodeKind,
+  CanvasNodeStatus,
+  CanvasPriority,
   CanvasNodeStyle,
   CanvasStroke,
   CanvasViewport,
@@ -80,12 +82,43 @@ function normalizeNodeStyle(value: unknown, kind: CanvasNodeKind): CanvasNodeSty
   };
 }
 
+
+function normalizeNodeStatus(value: unknown, kind: CanvasNodeKind): CanvasNodeStatus {
+  if (
+    value === "idea" ||
+    value === "planned" ||
+    value === "in_progress" ||
+    value === "done" ||
+    value === "blocked"
+  ) {
+    return value;
+  }
+  return kind === "task" || kind === "milestone" ? "planned" : "idea";
+}
+
+function normalizePriority(value: unknown): CanvasPriority | null {
+  return value === "critical" ||
+    value === "high" ||
+    value === "medium" ||
+    value === "low"
+    ? value
+    : null;
+}
+
 function normalizeNode(value: unknown, boardId: string): CanvasNode | null {
   if (!value || typeof value !== "object") return null;
   const raw = value as Partial<CanvasNode>;
   if (typeof raw.id !== "string") return null;
   const now = new Date().toISOString();
   const kind = normalizeNodeKind(raw.kind);
+  const minHeight =
+    kind === "sticky" || kind === "note"
+      ? 170
+      : kind === "idea" || kind === "task"
+        ? 140
+        : kind === "milestone"
+          ? 130
+          : 72;
   return {
     id: raw.id,
     board_id: boardId,
@@ -93,9 +126,12 @@ function normalizeNode(value: unknown, boardId: string): CanvasNode | null {
     x: safeNumber(raw.x, 0),
     y: safeNumber(raw.y, 0),
     width: Math.max(140, safeNumber(raw.width, 220)),
-    height: Math.max(72, safeNumber(raw.height, 110)),
+    height: Math.max(minHeight, safeNumber(raw.height, minHeight)),
     title: typeof raw.title === "string" ? raw.title : "فكرة جديدة",
     description: typeof raw.description === "string" ? raw.description : null,
+    status: normalizeNodeStatus(raw.status, kind),
+    priority: normalizePriority(raw.priority),
+    progress: Math.min(100, Math.max(0, safeNumber(raw.progress, raw.status === "done" ? 100 : 0))),
     asset_id: typeof raw.asset_id === "string" ? raw.asset_id : null,
     style: normalizeNodeStyle(raw.style, kind),
     created_at: typeof raw.created_at === "string" ? raw.created_at : now,
@@ -241,16 +277,16 @@ export function createCanvasNode(
   const now = new Date().toISOString();
   const size =
     kind === "milestone"
-      ? { width: 180, height: 100 }
+      ? { width: 180, height: 130 }
       : kind === "sticky" || kind === "note"
-        ? { width: 210, height: 170 }
+        ? { width: 210, height: 180 }
         : kind === "text"
           ? { width: 260, height: 80 }
           : kind === "image"
             ? { width: 320, height: 220 }
             : kind === "rectangle" || kind === "ellipse"
               ? { width: 220, height: 140 }
-            : { width: 220, height: 110 };
+            : { width: 220, height: kind === "idea" || kind === "task" ? 140 : 110 };
   const title =
     kind === "task"
       ? "مهمة جديدة"
@@ -277,6 +313,9 @@ export function createCanvasNode(
     height: size.height,
     title,
     description: null,
+    status: kind === "task" || kind === "milestone" ? "planned" : "idea",
+    priority: null,
+    progress: 0,
     asset_id: null,
     style: defaultNodeStyle(kind),
     created_at: now,

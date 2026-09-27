@@ -29,6 +29,8 @@ export type CanvasEdgeKind = "relationship" | "dependency";
 export type CanvasStrokeTool = "pen" | "highlighter";
 export type CanvasColor = "ink" | "brand" | "warning" | "info" | "danger" | "success";
 export type CanvasTextAlign = "start" | "center" | "end";
+export type CanvasNodeStatus = "idea" | "planned" | "in_progress" | "done" | "blocked";
+export type CanvasPriority = "critical" | "high" | "medium" | "low";
 
 export interface CanvasNodeStyle {
   fill: CanvasColor | "transparent";
@@ -125,6 +127,10 @@ export interface CanvasNode {
   height: number;
   title: string;
   description: string | null;
+  status: CanvasNodeStatus;
+  priority: CanvasPriority | null;
+  /** نسبة الإنجاز من 0 إلى 100. */
+  progress: number;
   /** مرجع ملف الصورة في مخزن الأصول المحلي/Storage المستقبلي. */
   asset_id: string | null;
   style: CanvasNodeStyle;
