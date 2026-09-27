@@ -43,6 +43,8 @@ import type {
   CanvasColor,
   CanvasEdge,
   CanvasNode,
+  CanvasNodeStatus,
+  CanvasPriority,
   CanvasStroke,
   CanvasViewport,
 } from "@/types";
@@ -110,6 +112,47 @@ function snap(value: number, enabled: boolean) {
 
 function canvasColorVar(color: CanvasColor) {
   return `var(--${color})`;
+}
+
+
+const NODE_STATUS_OPTIONS: Array<{ value: CanvasNodeStatus; label: string }> = [
+  { value: "idea", label: "فكرة" },
+  { value: "planned", label: "مخطط" },
+  { value: "in_progress", label: "قيد التنفيذ" },
+  { value: "done", label: "مكتمل" },
+  { value: "blocked", label: "معطل" },
+];
+
+const PRIORITY_OPTIONS: Array<{ value: CanvasPriority; label: string }> = [
+  { value: "critical", label: "حرجة" },
+  { value: "high", label: "عالية" },
+  { value: "medium", label: "متوسطة" },
+  { value: "low", label: "منخفضة" },
+];
+
+function isSemanticNode(node: CanvasNode) {
+  return (
+    node.kind === "idea" ||
+    node.kind === "task" ||
+    node.kind === "milestone" ||
+    node.kind === "note" ||
+    node.kind === "sticky"
+  );
+}
+
+function statusClass(status: CanvasNodeStatus) {
+  if (status === "done") return "bg-success/15 text-success";
+  if (status === "blocked") return "bg-danger/15 text-danger";
+  if (status === "in_progress") return "bg-brand/15 text-brand";
+  if (status === "planned") return "bg-info/15 text-info";
+  return "bg-muted text-muted-foreground";
+}
+
+function priorityClass(priority: CanvasPriority) {
+  if (priority === "critical") return "bg-danger/15 text-danger";
+  if (priority === "high") return "bg-warning/15 text-warning";
+  if (priority === "medium") return "bg-info/15 text-info";
+  return "bg-success/15 text-success";
 }
 
 const DRAWING_COLORS: Array<{ value: CanvasColor; label: string }> = [
@@ -1497,6 +1540,32 @@ function CanvasNodeCard({
           )}
         </>
       )}
+      {isSemanticNode(node) && (
+        <div className="mt-3 space-y-2">
+          <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+            <span className={cn("rounded-full px-2 py-0.5 font-medium", statusClass(node.status))}>
+              {NODE_STATUS_OPTIONS.find((item) => item.value === node.status)?.label}
+            </span>
+            {node.priority && (
+              <span className={cn("rounded-full px-2 py-0.5 font-medium", priorityClass(node.priority))}>
+                {PRIORITY_OPTIONS.find((item) => item.value === node.priority)?.label}
+              </span>
+            )}
+            {(node.progress > 0 || node.status === "in_progress" || node.status === "done") && (
+              <span className="ms-auto text-muted-foreground">{Math.round(node.progress)}%</span>
+            )}
+          </div>
+          {(node.progress > 0 || node.status === "in_progress" || node.status === "done") && (
+            <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-brand transition-[width]"
+                style={{ width: `${Math.max(0, Math.min(100, node.progress))}%` }}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
       {selected && (
         <button
           type="button"
@@ -1664,6 +1733,91 @@ function NodeInspector({
             ))}
           </div>
         </div>
+        {isSemanticNode(node) && (
+          <div className="space-y-4 rounded-2xl border border-border bg-muted/30 p-3">
+            <div>
+              <span className="mb-2 block text-xs text-muted-foreground">الحالة</span>
+              <div className="flex flex-wrap gap-1.5">
+                {NODE_STATUS_OPTIONS.map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() =>
+                      onChange({
+                        status: item.value,
+                        ...(item.value === "done" ? { progress: 100 } : {}),
+                      })
+                    }
+                    className={cn(
+                      "rounded-full border px-2.5 py-1 text-xs transition",
+                      node.status === item.value
+                        ? "border-brand bg-brand/10 text-brand"
+                        : "border-border text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <span className="mb-2 block text-xs text-muted-foreground">الأولوية</span>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => onChange({ priority: null })}
+                  className={cn(
+                    "rounded-full border px-2.5 py-1 text-xs",
+                    node.priority === null
+                      ? "border-brand bg-brand/10 text-brand"
+                      : "border-border text-muted-foreground",
+                  )}
+                >
+                  بدون
+                </button>
+                {PRIORITY_OPTIONS.map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => onChange({ priority: item.value })}
+                    className={cn(
+                      "rounded-full border px-2.5 py-1 text-xs",
+                      node.priority === item.value
+                        ? "border-brand bg-brand/10 text-brand"
+                        : "border-border text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <label className="block">
+              <span className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
+                <span>نسبة الإنجاز</span>
+                <span>{Math.round(node.progress)}%</span>
+              </span>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={5}
+                value={node.progress}
+                onChange={(event) => {
+                  const progress = Number(event.target.value);
+                  onChange({
+                    progress,
+                    ...(progress === 100 ? { status: "done" as const } : {}),
+                  });
+                }}
+                className="w-full accent-[var(--brand)]"
+              />
+            </label>
+          </div>
+        )}
+
         {node.kind !== "image" && (
         <div className="space-y-3 rounded-2xl border border-border bg-muted/30 p-3">
           <div>
