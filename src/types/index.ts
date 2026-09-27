@@ -15,9 +15,26 @@ export type BoardType =
 
 export type AccentColor = "brand" | "amber" | "sky" | "rose" | "violet" | "lime";
 
-export type CanvasNodeKind = "idea" | "task" | "milestone" | "note";
+export type CanvasNodeKind =
+  | "idea"
+  | "task"
+  | "milestone"
+  | "note"
+  | "sticky"
+  | "text"
+  | "rectangle"
+  | "ellipse";
 export type CanvasEdgeKind = "relationship" | "dependency";
 export type CanvasStrokeTool = "pen" | "highlighter";
+export type CanvasColor = "ink" | "brand" | "warning" | "info" | "danger" | "success";
+export type CanvasTextAlign = "start" | "center" | "end";
+
+export interface CanvasNodeStyle {
+  fill: CanvasColor | "transparent";
+  stroke: CanvasColor;
+  font_size: number;
+  text_align: CanvasTextAlign;
+}
 
 export interface CanvasPoint {
   x: number;
@@ -32,6 +49,7 @@ export interface CanvasStroke {
   tool: CanvasStrokeTool;
   points: CanvasPoint[];
   size: number;
+  color: CanvasColor;
   created_at: string;
   updated_at: string;
 }
@@ -106,6 +124,7 @@ export interface CanvasNode {
   height: number;
   title: string;
   description: string | null;
+  style: CanvasNodeStyle;
   created_at: string;
   updated_at: string;
 }
