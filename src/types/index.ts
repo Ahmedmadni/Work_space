@@ -49,6 +49,8 @@ export interface CanvasPoint {
 export interface CanvasStroke {
   id: string;
   board_id: string;
+  /** Server-side optimistic concurrency version. Older backups may omit it. */
+  version?: number;
   tool: CanvasStrokeTool;
   points: CanvasPoint[];
   size: number;
@@ -120,6 +122,8 @@ export interface Board {
 export interface CanvasNode {
   id: string;
   board_id: string;
+  /** Server-side optimistic concurrency version. Older backups may omit it. */
+  version?: number;
   kind: CanvasNodeKind;
   x: number;
   y: number;
@@ -149,6 +153,8 @@ export interface CanvasNode {
 export interface CanvasEdge {
   id: string;
   board_id: string;
+  /** Server-side optimistic concurrency version. Older backups may omit it. */
+  version?: number;
   source_node_id: string;
   target_node_id: string;
   kind: CanvasEdgeKind;
@@ -165,6 +171,8 @@ export interface CanvasViewport {
 
 export interface BoardCanvasSnapshot {
   board_id: string;
+  /** Monotonic board revision used to order collaboration events. */
+  revision?: number;
   nodes: CanvasNode[];
   edges: CanvasEdge[];
   strokes: CanvasStroke[];
