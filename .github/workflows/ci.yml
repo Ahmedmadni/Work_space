@@ -29,4 +29,5 @@ jobs:
         run: bun run build
 
       - name: Functional lint
-        run: bunx eslint . --rule 'prettier/prettier: off'
+        run: |
+          bunx eslint . --rule 'prettier/prettier: 0'
