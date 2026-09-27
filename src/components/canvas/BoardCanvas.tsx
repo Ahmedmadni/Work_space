@@ -10,9 +10,11 @@ import {
 import {
   CheckCircle2,
   Circle,
+  Columns3,
   Copy,
   Hand,
   Link2,
+  ListTree,
   Maximize,
   Milestone,
   MousePointer2,
@@ -48,6 +50,8 @@ import type {
   CanvasStroke,
   CanvasViewport,
 } from "@/types";
+
+type ViewMode = "canvas" | "kanban" | "outline";
 
 type Tool =
   | "select"
@@ -169,6 +173,7 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
   const saveCanvas = useSaveBoardCanvas(boardId);
 
   const [snapshot, setSnapshot] = useState<BoardCanvasSnapshot | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>("canvas");
   const [tool, setTool] = useState<Tool>("select");
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
@@ -688,6 +693,9 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
 
   return (
     <div className="relative flex flex-1 overflow-hidden">
+      <ViewSwitcher value={viewMode} onChange={setViewMode} />
+
+      {viewMode === "canvas" && (
       <CanvasToolbar
         tool={tool}
         snapToGrid={snapToGrid}
@@ -701,8 +709,9 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
         }}
         onToggleSnap={() => setSnapToGrid((value) => !value)}
       />
+      )}
 
-      {(tool === "pen" || tool === "highlighter") && (
+      {viewMode === "canvas" && (tool === "pen" || tool === "highlighter") && (
         <DrawingControls
           tool={tool}
           size={tool === "highlighter" ? highlighterSize : penSize}
@@ -728,6 +737,7 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
         }}
       />
 
+      {viewMode === "canvas" ? (
       <div
         ref={canvasRef}
         className={cn(
@@ -1045,8 +1055,41 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
           onRedo={redo}
         />
       </div>
+      ) : viewMode === "kanban" ? (
+        <KanbanView
+          snapshot={snapshot}
+          onOpen={(nodeId) => {
+            setSelectedNodeIds([nodeId]);
+            setSelectedEdgeId(null);
+            setViewMode("canvas");
+          }}
+          onStatusChange={(nodeId, status) => {
+            const node = snapshot.nodes.find((item) => item.id === nodeId);
+            if (!node) return;
+            updateNode(nodeId, {
+              status,
+              ...(status === "done" ? { progress: 100 } : {}),
+            });
+          }}
+        />
+      ) : (
+        <OutlineView
+          snapshot={snapshot}
+          onOpen={(nodeId) => {
+            setSelectedNodeIds([nodeId]);
+            setSelectedEdgeId(null);
+            setViewMode("canvas");
+          }}
+          onStatusChange={(nodeId, status) => {
+            updateNode(nodeId, {
+              status,
+              ...(status === "done" ? { progress: 100 } : {}),
+            });
+          }}
+        />
+      )}
 
-      {(selectedNodeIds.length > 0 || selectedEdgeId) && (
+      {viewMode === "canvas" && (selectedNodeIds.length > 0 || selectedEdgeId) && (
         <div className="frost-strong absolute end-3 top-3 z-30 flex items-center gap-1 rounded-xl p-1 lg:hidden">
           {selectedNodeIds.length > 0 && (
             <button
@@ -1069,6 +1112,7 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
         </div>
       )}
 
+      {viewMode === "canvas" && (
       <CanvasInspector
         selectedNode={selectedNode}
         selectedNodesCount={selectedNodes.length}
@@ -1080,8 +1124,9 @@ export function BoardCanvas({ boardId }: { boardId: string }) {
         onDelete={deleteSelection}
         onDuplicate={duplicateSelection}
       />
+      )}
 
-      {contextMenu && (
+      {viewMode === "canvas" && contextMenu && (
         <CanvasContextMenu
           state={contextMenu}
           hasSelection={selectedNodeIds.length > 0 || !!selectedEdgeId}
