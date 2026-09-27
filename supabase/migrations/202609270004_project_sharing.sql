@@ -16,6 +16,20 @@ create index if not exists project_invitations_email_idx
   on public.project_invitations(email_normalized)
   where accepted_at is null and revoked_at is null;
 
+-- Normalize historical memberships so the project creator is the only Owner.
+update public.project_members pm
+set role = 'admin'
+from public.projects p
+where p.id = pm.project_id
+  and pm.role = 'owner'
+  and pm.user_id <> p.created_by;
+
+insert into public.project_members (project_id, user_id, role, created_at)
+select p.id, p.created_by, 'owner', p.created_at
+from public.projects p
+on conflict (project_id, user_id) do update
+set role = 'owner';
+
 alter table public.project_invitations enable row level security;
 
 create or replace function public.project_current_role(p_project_id text)
