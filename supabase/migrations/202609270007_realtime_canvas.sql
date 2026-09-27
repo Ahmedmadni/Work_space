@@ -416,6 +416,29 @@ begin
       end if;
 
     elsif v_op = 'edge_create' then
+      if not exists (
+        select 1
+        from public.canvas_nodes n
+        where n.id = v_entity->>'source_node_id'
+          and n.board_id = p_board_id
+      ) or not exists (
+        select 1
+        from public.canvas_nodes n
+        where n.id = v_entity->>'target_node_id'
+          and n.board_id = p_board_id
+      ) then
+        v_conflicts := v_conflicts || jsonb_build_array(
+          jsonb_build_object(
+            'entity_type', 'edge',
+            'id', v_entity->>'id',
+            'reason', 'missing',
+            'expected_version', null,
+            'actual_version', null
+          )
+        );
+        continue;
+      end if;
+
       insert into public.canvas_edges (
         id, board_id, source_node_id, target_node_id,
         kind, label, version, created_at, updated_at
@@ -454,6 +477,34 @@ begin
       end if;
 
     elsif v_op = 'edge_update' then
+      if not exists (
+        select 1
+        from public.canvas_nodes n
+        where n.id = v_entity->>'source_node_id'
+          and n.board_id = p_board_id
+      ) or not exists (
+        select 1
+        from public.canvas_nodes n
+        where n.id = v_entity->>'target_node_id'
+          and n.board_id = p_board_id
+      ) then
+        select version into v_actual_version
+        from public.canvas_edges
+        where id = v_id
+          and board_id = p_board_id;
+
+        v_conflicts := v_conflicts || jsonb_build_array(
+          jsonb_build_object(
+            'entity_type', 'edge',
+            'id', v_id,
+            'reason', 'missing',
+            'expected_version', v_expected_version,
+            'actual_version', v_actual_version
+          )
+        );
+        continue;
+      end if;
+
       update public.canvas_edges
       set
         source_node_id = coalesce(v_entity->>'source_node_id', source_node_id),
@@ -828,7 +879,11 @@ $projectflow$;
 -- Expose collaboration-event inserts through Supabase Realtime Postgres Changes.
 do $projectflow$
 begin
-  if not exists (
+  if exists (
+    select 1
+    from pg_publication
+    where pubname = 'supabase_realtime'
+  ) and not exists (
     select 1
     from pg_publication_tables
     where pubname = 'supabase_realtime'
