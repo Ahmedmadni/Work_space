@@ -287,6 +287,7 @@ begin
           from public.project_members pm
           where pm.project_id = p_project_id
             and pm.user_id = p_assignee_user_id
+            and pm.role in ('owner','admin','editor')
         )
       )
   ) then
@@ -914,3 +915,88 @@ for each row
 execute function public.cleanup_deleted_node_execution();
 
 revoke all on function public.cleanup_deleted_node_execution() from public;
+
+
+create or replace function public.cleanup_removed_project_member_execution()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $projectflow$
+declare
+  v_board record;
+  v_revision bigint;
+  v_node_ids jsonb;
+begin
+  delete from public.canvas_node_watchers w
+  using public.boards b
+  where w.board_id = b.id
+    and b.project_id = old.project_id
+    and w.user_id = old.user_id;
+
+  for v_board in
+    select
+      b.id as board_id,
+      coalesce(
+        jsonb_agg(a.node_id order by a.node_id)
+          filter (where a.node_id is not null),
+        '[]'::jsonb
+      ) as node_ids
+    from public.boards b
+    left join public.canvas_node_assignments a
+      on a.board_id = b.id
+      and a.assignee_user_id = old.user_id
+    where b.project_id = old.project_id
+    group by b.id
+  loop
+    v_node_ids := v_board.node_ids;
+    if jsonb_array_length(v_node_ids) = 0 then
+      continue;
+    end if;
+
+    delete from public.canvas_node_assignments
+    where board_id = v_board.board_id
+      and assignee_user_id = old.user_id;
+
+    update public.boards
+    set
+      canvas_revision = canvas_revision + 1,
+      updated_at = now()
+    where id = v_board.board_id
+    returning canvas_revision into v_revision;
+
+    insert into public.board_collaboration_events (
+      board_id,
+      revision,
+      actor_user_id,
+      client_id,
+      operations
+    )
+    values (
+      v_board.board_id,
+      v_revision,
+      auth.uid(),
+      gen_random_uuid(),
+      jsonb_build_array(
+        jsonb_build_object(
+          'op', 'task_member_removed',
+          'user_id', old.user_id,
+          'node_ids', v_node_ids
+        )
+      )
+    );
+  end loop;
+
+  return old;
+end;
+$projectflow$;
+
+drop trigger if exists project_members_cleanup_execution
+  on public.project_members;
+create trigger project_members_cleanup_execution
+after delete on public.project_members
+for each row
+execute function public.cleanup_removed_project_member_execution();
+
+revoke all on function public.cleanup_removed_project_member_execution()
+  from public;
