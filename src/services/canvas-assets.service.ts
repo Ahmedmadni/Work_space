@@ -1,3 +1,5 @@
+import type { CanvasBackupAsset } from "@/types";
+
 const DB_NAME = "projectflow-assets";
 const DB_VERSION = 1;
 const STORE_NAME = "assets";
@@ -78,6 +80,104 @@ export async function saveCanvasImage(
   await done;
   db.close();
   return record;
+}
+
+export async function listBoardAssets(boardId: string): Promise<CanvasAssetRecord[]> {
+  const db = await openDb();
+  const transaction = db.transaction(STORE_NAME, "readonly");
+  const store = transaction.objectStore(STORE_NAME);
+  const index = store.index(BOARD_INDEX);
+
+  const rows = await new Promise<CanvasAssetRecord[]>((resolve, reject) => {
+    const request = index.getAll(IDBKeyRange.only(boardId));
+    request.onsuccess = () => resolve((request.result as CanvasAssetRecord[] | undefined) ?? []);
+    request.onerror = () => reject(request.error ?? new Error("Failed to list board assets"));
+  });
+
+  db.close();
+  return rows;
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () =>
+      typeof reader.result === "string"
+        ? resolve(reader.result)
+        : reject(new Error("Failed to encode asset"));
+    reader.onerror = () => reject(reader.error ?? new Error("Failed to encode asset"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+export async function exportBoardAssets(boardId: string): Promise<CanvasBackupAsset[]> {
+  const records = await listBoardAssets(boardId);
+  return Promise.all(
+    records.map(async (record) => ({
+      id: record.id,
+      name: record.name,
+      mime_type: record.mime_type,
+      size: record.size,
+      data_url: await blobToDataUrl(record.blob),
+      created_at: record.created_at,
+    })),
+  );
+}
+
+export async function importBoardAssets(
+  boardId: string,
+  assets: CanvasBackupAsset[],
+): Promise<Map<string, string>> {
+  const idMap = new Map<string, string>();
+  if (!assets.length) return idMap;
+
+  const prepared: Array<{ oldId: string; record: CanvasAssetRecord }> = [];
+  for (const asset of assets) {
+    if (
+      !asset ||
+      typeof asset.id !== "string" ||
+      typeof asset.data_url !== "string" ||
+      !asset.data_url.startsWith("data:image/")
+    ) {
+      continue;
+    }
+    const response = await fetch(asset.data_url);
+    const blob = await response.blob();
+    if (!blob.type.startsWith("image/") || blob.size > MAX_IMAGE_BYTES) continue;
+
+    const newId = `asset-${crypto.randomUUID()}`;
+    prepared.push({
+      oldId: asset.id,
+      record: {
+        id: newId,
+        board_id: boardId,
+        name: typeof asset.name === "string" && asset.name ? asset.name.slice(0, 180) : "image",
+        mime_type: blob.type,
+        size: blob.size,
+        blob,
+        created_at:
+          typeof asset.created_at === "string" ? asset.created_at : new Date().toISOString(),
+      },
+    });
+  }
+
+  if (!prepared.length) return idMap;
+
+  const db = await openDb();
+  const transaction = db.transaction(STORE_NAME, "readwrite");
+  const done = txDone(transaction);
+  const store = transaction.objectStore(STORE_NAME);
+  try {
+    for (const item of prepared) {
+      store.put(item.record);
+      idMap.set(item.oldId, item.record.id);
+    }
+    await done;
+  } finally {
+    db.close();
+  }
+
+  return idMap;
 }
 
 export async function getCanvasAsset(id: string): Promise<CanvasAssetRecord | null> {

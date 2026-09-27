@@ -21,6 +21,7 @@ import {
   MousePointer2,
   Pencil,
   Highlighter,
+  History,
   Eraser,
   Filter,
   Image as ImageIcon,
@@ -43,6 +44,7 @@ import {
 
 import { toast } from "sonner";
 
+import { BoardHistoryPanel } from "@/components/canvas/BoardHistoryPanel";
 import { useBoardCanvas, useSaveBoardCanvas } from "@/hooks/use-canvas";
 import { createCanvasEdge, createCanvasNode } from "@/services/canvas.service";
 import { getCanvasAsset, saveCanvasImage } from "@/services/canvas-assets.service";
@@ -288,6 +290,7 @@ export function BoardCanvas({
   const [priorityFilter, setPriorityFilter] = useState<"all" | "none" | CanvasPriority>("all");
   const [ownerFilter, setOwnerFilter] = useState("all");
   const [tagFilter, setTagFilter] = useState("all");
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
@@ -932,6 +935,15 @@ export function BoardCanvas({
   return (
     <div className="relative flex flex-1 overflow-hidden">
       <ViewSwitcher value={viewMode} onChange={setViewMode} />
+      <button
+        type="button"
+        onClick={() => setHistoryOpen(true)}
+        aria-label="سجل الإصدارات والنسخ الاحتياطي"
+        title="سجل الإصدارات"
+        className="frost-strong absolute end-3 top-3 z-50 grid h-10 w-10 place-items-center rounded-xl text-muted-foreground shadow-frost hover:text-brand"
+      >
+        <History className="h-4 w-4" />
+      </button>
       <BoardFilterBar
         query={searchQuery}
         status={statusFilter}
@@ -987,6 +999,24 @@ export function BoardCanvas({
         />
       )}
 
+
+      <BoardHistoryPanel
+        boardId={boardId}
+        snapshot={snapshot}
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        onReplaceSnapshot={(nextSnapshot) => {
+          setSnapshot(cloneSnapshot(nextSnapshot));
+          setSelectedNodeIds([]);
+          setSelectedEdgeId(null);
+          setConnectorSourceId(null);
+          setContextMenu(null);
+          past.current = [];
+          future.current = [];
+          setHistoryVersion((value) => value + 1);
+          setSaveState("saved");
+        }}
+      />
 
       <input
         ref={imageInputRef}

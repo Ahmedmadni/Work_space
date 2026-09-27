@@ -172,6 +172,38 @@ export interface BoardCanvasSnapshot {
   updated_at: string | null;
 }
 
+export type CanvasVersionReason = "auto" | "manual" | "before_restore" | "import";
+
+export interface CanvasBoardVersion {
+  id: string;
+  board_id: string;
+  reason: CanvasVersionReason;
+  label: string | null;
+  created_at: string;
+  node_count: number;
+  edge_count: number;
+  stroke_count: number;
+  snapshot: BoardCanvasSnapshot;
+}
+
+export interface CanvasBackupAsset {
+  id: string;
+  name: string;
+  mime_type: string;
+  size: number;
+  data_url: string;
+  created_at: string;
+}
+
+export interface CanvasBoardBackup {
+  schema: "projectflow.canvas.backup";
+  version: 1;
+  exported_at: string;
+  board_id: string;
+  snapshot: BoardCanvasSnapshot;
+  assets: CanvasBackupAsset[];
+}
+
 export interface CanvasNodeSearchFilters {
   query?: string;
   status?: CanvasNodeStatus | null;
