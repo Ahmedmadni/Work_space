@@ -802,7 +802,7 @@ begin
       ),
       nullif(n->>'asset_id',''),
       coalesce(n->'style', '{}'::jsonb),
-      greatest(1, coalesce((n->>'version')::bigint, 1)),
+      v_revision + 1,
       coalesce(nullif(n->>'created_at','')::timestamptz, now()),
       now()
     );
@@ -822,7 +822,7 @@ begin
       e->>'target_node_id',
       coalesce(nullif(e->>'kind',''), 'relationship'),
       nullif(e->>'label',''),
-      greatest(1, coalesce((e->>'version')::bigint, 1)),
+      v_revision + 1,
       coalesce(nullif(e->>'created_at','')::timestamptz, now()),
       now()
     );
@@ -842,7 +842,7 @@ begin
       coalesce(s->'points', '[]'::jsonb),
       least(48, greatest(0.1, coalesce((s->>'size')::double precision, 3))),
       coalesce(nullif(s->>'color',''), 'ink'),
-      greatest(1, coalesce((s->>'version')::bigint, 1)),
+      v_revision + 1,
       coalesce(nullif(s->>'created_at','')::timestamptz, now()),
       now()
     );
