@@ -85,18 +85,21 @@ export function ProjectWorkbench({
   const documents = documentsQuery.data ?? [];
 
   useEffect(() => {
-    const validIds = new Set(documents.map((document) => document.id));
-    setOpenDocumentIds((current) =>
-      current.filter((id) => validIds.has(id)),
+    if (!documentsQuery.isSuccess) return;
+    const validIds = new Set(
+      (documentsQuery.data ?? []).map((document) => document.id),
     );
-    if (
-      activeTab !== "board" &&
-      documentsQuery.isSuccess &&
-      !validIds.has(activeTab)
-    ) {
+    setOpenDocumentIds((current) => {
+      const next = current.filter((id) => validIds.has(id));
+      return next.length === current.length &&
+        next.every((id, index) => id === current[index])
+        ? current
+        : next;
+    });
+    if (activeTab !== "board" && !validIds.has(activeTab)) {
       setActiveTab("board");
     }
-  }, [documents, documentsQuery.isSuccess, activeTab]);
+  }, [documentsQuery.data, documentsQuery.isSuccess, activeTab]);
 
   useEffect(() => {
     try {
