@@ -73,6 +73,7 @@ function activityLabel(item: ProjectActivity) {
     task_status_changed: "غيّر حالة مهمة",
     task_due_changed: "غيّر تاريخ استحقاق مهمة",
     task_priority_changed: "غيّر أولوية مهمة",
+    task_schedule_changed: "غيّر الجدول الزمني لمهمة",
     automation_enabled: "فعّل قاعدة أتمتة",
     automation_disabled: "أوقف قاعدة أتمتة",
     automation_task_status_changed: "غيّرت الأتمتة حالة مهمة",
