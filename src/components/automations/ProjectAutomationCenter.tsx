@@ -6,9 +6,12 @@ import {
   CheckCircle2,
   Clock3,
   GitBranch,
+  HeartPulse,
   History,
   Play,
   RefreshCw,
+  RotateCcw,
+  ServerCog,
   ShieldAlert,
   Sparkles,
   WandSparkles,
@@ -18,10 +21,13 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   useAutomationHeartbeat,
+  useProjectAutomationHealth,
   useProjectAutomationRules,
   useProjectAutomationRuns,
   useRefreshProjectAutomations,
+  useRetryProjectAutomationRun,
   useSetProjectAutomationEnabled,
+  useTestProjectAutomationRule,
   useUpdateProjectAutomationConfig,
 } from "@/hooks/use-automations";
 import { relativeTime } from "@/lib/format";
@@ -56,13 +62,13 @@ const RULE_META: Record<
     icon: CalendarClock,
     description:
       "يرسل تنبيهًا للمسؤول والمتابعين قبل تاريخ الاستحقاق بالمدة التي تحددها.",
-    timing: "فحص دوري أثناء نشاط التطبيق",
+    timing: "كل دقيقة من الخادم عند توفر Scheduler 24/7",
   },
   overdue_escalate_managers: {
     icon: AlertTriangle,
     description:
       "يصعّد المهمة المتأخرة إلى إدارة المشروع بعد عدد الأيام المحدد، بحد أقصى مرة واحدة يوميًا.",
-    timing: "فحص دوري أثناء نشاط التطبيق",
+    timing: "كل دقيقة من الخادم عند توفر Scheduler 24/7",
   },
   dependency_ready_set_planned: {
     icon: WandSparkles,
@@ -97,6 +103,7 @@ function AutomationRuleCard({
 }) {
   const setEnabled = useSetProjectAutomationEnabled(projectId);
   const updateConfig = useUpdateProjectAutomationConfig(projectId);
+  const testRule = useTestProjectAutomationRule(projectId);
   const meta = RULE_META[rule.kind];
   const Icon = meta.icon;
   const configuredDays = readDays(rule);
@@ -107,6 +114,11 @@ function AutomationRuleCard({
   useEffect(() => {
     setDays(configuredDays === null ? "" : String(configuredDays));
   }, [configuredDays]);
+
+  const testedFresh =
+    !!rule.last_tested_at &&
+    (rule.enabled ||
+      Date.parse(rule.last_tested_at) >= Date.parse(rule.updated_at));
 
   const saveDays = () => {
     if (configuredDays === null || !canManage) return;
@@ -169,7 +181,11 @@ function AutomationRuleCard({
 
             <button
               type="button"
-              disabled={!canManage || setEnabled.isPending}
+              disabled={
+                !canManage ||
+                setEnabled.isPending ||
+                (!rule.enabled && !testedFresh)
+              }
               onClick={() =>
                 setEnabled.mutate({
                   ruleId: rule.id,
@@ -186,11 +202,13 @@ function AutomationRuleCard({
                 rule.enabled ? "إيقاف الأتمتة" : "تشغيل الأتمتة"
               }
               title={
-                canManage
-                  ? rule.enabled
-                    ? "إيقاف"
-                    : "تشغيل"
-                  : "يتطلب صلاحية إدارة المشروع"
+                !canManage
+                  ? "يتطلب صلاحية إدارة المشروع"
+                  : !rule.enabled && !testedFresh
+                    ? "شغّل اختبار القاعدة أولًا"
+                    : rule.enabled
+                      ? "إيقاف"
+                      : "تشغيل"
               }
             >
               <span
@@ -220,7 +238,71 @@ function AutomationRuleCard({
             {rule.last_run_at && (
               <span>آخر تشغيل {relativeTime(rule.last_run_at)}</span>
             )}
+            {rule.last_tested_at && (
+              <span
+                className={
+                  testedFresh
+                    ? "text-success"
+                    : "text-warning"
+                }
+              >
+                {testedFresh ? "مختبرة" : "تحتاج إعادة اختبار"} ·{" "}
+                {relativeTime(rule.last_tested_at)}
+              </span>
+            )}
           </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={!canManage || testRule.isPending}
+              onClick={() => testRule.mutate(rule.id)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-[10px] font-medium hover:bg-muted disabled:opacity-50"
+            >
+              {testRule.isPending ? (
+                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Play className="h-3.5 w-3.5" />
+              )}
+              اختبار القاعدة
+            </button>
+            {!rule.enabled && !testedFresh && canManage && (
+              <span className="text-[9px] text-warning">
+                الاختبار مطلوب قبل التفعيل.
+              </span>
+            )}
+          </div>
+
+          {testRule.data?.rule_id === rule.id && (
+            <div className="mt-3 rounded-xl border border-info/20 bg-info/5 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[10px] font-semibold text-info">
+                  معاينة بدون تنفيذ
+                </p>
+                <span className="text-[10px] text-muted-foreground">
+                  {testRule.data.candidate_count} عنصر مطابق
+                </span>
+              </div>
+              {!!testRule.data.sample.length && (
+                <div className="mt-2 space-y-1">
+                  {testRule.data.sample.slice(0, 3).map((item, index) => (
+                    <p
+                      key={String(item.node_id ?? index)}
+                      className="truncate text-[9px] text-muted-foreground"
+                    >
+                      •{" "}
+                      {typeof item.title === "string"
+                        ? item.title
+                        : "عنصر"}
+                      {typeof item.recipient_count === "number"
+                        ? ` · ${item.recipient_count} مستلم`
+                        : ""}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {configuredDays !== null && (
             <div className="mt-3 flex flex-wrap items-end gap-2 rounded-xl bg-muted/35 p-3">
@@ -294,7 +376,9 @@ export function ProjectAutomationCenter({
 }) {
   const rules = useProjectAutomationRules(projectId);
   const runs = useProjectAutomationRuns(projectId, true);
+  const health = useProjectAutomationHealth(projectId);
   const refresh = useRefreshProjectAutomations(projectId);
+  const retryRun = useRetryProjectAutomationRun(projectId);
   const available = workflowAutomationsAvailable();
   const [historyOpen, setHistoryOpen] = useState(true);
 
@@ -311,7 +395,9 @@ export function ProjectAutomationCenter({
 
   useAutomationHeartbeat(
     projectId,
-    available && scheduledEnabled,
+    available &&
+      scheduledEnabled &&
+      health.data?.scheduler_mode !== "pg_cron",
   );
 
   return (
@@ -350,9 +436,81 @@ export function ProjectAutomationCenter({
         )}
 
         {available && (
-          <div className="mt-3 flex items-center gap-2 rounded-xl bg-muted/35 px-3 py-2 text-[10px] text-muted-foreground">
-            <Bot className="h-3.5 w-3.5 text-brand" />
-            القواعد الحدثية تعمل فورًا. قواعد الوقت تُفحص كل دقيقة أثناء نشاط المشروع وكذلك من مركز الإشعارات.
+          <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+            <div
+              className={
+                health.data?.scheduler_mode === "pg_cron"
+                  ? "rounded-xl border border-success/20 bg-success/5 p-3"
+                  : "rounded-xl border border-warning/20 bg-warning/5 p-3"
+              }
+            >
+              <div className="flex items-center gap-2">
+                <ServerCog
+                  className={
+                    health.data?.scheduler_mode === "pg_cron"
+                      ? "h-4 w-4 text-success"
+                      : "h-4 w-4 text-warning"
+                  }
+                />
+                <span className="text-xs font-semibold">
+                  {health.data?.scheduler_mode === "pg_cron"
+                    ? "Scheduler 24/7 فعال"
+                    : "Active-app fallback"}
+                </span>
+              </div>
+              <p className="mt-1 text-[9px] leading-4 text-muted-foreground">
+                {health.data?.scheduler_mode === "pg_cron"
+                  ? "القواعد الزمنية تعمل من قاعدة البيانات حتى بدون مستخدمين متصلين."
+                  : "القواعد الزمنية تعمل أثناء نشاط التطبيق؛ Health سيعرض سبب عدم تفعيل pg_cron إن وجد."}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-border bg-muted/20 p-3">
+              <div className="flex items-center gap-2">
+                <HeartPulse className="h-4 w-4 text-brand" />
+                <span className="text-xs font-semibold">آخر نبضة</span>
+              </div>
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                {health.data?.last_success_at
+                  ? relativeTime(health.data.last_success_at)
+                  : "لم تسجل بعد"}
+                {typeof health.data?.last_duration_ms === "number"
+                  ? ` · ${health.data.last_duration_ms}ms`
+                  : ""}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-border bg-muted/20 p-3">
+              <div className="flex items-center gap-2">
+                <RotateCcw className="h-4 w-4 text-info" />
+                <span className="text-xs font-semibold">Retry Queue</span>
+              </div>
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                {health.data?.retrying_runs ?? 0} بانتظار إعادة المحاولة ·{" "}
+                {health.data?.exhausted_runs ?? 0} تحتاج تدخلًا
+              </p>
+            </div>
+
+            <div
+              className={
+                health.data?.last_error
+                  ? "rounded-xl border border-danger/20 bg-danger/5 p-3"
+                  : "rounded-xl border border-border bg-muted/20 p-3"
+              }
+            >
+              <div className="flex items-center gap-2">
+                {health.data?.last_error ? (
+                  <XCircle className="h-4 w-4 text-danger" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4 text-success" />
+                )}
+                <span className="text-xs font-semibold">صحة التشغيل</span>
+              </div>
+              <p className="mt-1 line-clamp-2 text-[9px] leading-4 text-muted-foreground">
+                {health.data?.last_error ??
+                  `${health.data?.enabled_rules ?? 0} قواعد مفعلة · ${health.data?.failed_runs ?? 0} فشل حالي`}
+              </p>
+            </div>
           </div>
         )}
       </header>
@@ -443,6 +601,27 @@ export function ProjectAutomationCenter({
                         {run.board_name ? ` · ${run.board_name}` : ""}
                         {run.error ? ` · ${run.error}` : ""}
                       </p>
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-[9px] text-muted-foreground">
+                        <span>
+                          محاولة {run.attempt_count}/{run.max_attempts}
+                        </span>
+                        {run.next_retry_at && (
+                          <span>
+                            Retry {relativeTime(run.next_retry_at)}
+                          </span>
+                        )}
+                        {run.status === "failed" && canManage && (
+                          <button
+                            type="button"
+                            disabled={retryRun.isPending}
+                            onClick={() => retryRun.mutate(run.id)}
+                            className="inline-flex items-center gap-1 rounded-md bg-danger/10 px-1.5 py-0.5 font-medium text-danger hover:bg-danger/15 disabled:opacity-50"
+                          >
+                            <RotateCcw className="h-3 w-3" />
+                            إعادة المحاولة
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <span className="shrink-0 text-[9px] text-muted-foreground">
                       {relativeTime(run.created_at)}
