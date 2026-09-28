@@ -74,6 +74,7 @@ declare
   v_title text;
   v_status text;
   v_due_date date;
+  v_days integer;
   v_recipient uuid;
   v_recipient_count integer := 0;
   v_changed boolean := false;
@@ -136,6 +137,19 @@ begin
     end if;
 
     if v_rule.kind = 'blocked_notify_managers' then
+      if v_status <> 'blocked' then
+        update public.project_automation_runs
+        set
+          status = 'skipped',
+          result = '{"reason":"task_no_longer_blocked"}'::jsonb,
+          error = null,
+          next_retry_at = null,
+          finished_at = now(),
+          last_attempt_at = now()
+        where id = p_run_id;
+        return false;
+      end if;
+
       for v_recipient in
         select distinct recipient
         from (
@@ -233,7 +247,23 @@ begin
       end loop;
 
     elsif v_rule.kind = 'due_soon_notify_assignee' then
-      if v_due_date is null or v_status = 'done' then
+      v_days := least(
+        30,
+        greatest(
+          0,
+          coalesce((v_run.trigger_payload->>'days_before')::integer, 2)
+        )
+      );
+
+      if v_due_date is null
+        or v_status = 'done'
+        or v_due_date < current_date
+        or v_due_date > current_date + v_days
+        or (
+          v_run.trigger_payload ? 'due_date'
+          and v_due_date::text <> v_run.trigger_payload->>'due_date'
+        )
+      then
         update public.project_automation_runs
         set
           status = 'skipped',
@@ -288,7 +318,22 @@ begin
       end loop;
 
     elsif v_rule.kind = 'overdue_escalate_managers' then
-      if v_due_date is null or v_status = 'done' then
+      v_days := least(
+        90,
+        greatest(
+          0,
+          coalesce((v_run.trigger_payload->>'days_overdue')::integer, 1)
+        )
+      );
+
+      if v_due_date is null
+        or v_status = 'done'
+        or v_due_date > current_date - v_days
+        or (
+          v_run.trigger_payload ? 'due_date'
+          and v_due_date::text <> v_run.trigger_payload->>'due_date'
+        )
+      then
         update public.project_automation_runs
         set
           status = 'skipped',
