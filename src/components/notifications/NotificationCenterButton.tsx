@@ -120,6 +120,13 @@ function notificationContext(notification: UserNotification) {
     if (typeof notification.metadata.automation_rule_id === "string") {
       return `${notification.board_name} · أتمتة سير العمل`;
     }
+    if (
+      notification.kind === "task_assigned" ||
+      notification.kind === "task_status" ||
+      notification.kind === "task_due"
+    ) {
+      return `${notification.board_name} · مهمة`;
+    }
     return notification.metadata.target_type === "node"
       ? `${notification.board_name} · مراجعة عنصر`
       : notification.board_name;
