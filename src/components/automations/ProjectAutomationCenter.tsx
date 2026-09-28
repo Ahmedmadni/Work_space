@@ -14,7 +14,7 @@ import {
   WandSparkles,
   XCircle,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   useAutomationHeartbeat,
@@ -103,6 +103,10 @@ function AutomationRuleCard({
   const [days, setDays] = useState(
     configuredDays === null ? "" : String(configuredDays),
   );
+
+  useEffect(() => {
+    setDays(configuredDays === null ? "" : String(configuredDays));
+  }, [configuredDays]);
 
   const saveDays = () => {
     if (configuredDays === null || !canManage) return;
