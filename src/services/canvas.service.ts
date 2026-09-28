@@ -171,6 +171,12 @@ function normalizeNode(value: unknown, boardId: string): CanvasNode | null {
     progress: Math.min(100, Math.max(0, safeNumber(raw.progress, raw.status === "done" ? 100 : 0))),
     start_date: normalizeLocalDate(raw.start_date),
     due_date: normalizeLocalDate(raw.due_date),
+    effort_hours:
+      typeof raw.effort_hours === "number" &&
+      Number.isFinite(raw.effort_hours) &&
+      raw.effort_hours >= 0
+        ? Math.min(10000, raw.effort_hours)
+        : null,
     owner: typeof raw.owner === "string" && raw.owner.trim() ? raw.owner.trim().slice(0, 80) : null,
     assignee_user_id:
       typeof raw.assignee_user_id === "string" && raw.assignee_user_id.trim()
@@ -573,6 +579,7 @@ export function createCanvasNode(
     progress: 0,
     start_date: null,
     due_date: null,
+    effort_hours: null,
     owner: null,
     assignee_user_id: null,
     assignee_name: null,

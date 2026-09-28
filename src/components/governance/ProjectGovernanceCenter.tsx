@@ -61,6 +61,9 @@ const ACTION_LABELS: Record<string, string> = {
   restore_checkpoint_created: "إنشاء نقطة استعادة",
   import_snapshot_created: "إنشاء نسخة استيراد",
   manual_snapshot_created: "إنشاء نسخة يدوية",
+  member_capacity_changed: "تغيير السعة الأسبوعية لعضو",
+  planning_baseline_created: "إنشاء Baseline للتخطيط",
+  planning_baseline_deleted: "حذف Baseline للتخطيط",
 };
 
 const CATEGORY_LABELS: Record<ProjectAuditCategory, string> = {

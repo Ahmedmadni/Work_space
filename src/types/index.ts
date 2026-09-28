@@ -138,6 +138,8 @@ export interface CanvasNode {
   /** تواريخ محلية بصيغة YYYY-MM-DD لعرض Roadmap دون مشاكل مناطق زمنية. */
   start_date: string | null;
   due_date: string | null;
+  /** تقدير الجهد بالساعات. null يعني أن المهمة لم تُقدّر بعد. */
+  effort_hours: number | null;
   /** اسم العرض للمالك. يبقى متوافقًا مع البيانات القديمة، ويُشتق من المستخدم عند وجود Assignee حقيقي. */
   owner: string | null;
   /** المكلّف الحقيقي من أعضاء المشروع. */
