@@ -1,5 +1,6 @@
 import { isSupabaseBackend } from "@/lib/backend-config";
 import { supabaseRest } from "@/services/supabase-rest";
+import { refreshMyProjectAutomations } from "@/services/automations.service";
 import { refreshTaskDueNotifications } from "@/services/task-execution.service";
 import type {
   NotificationFilter,
@@ -66,11 +67,20 @@ export async function listUserNotifications(
   limit = 60,
 ): Promise<UserNotification[]> {
   if (!isSupabaseBackend()) return [];
-  await refreshTaskDueNotifications().catch((error) => {
-    if (import.meta.env.DEV) {
-      console.warn("[notifications] تعذر تحديث تنبيهات الاستحقاق.", error);
-    }
-  });
+  await Promise.all([
+    refreshTaskDueNotifications().catch((error) => {
+      if (import.meta.env.DEV) {
+        console.warn("[notifications] تعذر تحديث تنبيهات الاستحقاق.", error);
+      }
+      return 0;
+    }),
+    refreshMyProjectAutomations().catch((error) => {
+      if (import.meta.env.DEV) {
+        console.warn("[notifications] تعذر تشغيل فحص أتمتة المشاريع.", error);
+      }
+      return 0;
+    }),
+  ]);
   const rows = await supabaseRest<Record<string, unknown>[]>(
     "rpc/list_user_notifications",
     {
