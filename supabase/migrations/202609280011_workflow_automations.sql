@@ -918,14 +918,24 @@ declare
   v_board_id text;
   v_source_id text;
   v_edge_id text;
+  v_kind text;
   v_version bigint;
 begin
-  v_board_id := coalesce(new.board_id, old.board_id);
-  v_source_id := coalesce(new.source_node_id, old.source_node_id);
-  v_edge_id := coalesce(new.id, old.id);
-  v_version := coalesce(new.version, old.version, 1);
+  if tg_op = 'DELETE' then
+    v_board_id := old.board_id;
+    v_source_id := old.source_node_id;
+    v_edge_id := old.id;
+    v_kind := old.kind;
+    v_version := coalesce(old.version, 1);
+  else
+    v_board_id := new.board_id;
+    v_source_id := new.source_node_id;
+    v_edge_id := new.id;
+    v_kind := new.kind;
+    v_version := coalesce(new.version, 1);
+  end if;
 
-  if coalesce(new.kind, old.kind) = 'dependency'
+  if v_kind = 'dependency'
     and v_board_id is not null
     and v_source_id is not null
   then
@@ -937,7 +947,10 @@ begin
     );
   end if;
 
-  return coalesce(new, old);
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+  return new;
 end;
 $projectflow$;
 
@@ -1050,6 +1063,42 @@ $projectflow$;
 
 revoke all on function public.refresh_project_automations(text) from public;
 grant execute on function public.refresh_project_automations(text)
+  to authenticated;
+
+create or replace function public.refresh_my_project_automations()
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $projectflow$
+declare
+  v_project_id text;
+  v_total integer := 0;
+begin
+  if auth.uid() is null then
+    raise exception 'AUTH_REQUIRED' using errcode = '42501';
+  end if;
+
+  for v_project_id in
+    select p.id
+    from public.projects p
+    where p.created_by = auth.uid()
+       or exists (
+         select 1
+         from public.project_members pm
+         where pm.project_id = p.id
+           and pm.user_id = auth.uid()
+       )
+  loop
+    v_total := v_total + public.refresh_project_automations(v_project_id);
+  end loop;
+
+  return v_total;
+end;
+$projectflow$;
+
+revoke all on function public.refresh_my_project_automations() from public;
+grant execute on function public.refresh_my_project_automations()
   to authenticated;
 
 -- Make built-in task status/due notifications automation-aware so system
