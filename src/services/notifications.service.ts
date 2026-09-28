@@ -1,11 +1,43 @@
 import { isSupabaseBackend } from "@/lib/backend-config";
 import { supabaseRest } from "@/services/supabase-rest";
+import { refreshMyProjectAutomations } from "@/services/automations.service";
 import { refreshTaskDueNotifications } from "@/services/task-execution.service";
 import type {
   NotificationFilter,
   NotificationKind,
   UserNotification,
 } from "@/types/notifications";
+const SCHEDULE_REFRESH_MS = 60_000;
+let lastScheduleRefreshAt = 0;
+let scheduleRefreshPromise: Promise<void> | null = null;
+
+async function refreshScheduledWorkIfNeeded() {
+  const now = Date.now();
+  if (now - lastScheduleRefreshAt < SCHEDULE_REFRESH_MS) return;
+  if (scheduleRefreshPromise) return scheduleRefreshPromise;
+
+  scheduleRefreshPromise = Promise.all([
+    refreshTaskDueNotifications().catch((error) => {
+      if (import.meta.env.DEV) {
+        console.warn("[notifications] تعذر تحديث تنبيهات الاستحقاق.", error);
+      }
+      return 0;
+    }),
+    refreshMyProjectAutomations().catch((error) => {
+      if (import.meta.env.DEV) {
+        console.warn("[notifications] تعذر تشغيل فحص أتمتة المشاريع.", error);
+      }
+      return 0;
+    }),
+  ]).then(() => {
+    lastScheduleRefreshAt = Date.now();
+  }).finally(() => {
+    scheduleRefreshPromise = null;
+  });
+
+  return scheduleRefreshPromise;
+}
+
 
 function normalizeKind(value: unknown): NotificationKind {
   return value === "mention" ||
@@ -66,11 +98,7 @@ export async function listUserNotifications(
   limit = 60,
 ): Promise<UserNotification[]> {
   if (!isSupabaseBackend()) return [];
-  await refreshTaskDueNotifications().catch((error) => {
-    if (import.meta.env.DEV) {
-      console.warn("[notifications] تعذر تحديث تنبيهات الاستحقاق.", error);
-    }
-  });
+  await refreshScheduledWorkIfNeeded();
   const rows = await supabaseRest<Record<string, unknown>[]>(
     "rpc/list_user_notifications",
     {
