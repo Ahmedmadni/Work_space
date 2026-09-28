@@ -721,28 +721,6 @@ begin
             )
           );
 
-          insert into public.project_activity (
-            project_id,
-            actor_user_id,
-            action,
-            entity_type,
-            entity_id,
-            metadata
-          )
-          values (
-            v_project_id,
-            null,
-            'automation_status_changed',
-            'node',
-            p_node_id,
-            jsonb_build_object(
-              'board_id', p_board_id,
-              'title', v_title,
-              'status', 'planned',
-              'automation_rule_id', v_rule.id,
-              'automation_kind', v_rule.kind
-            )
-          );
         end if;
       end if;
     end if;
@@ -914,42 +892,41 @@ language plpgsql
 security definer
 set search_path = public
 as $projectflow$
-declare
-  v_board_id text;
-  v_source_id text;
-  v_edge_id text;
-  v_kind text;
-  v_version bigint;
 begin
   if tg_op = 'DELETE' then
-    v_board_id := old.board_id;
-    v_source_id := old.source_node_id;
-    v_edge_id := old.id;
-    v_kind := old.kind;
-    v_version := coalesce(old.version, 1);
-  else
-    v_board_id := new.board_id;
-    v_source_id := new.source_node_id;
-    v_edge_id := new.id;
-    v_kind := new.kind;
-    v_version := coalesce(new.version, 1);
+    if old.kind = 'dependency' then
+      perform public.projectflow_evaluate_dependency_ready(
+        old.board_id,
+        old.source_node_id,
+        'edge:' || old.id || ':v' || coalesce(old.version, 1)::text || ':DELETE'
+      );
+    end if;
+    return old;
   end if;
 
-  if v_kind = 'dependency'
-    and v_board_id is not null
-    and v_source_id is not null
+  if tg_op = 'UPDATE'
+    and old.kind = 'dependency'
+    and (
+      new.kind is distinct from old.kind
+      or new.source_node_id is distinct from old.source_node_id
+      or new.target_node_id is distinct from old.target_node_id
+    )
   then
     perform public.projectflow_evaluate_dependency_ready(
-      v_board_id,
-      v_source_id,
-      'edge:' || coalesce(v_edge_id, 'unknown') ||
-        ':v' || v_version::text || ':' || tg_op
+      old.board_id,
+      old.source_node_id,
+      'edge:' || old.id || ':v' || coalesce(old.version, 1)::text || ':UPDATE_OLD'
     );
   end if;
 
-  if tg_op = 'DELETE' then
-    return old;
+  if new.kind = 'dependency' then
+    perform public.projectflow_evaluate_dependency_ready(
+      new.board_id,
+      new.source_node_id,
+      'edge:' || new.id || ':v' || coalesce(new.version, 1)::text || ':' || tg_op
+    );
   end if;
+
   return new;
 end;
 $projectflow$;
