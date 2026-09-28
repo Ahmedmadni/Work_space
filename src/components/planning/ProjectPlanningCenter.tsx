@@ -308,7 +308,6 @@ function GanttView({
     if (!range) return false;
     return (dependencyBySource.get(item.node.id) ?? []).some(
       (dependency) =>
-        dependency.target_status !== "done" &&
         dependency.target_due_date &&
         range.start < dependency.target_due_date,
     );
@@ -397,7 +396,6 @@ function GanttView({
               const dependencies = dependencyBySource.get(item.node.id) ?? [];
               const conflict = dependencies.some(
                 (dependency) =>
-                  dependency.target_status !== "done" &&
                   dependency.target_due_date &&
                   range.start < dependency.target_due_date,
               );
@@ -667,18 +665,31 @@ function CapacityView({
                   <p className="truncate text-xs font-semibold">{member.full_name}</p>
                   <div className="mt-1 flex items-center gap-1.5">
                     <input
+                      key={member.user_id + ":" + capacity}
                       type="number"
-                      min={1}
+                      min={0}
                       max={168}
-                      value={capacity}
+                      defaultValue={capacity}
                       disabled={!canManage || setCapacity.isPending}
-                      onChange={(event) => {
-                        const value = Number(event.target.value);
-                        if (value >= 1 && value <= 168) {
+                      onBlur={(event) => {
+                        const value = Number(event.currentTarget.value);
+                        if (
+                          Number.isFinite(value) &&
+                          value >= 0 &&
+                          value <= 168 &&
+                          value !== capacity
+                        ) {
                           setCapacity.mutate({
                             userId: member.user_id,
                             weeklyCapacityHours: value,
                           });
+                        } else {
+                          event.currentTarget.value = String(capacity);
+                        }
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.currentTarget.blur();
                         }
                       }}
                       className="w-16 rounded border border-border bg-background px-1.5 py-1 text-[9px]"
