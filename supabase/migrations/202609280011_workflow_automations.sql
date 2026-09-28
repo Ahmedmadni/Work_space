@@ -838,6 +838,10 @@ declare
   v_rule record;
   v_source_id text;
 begin
+  if current_setting('projectflow.suppress_automations', true) = '1' then
+    return new;
+  end if;
+
   select project_id into v_project_id
   from public.boards
   where id = new.board_id;
@@ -905,6 +909,13 @@ security definer
 set search_path = public
 as $projectflow$
 begin
+  if current_setting('projectflow.suppress_automations', true) = '1' then
+    if tg_op = 'DELETE' then
+      return old;
+    end if;
+    return new;
+  end if;
+
   if tg_op = 'DELETE' then
     if old.kind = 'dependency' then
       perform public.projectflow_evaluate_dependency_ready(
@@ -1256,3 +1267,160 @@ $projectflow$;
 
 revoke all on function public.notify_canvas_node_execution_change()
   from public;
+
+
+-- Restore/import replaces a full snapshot. Suppress dependency automation while
+-- rows are temporarily rebuilt, then emit the normal snapshot-replaced event.
+create or replace function public.save_board_canvas(
+  p_board_id text,
+  p_nodes jsonb,
+  p_edges jsonb,
+  p_strokes jsonb,
+  p_viewport jsonb
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $projectflow$
+declare
+  v_project_id text;
+  v_revision bigint;
+  n jsonb;
+  e jsonb;
+  s jsonb;
+begin
+  select project_id, canvas_revision
+    into v_project_id, v_revision
+  from public.boards
+  where id = p_board_id
+  for update;
+
+  if v_project_id is null or not public.can_edit_project(v_project_id) then
+    raise exception 'BOARD_EDIT_DENIED' using errcode = '42501';
+  end if;
+
+  if jsonb_typeof(coalesce(p_nodes, '[]'::jsonb)) <> 'array'
+    or jsonb_typeof(coalesce(p_edges, '[]'::jsonb)) <> 'array'
+    or jsonb_typeof(coalesce(p_strokes, '[]'::jsonb)) <> 'array'
+    or jsonb_typeof(coalesce(p_viewport, '{}'::jsonb)) <> 'object'
+  then
+    raise exception 'INVALID_CANVAS_PAYLOAD' using errcode = '22023';
+  end if;
+
+  perform set_config('projectflow.suppress_automations', '1', true);
+
+  delete from public.canvas_edges where board_id = p_board_id;
+  delete from public.canvas_strokes where board_id = p_board_id;
+  delete from public.canvas_nodes where board_id = p_board_id;
+
+  for n in
+    select value from jsonb_array_elements(coalesce(p_nodes, '[]'::jsonb))
+  loop
+    insert into public.canvas_nodes (
+      id, board_id, kind, x, y, width, height, title, description,
+      status, priority, progress, start_date, due_date, owner_label,
+      tags, asset_id, style, version, created_at, updated_at
+    )
+    values (
+      n->>'id',
+      p_board_id,
+      coalesce(nullif(n->>'kind',''), 'idea'),
+      coalesce((n->>'x')::double precision, 0),
+      coalesce((n->>'y')::double precision, 0),
+      greatest(1, coalesce((n->>'width')::double precision, 220)),
+      greatest(1, coalesce((n->>'height')::double precision, 140)),
+      coalesce(n->>'title', ''),
+      nullif(n->>'description',''),
+      coalesce(nullif(n->>'status',''), 'idea'),
+      nullif(n->>'priority',''),
+      least(100, greatest(0, coalesce((n->>'progress')::integer, 0))),
+      nullif(n->>'start_date','')::date,
+      nullif(n->>'due_date','')::date,
+      nullif(n->>'owner',''),
+      coalesce(
+        array(
+          select jsonb_array_elements_text(
+            coalesce(n->'tags','[]'::jsonb)
+          )
+        ),
+        '{}'::text[]
+      ),
+      nullif(n->>'asset_id',''),
+      coalesce(n->'style', '{}'::jsonb),
+      v_revision + 1,
+      coalesce(nullif(n->>'created_at','')::timestamptz, now()),
+      now()
+    );
+  end loop;
+
+  for e in
+    select value from jsonb_array_elements(coalesce(p_edges, '[]'::jsonb))
+  loop
+    insert into public.canvas_edges (
+      id, board_id, source_node_id, target_node_id,
+      kind, label, version, created_at, updated_at
+    )
+    values (
+      e->>'id',
+      p_board_id,
+      e->>'source_node_id',
+      e->>'target_node_id',
+      coalesce(nullif(e->>'kind',''), 'relationship'),
+      nullif(e->>'label',''),
+      v_revision + 1,
+      coalesce(nullif(e->>'created_at','')::timestamptz, now()),
+      now()
+    );
+  end loop;
+
+  for s in
+    select value from jsonb_array_elements(coalesce(p_strokes, '[]'::jsonb))
+  loop
+    insert into public.canvas_strokes (
+      id, board_id, tool, points, size, color,
+      version, created_at, updated_at
+    )
+    values (
+      s->>'id',
+      p_board_id,
+      coalesce(nullif(s->>'tool',''), 'pen'),
+      coalesce(s->'points', '[]'::jsonb),
+      least(48, greatest(0.1, coalesce((s->>'size')::double precision, 3))),
+      coalesce(nullif(s->>'color',''), 'ink'),
+      v_revision + 1,
+      coalesce(nullif(s->>'created_at','')::timestamptz, now()),
+      now()
+    );
+  end loop;
+
+  perform public.save_board_viewport(p_board_id, p_viewport);
+
+  update public.boards
+  set
+    canvas_revision = canvas_revision + 1,
+    updated_at = now()
+  where id = p_board_id
+  returning canvas_revision into v_revision;
+
+  insert into public.board_collaboration_events (
+    board_id,
+    revision,
+    actor_user_id,
+    client_id,
+    operations
+  )
+  values (
+    p_board_id,
+    v_revision,
+    auth.uid(),
+    gen_random_uuid(),
+    jsonb_build_array(
+      jsonb_build_object('op', 'snapshot_replaced')
+    )
+  );
+
+  perform set_config('projectflow.suppress_automations', '', true);
+end;
+$projectflow$;
+
