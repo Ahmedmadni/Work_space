@@ -31,6 +31,7 @@ import { ProjectAutomationCenter } from "@/components/automations/ProjectAutomat
 import { ProjectExecutionCenter } from "@/components/execution/ProjectExecutionCenter";
 import { ProjectGovernanceCenter } from "@/components/governance/ProjectGovernanceCenter";
 import { ProjectExecutiveDashboard } from "@/components/reports/ProjectExecutiveDashboard";
+import { ProjectPlanningCenter } from "@/components/planning/ProjectPlanningCenter";
 import { useProject } from "@/hooks/use-projects";
 import {
   useProjectAccess,
@@ -536,6 +537,18 @@ function ProjectDetail() {
           execution={execution.data}
           boards={boards.data ?? []}
           collaborators={collaborators.data ?? []}
+          canManage={!!access.data?.can_manage}
+        />
+      )}
+
+
+      {execution.data && (
+        <ProjectPlanningCenter
+          projectId={projectId}
+          summary={execution.data}
+          boards={boards.data ?? []}
+          collaborators={collaborators.data ?? []}
+          canEdit={!!access.data?.can_edit}
           canManage={!!access.data?.can_manage}
         />
       )}
