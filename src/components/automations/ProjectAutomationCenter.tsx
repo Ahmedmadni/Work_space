@@ -393,6 +393,12 @@ export function ProjectAutomationCenter({
     [rules.data],
   );
 
+  const schedulerStale =
+    health.data?.scheduler_mode === "pg_cron" &&
+    (health.data.scheduled_rules ?? 0) > 0 &&
+    !!health.data.last_success_at &&
+    Date.now() - Date.parse(health.data.last_success_at) > 3 * 60_000;
+
   useAutomationHeartbeat(
     projectId,
     available &&
@@ -439,7 +445,7 @@ export function ProjectAutomationCenter({
           <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
             <div
               className={
-                health.data?.scheduler_mode === "pg_cron"
+                health.data?.scheduler_mode === "pg_cron" && !schedulerStale
                   ? "rounded-xl border border-success/20 bg-success/5 p-3"
                   : "rounded-xl border border-warning/20 bg-warning/5 p-3"
               }
@@ -447,20 +453,26 @@ export function ProjectAutomationCenter({
               <div className="flex items-center gap-2">
                 <ServerCog
                   className={
-                    health.data?.scheduler_mode === "pg_cron"
+                    health.data?.scheduler_mode === "pg_cron" && !schedulerStale
                       ? "h-4 w-4 text-success"
                       : "h-4 w-4 text-warning"
                   }
                 />
                 <span className="text-xs font-semibold">
                   {health.data?.scheduler_mode === "pg_cron"
-                    ? "Scheduler 24/7 فعال"
+                    ? schedulerStale
+                      ? "Scheduler يحتاج فحص"
+                      : "Scheduler 24/7 فعال"
                     : "Active-app fallback"}
                 </span>
               </div>
               <p className="mt-1 text-[9px] leading-4 text-muted-foreground">
                 {health.data?.scheduler_mode === "pg_cron"
-                  ? "القواعد الزمنية تعمل من قاعدة البيانات حتى بدون مستخدمين متصلين."
+                  ? schedulerStale
+                    ? "pg_cron مسجل لكن آخر نبضة ناجحة تأخرت أكثر من 3 دقائق."
+                    : health.data.last_success_at
+                      ? "القواعد الزمنية تعمل من قاعدة البيانات حتى بدون مستخدمين متصلين."
+                      : "pg_cron مسجل؛ بانتظار أول نبضة ناجحة."
                   : "القواعد الزمنية تعمل أثناء نشاط التطبيق؛ Health سيعرض سبب عدم تفعيل pg_cron إن وجد."}
               </p>
             </div>
