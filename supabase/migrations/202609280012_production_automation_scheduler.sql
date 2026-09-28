@@ -1,6 +1,10 @@
 -- Phase 19: production automation scheduler and reliability.
 -- Server-side scheduler, retries, health diagnostics, and dry-run previews.
 
+alter table public.project_automation_rules
+  add column if not exists last_tested_at timestamptz,
+  add column if not exists last_test_summary jsonb;
+
 alter table public.project_automation_runs
   add column if not exists attempt_count integer not null default 1,
   add column if not exists max_attempts integer not null default 3,
@@ -858,6 +862,71 @@ $projectflow$;
 revoke all on function public.projectflow_run_scheduler_tick()
   from public;
 
+create or replace function public.set_project_automation_enabled(
+  p_project_id text,
+  p_rule_id uuid,
+  p_enabled boolean
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $projectflow$
+declare
+  v_rule public.project_automation_rules%rowtype;
+begin
+  if not public.can_manage_project(p_project_id) then
+    raise exception 'AUTOMATION_MANAGE_DENIED' using errcode = '42501';
+  end if;
+
+  select * into v_rule
+  from public.project_automation_rules
+  where id = p_rule_id
+    and project_id = p_project_id
+  for update;
+
+  if v_rule.id is null then
+    raise exception 'AUTOMATION_RULE_NOT_FOUND' using errcode = 'P0002';
+  end if;
+
+  if p_enabled and (
+    v_rule.last_tested_at is null
+    or v_rule.last_tested_at < v_rule.updated_at
+  ) then
+    raise exception 'AUTOMATION_TEST_REQUIRED' using errcode = '22023';
+  end if;
+
+  update public.project_automation_rules
+  set
+    enabled = p_enabled,
+    updated_at = now()
+  where id = p_rule_id
+    and project_id = p_project_id;
+
+  insert into public.project_activity (
+    project_id,
+    actor_user_id,
+    action,
+    entity_type,
+    entity_id,
+    metadata
+  )
+  values (
+    p_project_id,
+    auth.uid(),
+    case when p_enabled then 'automation_enabled' else 'automation_disabled' end,
+    'automation_rule',
+    p_rule_id::text,
+    jsonb_build_object('enabled', p_enabled)
+  );
+end;
+$projectflow$;
+
+revoke all on function public.set_project_automation_enabled(text, uuid, boolean)
+  from public;
+grant execute on function public.set_project_automation_enabled(text, uuid, boolean)
+  to authenticated;
+
 create or replace function public.test_project_automation_rule(
   p_project_id text,
   p_rule_id uuid,
@@ -865,7 +934,6 @@ create or replace function public.test_project_automation_rule(
 )
 returns jsonb
 language plpgsql
-stable
 security definer
 set search_path = public
 as $projectflow$
@@ -1078,6 +1146,16 @@ begin
     ) candidates;
   end if;
 
+  update public.project_automation_rules
+  set
+    last_tested_at = now(),
+    last_test_summary = jsonb_build_object(
+      'candidate_count', v_candidate_count,
+      'sample', v_sample,
+      'dry_run', true
+    )
+  where id = v_rule.id;
+
   return jsonb_build_object(
     'rule_id', v_rule.id,
     'kind', v_rule.kind,
@@ -1096,6 +1174,53 @@ revoke all on function public.test_project_automation_rule(
 grant execute on function public.test_project_automation_rule(
   text, uuid, integer
 ) to authenticated;
+
+create or replace function public.list_project_automation_rules(
+  p_project_id text
+)
+returns table (
+  id uuid,
+  kind text,
+  name text,
+  config jsonb,
+  enabled boolean,
+  last_run_at timestamptz,
+  last_tested_at timestamptz,
+  last_test_summary jsonb,
+  created_at timestamptz,
+  updated_at timestamptz
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $projectflow$
+begin
+  if not public.can_access_project(p_project_id) then
+    raise exception 'AUTOMATION_LIST_DENIED' using errcode = '42501';
+  end if;
+
+  return query
+  select
+    r.id,
+    r.kind,
+    r.name,
+    r.config,
+    r.enabled,
+    r.last_run_at,
+    r.last_tested_at,
+    r.last_test_summary,
+    r.created_at,
+    r.updated_at
+  from public.project_automation_rules r
+  where r.project_id = p_project_id
+  order by r.created_at, r.kind;
+end;
+$projectflow$;
+
+revoke all on function public.list_project_automation_rules(text) from public;
+grant execute on function public.list_project_automation_rules(text)
+  to authenticated;
 
 create or replace function public.get_project_automation_health(
   p_project_id text
