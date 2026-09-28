@@ -264,25 +264,6 @@ begin
     )
   );
 
-  perform public.projectflow_append_audit_event(
-    p_project_id,
-    'execution',
-    'task_schedule_changed',
-    'node',
-    p_node_id,
-    jsonb_build_object(
-      'start_date', v_old_start,
-      'due_date', v_old_due,
-      'effort_hours', v_old_effort
-    ),
-    jsonb_build_object(
-      'start_date', v_new_start,
-      'due_date', v_new_due,
-      'effort_hours', v_new_effort
-    ),
-    jsonb_build_object('board_id', p_board_id)
-  );
-
   return jsonb_build_object(
     'ok', true,
     'node_id', p_node_id,
@@ -302,6 +283,48 @@ revoke all on function public.update_canvas_node_schedule(
 grant execute on function public.update_canvas_node_schedule(
   text, text, text, bigint, boolean, date, boolean, date, boolean, numeric
 ) to authenticated;
+
+create or replace function public.projectflow_audit_effort_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $projectflow$
+declare
+  v_project_id text := coalesce(new.project_id, old.project_id);
+  v_node_id text := coalesce(new.node_id, old.node_id);
+  v_board_id text := coalesce(new.board_id, old.board_id);
+  v_before numeric := case when tg_op = 'INSERT' then null else old.effort_hours end;
+  v_after numeric := case when tg_op = 'DELETE' then null else new.effort_hours end;
+begin
+  if v_before is not distinct from v_after then
+    return coalesce(new, old);
+  end if;
+
+  perform public.projectflow_append_audit_event(
+    v_project_id,
+    'execution',
+    'task_effort_changed',
+    'node',
+    v_node_id,
+    jsonb_build_object('effort_hours', v_before),
+    jsonb_build_object('effort_hours', v_after),
+    jsonb_build_object('board_id', v_board_id)
+  );
+
+  return coalesce(new, old);
+end;
+$projectflow$;
+
+drop trigger if exists project_node_planning_audit_effort
+  on public.project_node_planning;
+create trigger project_node_planning_audit_effort
+after insert or update or delete on public.project_node_planning
+for each row
+execute function public.projectflow_audit_effort_change();
+
+revoke all on function public.projectflow_audit_effort_change()
+  from public;
 
 create or replace function public.set_project_member_capacity(
   p_project_id text,
