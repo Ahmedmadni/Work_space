@@ -3,7 +3,6 @@ import {
   AlertTriangle,
   BarChart3,
   CalendarDays,
-  CheckCircle2,
   Clock3,
   Flag,
   GitBranch,
@@ -948,11 +947,11 @@ export function ProjectPlanningCenter({
             </p>
           </div>
           <div className="flex gap-1 rounded-xl border border-border p-1">
-            {[
+            {([
               ["gantt", "Gantt / Roadmap", CalendarDays],
               ["capacity", "Capacity", UsersRound],
               ["baseline", "Baseline", BarChart3],
-            ].map(([value, label, Icon]) => (
+            ] as const).map(([value, label, Icon]) => (
               <button
                 key={String(value)}
                 type="button"
