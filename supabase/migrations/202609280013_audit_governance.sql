@@ -10,7 +10,9 @@ create table if not exists public.project_audit_heads (
 
 create table if not exists public.project_audit_events (
   id uuid primary key default gen_random_uuid(),
-  project_id text not null references public.projects(id) on delete cascade,
+  -- Deliberately no FK: audit evidence survives project deletion. RLS/RPCs
+  -- still require access to a live project, so orphaned history is not exposed.
+  project_id text not null,
   sequence bigint not null check (sequence > 0),
   previous_hash text,
   event_hash text not null,
@@ -131,7 +133,10 @@ begin
   end if;
 
   v_source := public.projectflow_audit_source(p_source);
-  v_actor := coalesce(p_actor_user_id, auth.uid());
+  v_actor := case
+    when v_source in ('automation','system','auth') then p_actor_user_id
+    else coalesce(p_actor_user_id, auth.uid())
+  end;
   v_actor_kind := case
     when v_source = 'automation' then 'automation'
     when v_actor is not null then 'human'
@@ -170,7 +175,10 @@ begin
     coalesce(p_before_state::text, '') || '|' ||
     coalesce(p_after_state::text, '') || '|' ||
     coalesce(p_metadata::text, '{}') || '|' ||
-    v_now::text
+    to_char(
+      v_now at time zone 'UTC',
+      'YYYY-MM-DD"T"HH24:MI:SS.US'
+    )
   );
 
   insert into public.project_audit_events (
@@ -486,6 +494,41 @@ for each row
 execute function public.projectflow_audit_project_change();
 
 revoke all on function public.projectflow_audit_project_change()
+  from public;
+
+create or replace function public.projectflow_audit_project_delete()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $projectflow$
+begin
+  perform public.projectflow_append_audit_event(
+    old.id,
+    'project',
+    'project_deleted',
+    'project',
+    old.id,
+    jsonb_build_object(
+      'name', old.name,
+      'description', old.description,
+      'status', old.status,
+      'archived_at', old.archived_at
+    ),
+    null,
+    '{}'::jsonb
+  );
+  return old;
+end;
+$projectflow$;
+
+drop trigger if exists projects_audit_delete on public.projects;
+create trigger projects_audit_delete
+before delete on public.projects
+for each row
+execute function public.projectflow_audit_project_delete();
+
+revoke all on function public.projectflow_audit_project_delete()
   from public;
 
 create or replace function public.projectflow_audit_board_change()
@@ -1184,7 +1227,10 @@ begin
       coalesce(v_event.before_state::text, '') || '|' ||
       coalesce(v_event.after_state::text, '') || '|' ||
       coalesce(v_event.metadata::text, '{}') || '|' ||
-      v_event.occurred_at::text
+      to_char(
+        v_event.occurred_at at time zone 'UTC',
+        'YYYY-MM-DD"T"HH24:MI:SS.US'
+      )
     );
 
     if v_event.event_hash <> v_expected_hash then
