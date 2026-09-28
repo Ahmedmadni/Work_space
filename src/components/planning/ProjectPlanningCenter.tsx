@@ -309,7 +309,7 @@ function GanttView({
     return (dependencyBySource.get(item.node.id) ?? []).some(
       (dependency) =>
         dependency.target_due_date &&
-        range.start < dependency.target_due_date,
+        range.start <= dependency.target_due_date,
     );
   }).length;
 
@@ -397,7 +397,7 @@ function GanttView({
               const conflict = dependencies.some(
                 (dependency) =>
                   dependency.target_due_date &&
-                  range.start < dependency.target_due_date,
+                  range.start <= dependency.target_due_date,
               );
               const slip =
                 baselineDue && range.due > baselineDue
@@ -706,7 +706,12 @@ function CapacityView({
                 {weeks.map((week) => {
                   const used =
                     memberAllocation?.get(dateKey(week)) ?? 0;
-                  const ratio = capacity > 0 ? used / capacity : 0;
+                  const ratio =
+                    capacity > 0
+                      ? used / capacity
+                      : used > 0
+                        ? Number.POSITIVE_INFINITY
+                        : 0;
                   return (
                     <div
                       key={dateKey(week)}
@@ -725,7 +730,9 @@ function CapacityView({
                           {used.toFixed(1)}h
                         </p>
                         <p className="mt-0.5 text-[8px] opacity-70">
-                          {Math.round(ratio * 100)}%
+                          {Number.isFinite(ratio)
+                            ? `${Math.round(ratio * 100)}%`
+                            : "بدون سعة"}
                         </p>
                       </div>
                     </div>
