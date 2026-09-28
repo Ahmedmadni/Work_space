@@ -709,12 +709,33 @@ language plpgsql
 security definer
 set search_path = public
 as $projectflow$
+declare
+  v_total integer := 0;
+  v_run_id uuid;
 begin
   if not public.can_access_project(p_project_id) then
     raise exception 'AUTOMATION_REFRESH_DENIED' using errcode = '42501';
   end if;
 
-  return public.projectflow_refresh_project_automations_core(p_project_id);
+  for v_run_id in
+    select run.id
+    from public.project_automation_runs run
+    where run.project_id = p_project_id
+      and run.status = 'failed'
+      and run.next_retry_at is not null
+      and run.next_retry_at <= now()
+      and run.attempt_count < run.max_attempts
+    order by run.next_retry_at, run.created_at
+    limit 25
+    for update skip locked
+  loop
+    if public.projectflow_retry_automation_run_internal(v_run_id) then
+      v_total := v_total + 1;
+    end if;
+  end loop;
+
+  return v_total +
+    public.projectflow_refresh_project_automations_core(p_project_id);
 end;
 $projectflow$;
 
@@ -731,6 +752,7 @@ as $projectflow$
 declare
   v_project_id text;
   v_total integer := 0;
+  v_run_id uuid;
 begin
   if auth.uid() is null then
     raise exception 'AUTH_REQUIRED' using errcode = '42501';
@@ -747,6 +769,23 @@ begin
            and pm.user_id = auth.uid()
        )
   loop
+    for v_run_id in
+      select run.id
+      from public.project_automation_runs run
+      where run.project_id = v_project_id
+        and run.status = 'failed'
+        and run.next_retry_at is not null
+        and run.next_retry_at <= now()
+        and run.attempt_count < run.max_attempts
+      order by run.next_retry_at, run.created_at
+      limit 25
+      for update skip locked
+    loop
+      if public.projectflow_retry_automation_run_internal(v_run_id) then
+        v_total := v_total + 1;
+      end if;
+    end loop;
+
     v_total := v_total +
       public.projectflow_refresh_project_automations_core(v_project_id);
   end loop;
