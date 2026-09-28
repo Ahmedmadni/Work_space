@@ -72,6 +72,7 @@ export function useUpdateCanvasNodeSchedule(
                         version: update.version,
                         start_date: update.start_date,
                         due_date: update.due_date,
+                        effort_hours: update.effort_hours,
                         updated_at: update.updated_at,
                       }
                     : node,
@@ -95,6 +96,7 @@ export function useUpdateCanvasNodeSchedule(
                           version: update.version,
                           start_date: update.start_date,
                           due_date: update.due_date,
+                          effort_hours: update.effort_hours,
                           updated_at: update.updated_at,
                         },
                       }
