@@ -121,6 +121,9 @@ export function ProjectExecutiveDashboard({
 }) {
   const automation = useProjectAutomationHealth(project.id);
   const governance = useProjectAuditSummary(project.id, canManage);
+  const reportReady =
+    !automation.isLoading &&
+    (!canManage || !governance.isLoading);
 
   const report = useMemo(
     () =>
@@ -174,16 +177,18 @@ export function ProjectExecutiveDashboard({
           >
             <button
               type="button"
+              disabled={!reportReady}
               onClick={() => downloadProjectExecutiveReportCsv(report)}
-              className="inline-flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-xs font-medium hover:bg-muted"
+              className="inline-flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-xs font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Download className="h-4 w-4" />
               تصدير CSV
             </button>
             <button
               type="button"
+              disabled={!reportReady}
               onClick={() => window.print()}
-              className="inline-flex items-center gap-2 rounded-xl bg-brand px-3 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90"
+              className="inline-flex items-center gap-2 rounded-xl bg-brand px-3 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Printer className="h-4 w-4" />
               طباعة التقرير
@@ -209,20 +214,30 @@ export function ProjectExecutiveDashboard({
             </p>
           </div>
 
-          <div className={`rounded-xl border p-4 ${health.className}`}>
+          <div
+            className={
+              reportReady
+                ? `rounded-xl border p-4 ${health.className}`
+                : "rounded-xl border border-border bg-muted/25 p-4 text-muted-foreground"
+            }
+          >
             <div className="flex items-center gap-2">
-              {report.health.level === "healthy" ? (
+              {reportReady && report.health.level === "healthy" ? (
                 <CheckCircle2 className="h-5 w-5" />
               ) : (
                 <AlertTriangle className="h-5 w-5" />
               )}
               <div>
                 <p className="text-[10px] opacity-80">حالة المشروع</p>
-                <p className="text-lg font-semibold">{health.label}</p>
+                <p className="text-lg font-semibold">
+                  {reportReady ? health.label : "جاري تجميع التقرير"}
+                </p>
               </div>
             </div>
             <p className="mt-2 text-[10px] leading-4 opacity-80">
-              {health.description}
+              {reportReady
+                ? health.description
+                : "يتم تحميل بيانات التنفيذ والأتمتة والحوكمة قبل اعتماد الحالة."}
             </p>
           </div>
         </div>
