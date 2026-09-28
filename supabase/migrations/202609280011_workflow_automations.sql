@@ -45,6 +45,11 @@ create index if not exists project_automation_runs_project_idx
   on public.project_automation_runs(project_id, created_at desc);
 create index if not exists project_automation_runs_rule_idx
   on public.project_automation_runs(rule_id, created_at desc);
+create index if not exists canvas_nodes_automation_due_idx
+  on public.canvas_nodes(due_date, board_id)
+  where due_date is not null
+    and status <> 'done'
+    and kind in ('task','milestone');
 
 alter table public.project_automation_rules enable row level security;
 alter table public.project_automation_runs enable row level security;
@@ -406,13 +411,16 @@ as $projectflow$
     and not exists (
       select 1
       from public.canvas_edges e
-      join public.canvas_nodes dependency
+      left join public.canvas_nodes dependency
         on dependency.id = e.target_node_id
         and dependency.board_id = e.board_id
       where e.board_id = p_board_id
         and e.source_node_id = p_node_id
         and e.kind = 'dependency'
-        and dependency.status <> 'done'
+        and (
+          dependency.id is null
+          or dependency.status <> 'done'
+        )
     );
 $projectflow$;
 
@@ -745,6 +753,10 @@ begin
     update public.project_automation_rules
     set last_run_at = now()
     where id = v_rule.id;
+
+    delete from public.project_automation_runs
+    where project_id = v_rule.project_id
+      and created_at < now() - interval '180 days';
 
     return true;
   exception when others then
