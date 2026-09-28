@@ -1224,6 +1224,8 @@ begin
     raise exception 'INVALID_CANVAS_PAYLOAD' using errcode = '22023';
   end if;
 
+  perform set_config('projectflow.suppress_automations', '1', true);
+
   delete from public.canvas_edges where board_id = p_board_id;
   delete from public.canvas_strokes where board_id = p_board_id;
   delete from public.canvas_nodes where board_id = p_board_id;
@@ -1334,6 +1336,8 @@ begin
       jsonb_build_object('op', 'snapshot_replaced')
     )
   );
+
+  perform set_config('projectflow.suppress_automations', '', true);
 end;
 $projectflow$;
 
