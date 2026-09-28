@@ -2,6 +2,11 @@ import { isSupabaseBackend } from "@/lib/backend-config";
 import { supabaseRest } from "@/services/supabase-rest";
 import { refreshMyProjectAutomations } from "@/services/automations.service";
 import { refreshTaskDueNotifications } from "@/services/task-execution.service";
+import type {
+  NotificationFilter,
+  NotificationKind,
+  UserNotification,
+} from "@/types/notifications";
 const SCHEDULE_REFRESH_MS = 60_000;
 let lastScheduleRefreshAt = 0;
 let scheduleRefreshPromise: Promise<void> | null = null;
@@ -33,11 +38,6 @@ async function refreshScheduledWorkIfNeeded() {
   return scheduleRefreshPromise;
 }
 
-import type {
-  NotificationFilter,
-  NotificationKind,
-  UserNotification,
-} from "@/types/notifications";
 
 function normalizeKind(value: unknown): NotificationKind {
   return value === "mention" ||
