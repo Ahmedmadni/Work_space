@@ -16,7 +16,8 @@ create table if not exists public.project_audit_events (
   sequence bigint not null check (sequence > 0),
   previous_hash text,
   event_hash text not null,
-  actor_user_id uuid references auth.users(id) on delete set null,
+  -- Historical actor id is retained even if the auth account is later deleted.
+  actor_user_id uuid,
   actor_kind text not null
     check (actor_kind in ('human','automation','system')),
   source text not null
