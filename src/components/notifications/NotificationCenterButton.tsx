@@ -84,6 +84,16 @@ function notificationTitle(notification: UserNotification) {
     return `تم إسناد «${taskTitle}» إليك`;
   }
   if (notification.kind === "task_status") {
+    const event =
+      typeof notification.metadata.event === "string"
+        ? notification.metadata.event
+        : "";
+    if (event === "automation_blocked") {
+      return `تنبيه تلقائي: «${taskTitle}» أصبحت معطلة`;
+    }
+    if (event === "automation_dependencies_ready") {
+      return `«${taskTitle}» أصبحت جاهزة للعمل`;
+    }
     return `تغيّرت حالة «${taskTitle}»`;
   }
   if (notification.kind === "task_due") {
@@ -107,6 +117,9 @@ function notificationContext(notification: UserNotification) {
       : notification.document_name;
   }
   if (notification.board_name) {
+    if (typeof notification.metadata.automation_rule_id === "string") {
+      return `${notification.board_name} · أتمتة سير العمل`;
+    }
     return notification.metadata.target_type === "node"
       ? `${notification.board_name} · مراجعة عنصر`
       : notification.board_name;
@@ -203,7 +216,7 @@ export function NotificationCenterButton() {
                 الإشعارات
               </SheetTitle>
               <SheetDescription className="mt-1">
-                الإشارات، الردود، تكليفات المهام، الاستحقاقات وتغييرات الوصول.
+                الإشارات، الردود، تكليفات المهام، الأتمتة، الاستحقاقات وتغييرات الوصول.
               </SheetDescription>
             </div>
 
