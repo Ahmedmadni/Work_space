@@ -27,6 +27,7 @@ import {
 } from "@/components/app/shared";
 import { CreateBoardDialog } from "@/components/app/dialogs";
 import { ProjectShareDialog } from "@/components/collaboration/ProjectShareDialog";
+import { ProjectAutomationCenter } from "@/components/automations/ProjectAutomationCenter";
 import { ProjectExecutionCenter } from "@/components/execution/ProjectExecutionCenter";
 import { useProject } from "@/hooks/use-projects";
 import {
@@ -545,6 +546,11 @@ function ProjectDetail() {
           canEdit={!!access.data?.can_edit}
         />
       )}
+
+      <ProjectAutomationCenter
+        projectId={projectId}
+        canManage={!!access.data?.can_manage}
+      />
 
       <section className="mb-6 rounded-2xl border border-border bg-card p-4 shadow-[var(--shadow-frost)]">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
