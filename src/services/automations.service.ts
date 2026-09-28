@@ -1,6 +1,8 @@
 import { isSupabaseBackend } from "@/lib/backend-config";
 import { supabaseRest } from "@/services/supabase-rest";
 import type {
+  ProjectAutomationDryRun,
+  ProjectAutomationHealth,
   ProjectAutomationKind,
   ProjectAutomationRule,
   ProjectAutomationRun,
@@ -76,6 +78,14 @@ function normalizeRule(row: Record<string, unknown>): ProjectAutomationRule | nu
     enabled: row.enabled === true,
     last_run_at:
       typeof row.last_run_at === "string" ? row.last_run_at : null,
+    last_tested_at:
+      typeof row.last_tested_at === "string" ? row.last_tested_at : null,
+    last_test_summary:
+      row.last_test_summary &&
+      typeof row.last_test_summary === "object" &&
+      !Array.isArray(row.last_test_summary)
+        ? (row.last_test_summary as Record<string, unknown>)
+        : null,
     created_at:
       typeof row.created_at === "string"
         ? row.created_at
@@ -129,6 +139,18 @@ function normalizeRun(row: Record<string, unknown>): ProjectAutomationRun | null
         ? (row.result as Record<string, unknown>)
         : {},
     error: typeof row.error === "string" ? row.error : null,
+    attempt_count:
+      typeof row.attempt_count === "number" ? row.attempt_count : 1,
+    max_attempts:
+      typeof row.max_attempts === "number" ? row.max_attempts : 3,
+    next_retry_at:
+      typeof row.next_retry_at === "string" ? row.next_retry_at : null,
+    last_attempt_at:
+      typeof row.last_attempt_at === "string"
+        ? row.last_attempt_at
+        : typeof row.created_at === "string"
+          ? row.created_at
+          : new Date(0).toISOString(),
     created_at:
       typeof row.created_at === "string"
         ? row.created_at
@@ -153,6 +175,8 @@ export async function listProjectAutomationRules(
       config: preset.config,
       enabled: false,
       last_run_at: null,
+      last_tested_at: null,
+      last_test_summary: null,
       created_at: new Date(index).toISOString(),
       updated_at: new Date(index).toISOString(),
     }));
@@ -249,5 +273,143 @@ export async function refreshMyProjectAutomations(): Promise<number> {
   return supabaseRest<number>("rpc/refresh_my_project_automations", {
     method: "POST",
     body: {},
+  });
+}
+
+
+export async function getProjectAutomationHealth(
+  projectId: string,
+): Promise<ProjectAutomationHealth> {
+  if (!isSupabaseBackend()) {
+    return {
+      scheduler_mode: "active_app_fallback",
+      scheduler_available: false,
+      cron_job_name: null,
+      cron_job_id: null,
+      last_tick_at: null,
+      last_success_at: null,
+      last_error_at: null,
+      last_error: null,
+      last_duration_ms: null,
+      running_since: null,
+      failed_runs: 0,
+      retrying_runs: 0,
+      exhausted_runs: 0,
+      oldest_failed_at: null,
+      enabled_rules: 0,
+      scheduled_rules: 0,
+      checked_at: new Date().toISOString(),
+    };
+  }
+
+  const raw = await supabaseRest<Record<string, unknown>>(
+    "rpc/get_project_automation_health",
+    {
+      method: "POST",
+      body: { p_project_id: projectId },
+    },
+  );
+
+  return {
+    scheduler_mode:
+      raw.scheduler_mode === "pg_cron"
+        ? "pg_cron"
+        : "active_app_fallback",
+    scheduler_available: raw.scheduler_available === true,
+    cron_job_name:
+      typeof raw.cron_job_name === "string" ? raw.cron_job_name : null,
+    cron_job_id:
+      typeof raw.cron_job_id === "number" ? raw.cron_job_id : null,
+    last_tick_at:
+      typeof raw.last_tick_at === "string" ? raw.last_tick_at : null,
+    last_success_at:
+      typeof raw.last_success_at === "string" ? raw.last_success_at : null,
+    last_error_at:
+      typeof raw.last_error_at === "string" ? raw.last_error_at : null,
+    last_error:
+      typeof raw.last_error === "string" ? raw.last_error : null,
+    last_duration_ms:
+      typeof raw.last_duration_ms === "number" ? raw.last_duration_ms : null,
+    running_since:
+      typeof raw.running_since === "string" ? raw.running_since : null,
+    failed_runs:
+      typeof raw.failed_runs === "number" ? raw.failed_runs : 0,
+    retrying_runs:
+      typeof raw.retrying_runs === "number" ? raw.retrying_runs : 0,
+    exhausted_runs:
+      typeof raw.exhausted_runs === "number" ? raw.exhausted_runs : 0,
+    oldest_failed_at:
+      typeof raw.oldest_failed_at === "string" ? raw.oldest_failed_at : null,
+    enabled_rules:
+      typeof raw.enabled_rules === "number" ? raw.enabled_rules : 0,
+    scheduled_rules:
+      typeof raw.scheduled_rules === "number" ? raw.scheduled_rules : 0,
+    checked_at:
+      typeof raw.checked_at === "string"
+        ? raw.checked_at
+        : new Date().toISOString(),
+  };
+}
+
+export async function testProjectAutomationRule(input: {
+  projectId: string;
+  ruleId: string;
+  limit?: number;
+}): Promise<ProjectAutomationDryRun> {
+  if (!isSupabaseBackend()) {
+    throw new Error("اختبار الأتمتة يتطلب Supabase.");
+  }
+
+  const raw = await supabaseRest<Record<string, unknown>>(
+    "rpc/test_project_automation_rule",
+    {
+      method: "POST",
+      body: {
+        p_project_id: input.projectId,
+        p_rule_id: input.ruleId,
+        p_limit: input.limit ?? 20,
+      },
+    },
+  );
+
+  if (
+    typeof raw.rule_id !== "string" ||
+    typeof raw.kind !== "string" ||
+    !KIND_SET.has(raw.kind as ProjectAutomationKind) ||
+    typeof raw.candidate_count !== "number" ||
+    !Array.isArray(raw.sample) ||
+    typeof raw.tested_at !== "string"
+  ) {
+    throw new Error("عاد الخادم بنتيجة اختبار أتمتة غير صالحة.");
+  }
+
+  return {
+    rule_id: raw.rule_id,
+    kind: raw.kind as ProjectAutomationKind,
+    enabled: raw.enabled === true,
+    candidate_count: raw.candidate_count,
+    sample: raw.sample.filter(
+      (item): item is Record<string, unknown> =>
+        !!item && typeof item === "object" && !Array.isArray(item),
+    ),
+    dry_run: true,
+    tested_at: raw.tested_at,
+  };
+}
+
+export async function retryProjectAutomationRun(input: {
+  projectId: string;
+  runId: string;
+}): Promise<boolean> {
+  if (!isSupabaseBackend()) {
+    throw new Error("إعادة المحاولة تتطلب Supabase.");
+  }
+
+  return supabaseRest<boolean>("rpc/retry_project_automation_run", {
+    method: "POST",
+    body: {
+      p_project_id: input.projectId,
+      p_run_id: input.runId,
+    },
   });
 }

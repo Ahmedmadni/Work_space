@@ -10,10 +10,13 @@ import {
 import { toast } from "sonner";
 
 import {
+  getProjectAutomationHealth,
   listProjectAutomationRules,
   listProjectAutomationRuns,
   refreshProjectAutomations,
+  retryProjectAutomationRun,
   setProjectAutomationEnabled,
+  testProjectAutomationRule,
   updateProjectAutomationConfig,
 } from "@/services/automations.service";
 
@@ -38,6 +41,16 @@ export function useProjectAutomationRuns(
   });
 }
 
+
+export function useProjectAutomationHealth(projectId: string) {
+  return useQuery({
+    queryKey: ["project-automation-health", projectId],
+    queryFn: () => getProjectAutomationHealth(projectId),
+    enabled: !!projectId,
+    refetchInterval: 20_000,
+  });
+}
+
 function useInvalidateAutomations(projectId: string) {
   const queryClient = useQueryClient();
   return () => {
@@ -46,6 +59,9 @@ function useInvalidateAutomations(projectId: string) {
     });
     void queryClient.invalidateQueries({
       queryKey: ["project-automation-runs", projectId],
+    });
+    void queryClient.invalidateQueries({
+      queryKey: ["project-automation-health", projectId],
     });
     void queryClient.invalidateQueries({
       queryKey: ["notifications"],
@@ -73,12 +89,15 @@ export function useSetProjectAutomationEnabled(projectId: string) {
         input.enabled ? "تم تشغيل الأتمتة." : "تم إيقاف الأتمتة.",
       );
     },
-    onError: (error) =>
+    onError: (error) => {
+      const message =
+        error instanceof Error ? error.message : "تعذر تحديث الأتمتة.";
       toast.error(
-        error instanceof Error
-          ? error.message
-          : "تعذر تحديث الأتمتة.",
-      ),
+        message.includes("AUTOMATION_TEST_REQUIRED")
+          ? "شغّل «اختبار القاعدة» بعد آخر تعديل قبل تفعيلها."
+          : message,
+      );
+    },
   });
 }
 
@@ -123,6 +142,57 @@ export function useRefreshProjectAutomations(projectId: string) {
         error instanceof Error
           ? error.message
           : "تعذر تشغيل فحص الأتمتة.",
+      ),
+  });
+}
+
+export function useTestProjectAutomationRule(projectId: string) {
+  const invalidate = useInvalidateAutomations(projectId);
+  return useMutation({
+    mutationFn: (ruleId: string) =>
+      testProjectAutomationRule({
+        projectId,
+        ruleId,
+        limit: 20,
+      }),
+    onSuccess: (result) => {
+      invalidate();
+      toast.success(
+        result.candidate_count > 0
+          ? `الاختبار آمن: ${result.candidate_count} عنصرًا مطابقًا حاليًا.`
+          : "الاختبار آمن: لا توجد عناصر مطابقة حاليًا.",
+      );
+    },
+    onError: (error) =>
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "تعذر اختبار قاعدة الأتمتة.",
+      ),
+  });
+}
+
+export function useRetryProjectAutomationRun(projectId: string) {
+  const invalidate = useInvalidateAutomations(projectId);
+  return useMutation({
+    mutationFn: (runId: string) =>
+      retryProjectAutomationRun({
+        projectId,
+        runId,
+      }),
+    onSuccess: (ok) => {
+      invalidate();
+      toast.success(
+        ok
+          ? "نجحت إعادة تشغيل الأتمتة."
+          : "تمت المحاولة، لكن التشغيل لم يكتمل بنجاح.",
+      );
+    },
+    onError: (error) =>
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "تعذر إعادة تشغيل الأتمتة.",
       ),
   });
 }
