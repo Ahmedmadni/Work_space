@@ -1344,3 +1344,205 @@ revoke all on function public.save_board_canvas(
 grant execute on function public.save_board_canvas(
   text, jsonb, jsonb, jsonb, jsonb
 ) to authenticated;
+
+
+-- Unified planning contract consumed by the application.
+create or replace function public.update_canvas_node_schedule(
+  p_project_id text,
+  p_board_id text,
+  p_node_id text,
+  p_expected_version bigint,
+  p_set_start_date boolean default false,
+  p_start_date date default null,
+  p_set_due_date boolean default false,
+  p_due_date date default null,
+  p_set_effort_hours boolean default false,
+  p_effort_hours numeric default null
+)
+returns jsonb
+language sql
+security definer
+set search_path = public
+as $projectflow$
+  select public.update_canvas_node_planning(
+    p_project_id,
+    p_board_id,
+    p_node_id,
+    p_expected_version,
+    p_set_start_date,
+    p_start_date,
+    p_set_due_date,
+    p_due_date,
+    p_set_effort_hours,
+    p_effort_hours,
+    false,
+    null
+  );
+$projectflow$;
+
+revoke all on function public.update_canvas_node_schedule(
+  text, text, text, bigint, boolean, date, boolean, date, boolean, numeric
+) from public;
+grant execute on function public.update_canvas_node_schedule(
+  text, text, text, bigint, boolean, date, boolean, date, boolean, numeric
+) to authenticated;
+
+create or replace function public.create_project_schedule_baseline(
+  p_project_id text,
+  p_name text
+)
+returns uuid
+language sql
+security definer
+set search_path = public
+as $projectflow$
+  select public.create_project_plan_baseline(p_project_id, p_name);
+$projectflow$;
+
+revoke all on function public.create_project_schedule_baseline(text, text)
+  from public;
+grant execute on function public.create_project_schedule_baseline(text, text)
+  to authenticated;
+
+create or replace function public.list_project_planning_data(
+  p_project_id text
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, auth
+as $projectflow$
+declare
+  v_latest record;
+  v_latest_items jsonb := '[]'::jsonb;
+begin
+  if not public.can_access_project(p_project_id) then
+    raise exception 'PLANNING_LIST_DENIED' using errcode = '42501';
+  end if;
+
+  select
+    baseline.id,
+    baseline.name,
+    baseline.created_at,
+    baseline.snapshot
+  into v_latest
+  from public.project_plan_baselines baseline
+  where baseline.project_id = p_project_id
+  order by baseline.created_at desc
+  limit 1;
+
+  if v_latest.id is not null then
+    v_latest_items := coalesce(v_latest.snapshot->'nodes', '[]'::jsonb);
+  end if;
+
+  return jsonb_build_object(
+    'effort',
+    coalesce((
+      select jsonb_agg(
+        jsonb_build_object(
+          'board_id', n.board_id,
+          'node_id', n.id,
+          'effort_hours', n.effort_hours
+        )
+        order by n.board_id, n.id
+      )
+      from public.canvas_nodes n
+      join public.boards b on b.id = n.board_id
+      where b.project_id = p_project_id
+        and n.kind in ('idea','task','milestone')
+    ), '[]'::jsonb),
+
+    'capacity',
+    coalesce((
+      with participants as (
+        select p.created_by as user_id
+        from public.projects p
+        where p.id = p_project_id
+
+        union
+
+        select pm.user_id
+        from public.project_members pm
+        where pm.project_id = p_project_id
+      )
+      select jsonb_agg(
+        jsonb_build_object(
+          'user_id', participant.user_id,
+          'weekly_capacity_hours',
+            coalesce(capacity.weekly_capacity_hours, 40)
+        )
+        order by participant.user_id
+      )
+      from participants participant
+      left join public.project_member_capacity capacity
+        on capacity.project_id = p_project_id
+        and capacity.user_id = participant.user_id
+    ), '[]'::jsonb),
+
+    'dependencies',
+    coalesce((
+      select jsonb_agg(
+        jsonb_build_object(
+          'board_id', edge.board_id,
+          'source_node_id', edge.source_node_id,
+          'target_node_id', edge.target_node_id,
+          'target_title', target.title,
+          'target_due_date', target.due_date,
+          'target_status', target.status
+        )
+        order by edge.board_id, edge.source_node_id, edge.target_node_id
+      )
+      from public.canvas_edges edge
+      join public.boards b on b.id = edge.board_id
+      join public.canvas_nodes target
+        on target.id = edge.target_node_id
+        and target.board_id = edge.board_id
+      where b.project_id = p_project_id
+        and edge.kind = 'dependency'
+    ), '[]'::jsonb),
+
+    'baselines',
+    coalesce((
+      select jsonb_agg(
+        jsonb_build_object(
+          'id', baseline.id,
+          'name', baseline.name,
+          'created_at', baseline.created_at,
+          'created_by', baseline.created_by,
+          'created_by_name',
+            coalesce(
+              nullif(profile.full_name, ''),
+              nullif(split_part(coalesce(user_row.email, ''), '@', 1), ''),
+              'مستخدم'
+            ),
+          'item_count',
+            jsonb_array_length(
+              coalesce(baseline.snapshot->'nodes', '[]'::jsonb)
+            )
+        )
+        order by baseline.created_at desc
+      )
+      from public.project_plan_baselines baseline
+      left join auth.users user_row on user_row.id = baseline.created_by
+      left join public.profiles profile on profile.id = baseline.created_by
+      where baseline.project_id = p_project_id
+    ), '[]'::jsonb),
+
+    'latest_baseline',
+    case
+      when v_latest.id is null then null
+      else jsonb_build_object(
+        'id', v_latest.id,
+        'name', v_latest.name,
+        'created_at', v_latest.created_at,
+        'items', v_latest_items
+      )
+    end
+  );
+end;
+$projectflow$;
+
+revoke all on function public.list_project_planning_data(text) from public;
+grant execute on function public.list_project_planning_data(text)
+  to authenticated;
