@@ -302,6 +302,9 @@ export async function updateCanvasNodeSchedule(
             ...node,
             start_date: startDate,
             due_date: dueDate,
+            effort_hours: setEffort
+              ? input.effortHours ?? null
+              : node.effort_hours,
             version,
             updated_at: now,
           }
