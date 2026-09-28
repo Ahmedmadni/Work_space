@@ -29,6 +29,7 @@ import { CreateBoardDialog } from "@/components/app/dialogs";
 import { ProjectShareDialog } from "@/components/collaboration/ProjectShareDialog";
 import { ProjectAutomationCenter } from "@/components/automations/ProjectAutomationCenter";
 import { ProjectExecutionCenter } from "@/components/execution/ProjectExecutionCenter";
+import { ProjectGovernanceCenter } from "@/components/governance/ProjectGovernanceCenter";
 import { useProject } from "@/hooks/use-projects";
 import {
   useProjectAccess,
@@ -549,6 +550,13 @@ function ProjectDetail() {
 
       <ProjectAutomationCenter
         projectId={projectId}
+        canManage={!!access.data?.can_manage}
+      />
+
+
+      <ProjectGovernanceCenter
+        projectId={projectId}
+        collaborators={collaborators.data ?? []}
         canManage={!!access.data?.can_manage}
       />
 
