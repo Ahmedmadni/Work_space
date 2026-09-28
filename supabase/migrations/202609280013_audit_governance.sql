@@ -1192,6 +1192,8 @@ declare
   v_previous_hash text := null;
   v_expected_hash text;
   v_checked integer := 0;
+  v_head_sequence bigint;
+  v_head_hash text;
 begin
   if not public.can_manage_project(p_project_id) then
     raise exception 'AUDIT_VERIFY_DENIED' using errcode = '42501';
@@ -1245,6 +1247,22 @@ begin
     v_previous_hash := v_event.event_hash;
     v_checked := v_checked + 1;
   end loop;
+
+  select last_sequence, last_hash
+    into v_head_sequence, v_head_hash
+  from public.project_audit_heads
+  where project_id = p_project_id;
+
+  if coalesce(v_head_sequence, 0) <> v_checked
+    or v_head_hash is distinct from v_previous_hash
+  then
+    return jsonb_build_object(
+      'ok', false,
+      'checked', v_checked,
+      'failed_sequence', coalesce(v_head_sequence, v_checked),
+      'reason', 'head_mismatch'
+    );
+  end if;
 
   return jsonb_build_object(
     'ok', true,
