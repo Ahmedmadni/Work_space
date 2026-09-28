@@ -53,6 +53,12 @@ function dateKey(date: Date) {
     String(date.getUTCDate()).padStart(2, "0"),
   ].join("-");
 }
+function localTodayUtc() {
+  const now = new Date();
+  return new Date(
+    Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 12),
+  );
+}
 function addDays(date: Date, days: number) {
   const next = new Date(date);
   next.setUTCDate(next.getUTCDate() + days);
@@ -280,7 +286,7 @@ function GanttView({
   const scheduled = items.filter((item) => scheduledRange(item));
   const unscheduled = items.filter((item) => !scheduledRange(item));
 
-  const dates: Date[] = [new Date()];
+  const dates: Date[] = [localTodayUtc()];
   for (const item of scheduled) {
     const range = scheduledRange(item)!;
     dates.push(dateFromKey(range.start), dateFromKey(range.due));
@@ -295,7 +301,7 @@ function GanttView({
   const rangeEnd = addDays(max, 21);
   const totalDays = diffDays(rangeStart, rangeEnd) + 1;
   const timelineWidth = totalDays * dayWidth;
-  const todayLeft = diffDays(rangeStart, new Date()) * dayWidth;
+  const todayLeft = diffDays(rangeStart, localTodayUtc()) * dayWidth;
 
   const conflictCount = items.filter((item) => {
     const range = scheduledRange(item);
@@ -588,7 +594,7 @@ function CapacityView({
       row.weekly_capacity_hours,
     ]),
   );
-  const currentWeek = startOfWeek(new Date());
+  const currentWeek = startOfWeek(localTodayUtc());
   const weeks = Array.from({ length: 8 }, (_, index) =>
     addDays(currentWeek, index * 7),
   );
