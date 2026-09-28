@@ -13,12 +13,15 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ArchiveRouteImport } from './routes/archive'
 import { Route as FavoritesRouteImport } from './routes/favorites'
 import { Route as HelpRouteImport } from './routes/help'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as ProjectsRouteImport } from './routes/projects'
 import { Route as RecentRouteImport } from './routes/recent'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as TemplatesRouteImport } from './routes/templates'
 import { Route as WorkspacesIndexRouteImport } from './routes/workspaces.index'
+import { Route as ProjectProjectIdIndexRouteImport } from './routes/project.$projectId.index'
 import { Route as WorkspaceWorkspaceIdIndexRouteImport } from './routes/workspace.$workspaceId.index'
+import { Route as ProjectProjectIdBoardBoardIdRouteImport } from './routes/project.$projectId.board.$boardId'
 import { Route as WorkspaceWorkspaceIdProjectProjectIdIndexRouteImport } from './routes/workspace.$workspaceId.project.$projectId.index'
 import { Route as WorkspaceWorkspaceIdProjectProjectIdBoardBoardIdRouteImport } from './routes/workspace.$workspaceId.project.$projectId.board.$boardId'
 
@@ -40,6 +43,11 @@ const FavoritesRoute = FavoritesRouteImport.update({
 const HelpRoute = HelpRouteImport.update({
   id: '/help',
   path: '/help',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProjectsRoute = ProjectsRouteImport.update({
@@ -67,10 +75,21 @@ const WorkspacesIndexRoute = WorkspacesIndexRouteImport.update({
   path: '/workspaces/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProjectProjectIdIndexRoute = ProjectProjectIdIndexRouteImport.update({
+  id: '/project/$projectId/',
+  path: '/project/$projectId/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const WorkspaceWorkspaceIdIndexRoute =
   WorkspaceWorkspaceIdIndexRouteImport.update({
     id: '/workspace/$workspaceId/',
     path: '/workspace/$workspaceId/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ProjectProjectIdBoardBoardIdRoute =
+  ProjectProjectIdBoardBoardIdRouteImport.update({
+    id: '/project/$projectId/board/$boardId',
+    path: '/project/$projectId/board/$boardId',
     getParentRoute: () => rootRouteImport,
   } as any)
 const WorkspaceWorkspaceIdProjectProjectIdIndexRoute =
@@ -91,12 +110,15 @@ export interface FileRoutesByFullPath {
   '/archive': typeof ArchiveRoute
   '/favorites': typeof FavoritesRoute
   '/help': typeof HelpRoute
+  '/login': typeof LoginRoute
   '/projects': typeof ProjectsRoute
   '/recent': typeof RecentRoute
   '/settings': typeof SettingsRoute
   '/templates': typeof TemplatesRoute
   '/workspaces/': typeof WorkspacesIndexRoute
+  '/project/$projectId/': typeof ProjectProjectIdIndexRoute
   '/workspace/$workspaceId/': typeof WorkspaceWorkspaceIdIndexRoute
+  '/project/$projectId/board/$boardId': typeof ProjectProjectIdBoardBoardIdRoute
   '/workspace/$workspaceId/project/$projectId/': typeof WorkspaceWorkspaceIdProjectProjectIdIndexRoute
   '/workspace/$workspaceId/project/$projectId/board/$boardId': typeof WorkspaceWorkspaceIdProjectProjectIdBoardBoardIdRoute
 }
@@ -105,12 +127,15 @@ export interface FileRoutesByTo {
   '/archive': typeof ArchiveRoute
   '/favorites': typeof FavoritesRoute
   '/help': typeof HelpRoute
+  '/login': typeof LoginRoute
   '/projects': typeof ProjectsRoute
   '/recent': typeof RecentRoute
   '/settings': typeof SettingsRoute
   '/templates': typeof TemplatesRoute
   '/workspaces': typeof WorkspacesIndexRoute
+  '/project/$projectId': typeof ProjectProjectIdIndexRoute
   '/workspace/$workspaceId': typeof WorkspaceWorkspaceIdIndexRoute
+  '/project/$projectId/board/$boardId': typeof ProjectProjectIdBoardBoardIdRoute
   '/workspace/$workspaceId/project/$projectId': typeof WorkspaceWorkspaceIdProjectProjectIdIndexRoute
   '/workspace/$workspaceId/project/$projectId/board/$boardId': typeof WorkspaceWorkspaceIdProjectProjectIdBoardBoardIdRoute
 }
@@ -120,12 +145,15 @@ export interface FileRoutesById {
   '/archive': typeof ArchiveRoute
   '/favorites': typeof FavoritesRoute
   '/help': typeof HelpRoute
+  '/login': typeof LoginRoute
   '/projects': typeof ProjectsRoute
   '/recent': typeof RecentRoute
   '/settings': typeof SettingsRoute
   '/templates': typeof TemplatesRoute
   '/workspaces/': typeof WorkspacesIndexRoute
+  '/project/$projectId/': typeof ProjectProjectIdIndexRoute
   '/workspace/$workspaceId/': typeof WorkspaceWorkspaceIdIndexRoute
+  '/project/$projectId/board/$boardId': typeof ProjectProjectIdBoardBoardIdRoute
   '/workspace/$workspaceId/project/$projectId/': typeof WorkspaceWorkspaceIdProjectProjectIdIndexRoute
   '/workspace/$workspaceId/project/$projectId/board/$boardId': typeof WorkspaceWorkspaceIdProjectProjectIdBoardBoardIdRoute
 }
@@ -136,12 +164,15 @@ export interface FileRouteTypes {
     | '/archive'
     | '/favorites'
     | '/help'
+    | '/login'
     | '/projects'
     | '/recent'
     | '/settings'
     | '/templates'
     | '/workspaces/'
+    | '/project/$projectId/'
     | '/workspace/$workspaceId/'
+    | '/project/$projectId/board/$boardId'
     | '/workspace/$workspaceId/project/$projectId/'
     | '/workspace/$workspaceId/project/$projectId/board/$boardId'
   fileRoutesByTo: FileRoutesByTo
@@ -150,12 +181,15 @@ export interface FileRouteTypes {
     | '/archive'
     | '/favorites'
     | '/help'
+    | '/login'
     | '/projects'
     | '/recent'
     | '/settings'
     | '/templates'
     | '/workspaces'
+    | '/project/$projectId'
     | '/workspace/$workspaceId'
+    | '/project/$projectId/board/$boardId'
     | '/workspace/$workspaceId/project/$projectId'
     | '/workspace/$workspaceId/project/$projectId/board/$boardId'
   id:
@@ -164,12 +198,15 @@ export interface FileRouteTypes {
     | '/archive'
     | '/favorites'
     | '/help'
+    | '/login'
     | '/projects'
     | '/recent'
     | '/settings'
     | '/templates'
     | '/workspaces/'
+    | '/project/$projectId/'
     | '/workspace/$workspaceId/'
+    | '/project/$projectId/board/$boardId'
     | '/workspace/$workspaceId/project/$projectId/'
     | '/workspace/$workspaceId/project/$projectId/board/$boardId'
   fileRoutesById: FileRoutesById
@@ -179,12 +216,15 @@ export interface RootRouteChildren {
   ArchiveRoute: typeof ArchiveRoute
   FavoritesRoute: typeof FavoritesRoute
   HelpRoute: typeof HelpRoute
+  LoginRoute: typeof LoginRoute
   ProjectsRoute: typeof ProjectsRoute
   RecentRoute: typeof RecentRoute
   SettingsRoute: typeof SettingsRoute
   TemplatesRoute: typeof TemplatesRoute
   WorkspacesIndexRoute: typeof WorkspacesIndexRoute
+  ProjectProjectIdIndexRoute: typeof ProjectProjectIdIndexRoute
   WorkspaceWorkspaceIdIndexRoute: typeof WorkspaceWorkspaceIdIndexRoute
+  ProjectProjectIdBoardBoardIdRoute: typeof ProjectProjectIdBoardBoardIdRoute
   WorkspaceWorkspaceIdProjectProjectIdIndexRoute: typeof WorkspaceWorkspaceIdProjectProjectIdIndexRoute
   WorkspaceWorkspaceIdProjectProjectIdBoardBoardIdRoute: typeof WorkspaceWorkspaceIdProjectProjectIdBoardBoardIdRoute
 }
@@ -217,6 +257,13 @@ declare module '@tanstack/react-router' {
       path: '/help'
       fullPath: '/help'
       preLoaderRoute: typeof HelpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/projects': {
@@ -254,11 +301,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WorkspacesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/project/$projectId/': {
+      id: '/project/$projectId/'
+      path: '/project/$projectId'
+      fullPath: '/project/$projectId/'
+      preLoaderRoute: typeof ProjectProjectIdIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/workspace/$workspaceId/': {
       id: '/workspace/$workspaceId/'
       path: '/workspace/$workspaceId'
       fullPath: '/workspace/$workspaceId/'
       preLoaderRoute: typeof WorkspaceWorkspaceIdIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/project/$projectId/board/$boardId': {
+      id: '/project/$projectId/board/$boardId'
+      path: '/project/$projectId/board/$boardId'
+      fullPath: '/project/$projectId/board/$boardId'
+      preLoaderRoute: typeof ProjectProjectIdBoardBoardIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/workspace/$workspaceId/project/$projectId/': {
@@ -283,12 +344,15 @@ const rootRouteChildren: RootRouteChildren = {
   ArchiveRoute: ArchiveRoute,
   FavoritesRoute: FavoritesRoute,
   HelpRoute: HelpRoute,
+  LoginRoute: LoginRoute,
   ProjectsRoute: ProjectsRoute,
   RecentRoute: RecentRoute,
   SettingsRoute: SettingsRoute,
   TemplatesRoute: TemplatesRoute,
   WorkspacesIndexRoute: WorkspacesIndexRoute,
+  ProjectProjectIdIndexRoute: ProjectProjectIdIndexRoute,
   WorkspaceWorkspaceIdIndexRoute: WorkspaceWorkspaceIdIndexRoute,
+  ProjectProjectIdBoardBoardIdRoute: ProjectProjectIdBoardBoardIdRoute,
   WorkspaceWorkspaceIdProjectProjectIdIndexRoute:
     WorkspaceWorkspaceIdProjectProjectIdIndexRoute,
   WorkspaceWorkspaceIdProjectProjectIdBoardBoardIdRoute:
