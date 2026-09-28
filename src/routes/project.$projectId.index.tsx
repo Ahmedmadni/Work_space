@@ -30,6 +30,7 @@ import { ProjectShareDialog } from "@/components/collaboration/ProjectShareDialo
 import { ProjectAutomationCenter } from "@/components/automations/ProjectAutomationCenter";
 import { ProjectExecutionCenter } from "@/components/execution/ProjectExecutionCenter";
 import { ProjectGovernanceCenter } from "@/components/governance/ProjectGovernanceCenter";
+import { ProjectExecutiveDashboard } from "@/components/reports/ProjectExecutiveDashboard";
 import { useProject } from "@/hooks/use-projects";
 import {
   useProjectAccess,
@@ -528,6 +529,16 @@ function ProjectDetail() {
           </>
         }
       />
+
+      {execution.data && (
+        <ProjectExecutiveDashboard
+          project={p}
+          execution={execution.data}
+          boards={boards.data ?? []}
+          collaborators={collaborators.data ?? []}
+          canManage={!!access.data?.can_manage}
+        />
+      )}
 
       {execution.data && execution.data.total > 0 && (
         <ExecutionOverview
