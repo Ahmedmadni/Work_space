@@ -169,3 +169,58 @@
     linear-gradient(to bottom, var(--hairline) 1px, transparent 1px);
   background-size: 28px 28px;
 }
+
+
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  [data-project-report-print],
+  [data-project-report-print] * {
+    visibility: visible !important;
+  }
+
+  [data-project-report-print] {
+    position: absolute !important;
+    inset: 0 auto auto 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: white !important;
+    color: black !important;
+  }
+
+  [data-project-report-print] [data-report-screen-only] {
+    display: none !important;
+  }
+
+  [data-project-report-print] section,
+  [data-project-report-print] article,
+  [data-project-report-print] aside,
+  [data-project-report-print] div {
+    break-inside: avoid;
+  }
+
+  [data-project-report-print] .text-muted-foreground {
+    color: #555 !important;
+  }
+
+  [data-project-report-print] .bg-card,
+  [data-project-report-print] .bg-background,
+  [data-project-report-print] .bg-muted\/25,
+  [data-project-report-print] .bg-muted\/30 {
+    background: white !important;
+  }
+}
