@@ -12,6 +12,8 @@ export interface ProjectAutomationRule {
   config: Record<string, unknown>;
   enabled: boolean;
   last_run_at: string | null;
+  last_tested_at: string | null;
+  last_test_summary: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 }
@@ -36,6 +38,41 @@ export interface ProjectAutomationRun {
   trigger_payload: Record<string, unknown>;
   result: Record<string, unknown>;
   error: string | null;
+  attempt_count: number;
+  max_attempts: number;
+  next_retry_at: string | null;
+  last_attempt_at: string;
   created_at: string;
   finished_at: string | null;
+}
+
+
+export interface ProjectAutomationHealth {
+  scheduler_mode: "pg_cron" | "active_app_fallback";
+  scheduler_available: boolean;
+  cron_job_name: string | null;
+  cron_job_id: number | null;
+  last_tick_at: string | null;
+  last_success_at: string | null;
+  last_error_at: string | null;
+  last_error: string | null;
+  last_duration_ms: number | null;
+  running_since: string | null;
+  failed_runs: number;
+  retrying_runs: number;
+  exhausted_runs: number;
+  oldest_failed_at: string | null;
+  enabled_rules: number;
+  scheduled_rules: number;
+  checked_at: string;
+}
+
+export interface ProjectAutomationDryRun {
+  rule_id: string;
+  kind: ProjectAutomationKind;
+  enabled: boolean;
+  candidate_count: number;
+  sample: Array<Record<string, unknown>>;
+  dry_run: true;
+  tested_at: string;
 }
