@@ -1,7 +1,6 @@
 import {
   Activity,
   Bot,
-  CheckCircle2,
   ChevronDown,
   FileClock,
   Filter,
@@ -43,6 +42,7 @@ const ACTION_LABELS: Record<string, string> = {
   project_renamed: "تغيير اسم المشروع",
   project_archived: "أرشفة المشروع",
   project_restored: "استعادة المشروع",
+  project_deleted: "حذف المشروع",
   board_created: "إنشاء لوحة",
   board_deleted: "حذف لوحة",
   board_updated: "تعديل لوحة",
