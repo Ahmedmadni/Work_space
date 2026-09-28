@@ -8,13 +8,9 @@ const supabaseAnonKey = (
 ).trim();
 const supabaseConfigured = !!supabaseUrl && !!supabaseAnonKey;
 
-// Cloud is the default whenever it is configured; set VITE_DATA_BACKEND=local to opt out.
+// Cloud mode stays opt-in until every database migration is applied.
 const requestedMode: DataBackendMode =
-  import.meta.env.VITE_DATA_BACKEND === "local"
-    ? "local"
-    : supabaseConfigured
-      ? "supabase"
-      : "local";
+  import.meta.env.VITE_DATA_BACKEND === "supabase" ? "supabase" : "local";
 
 export const BACKEND_CONFIG = {
   requestedMode,
