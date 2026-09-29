@@ -244,3 +244,40 @@ export async function deleteProjectDocument(id: string): Promise<void> {
     ? remoteDeleteProjectDocument(id)
     : deleteLocalProjectDocument(id);
 }
+
+
+export interface LocalProjectDocumentMigrationRecord {
+  document: ProjectDocument;
+  blob: Blob;
+}
+
+/** Read-only IndexedDB bridge used by the cloud cutover. */
+export async function listLocalProjectDocumentsForMigration(
+  projectId: string,
+): Promise<LocalProjectDocumentMigrationRecord[]> {
+  const db = await openDb();
+  try {
+    const transaction = db.transaction(STORE_NAME, "readonly");
+    const index = transaction.objectStore(STORE_NAME).index(PROJECT_INDEX);
+    const rows = await new Promise<LocalProjectDocumentRecord[]>(
+      (resolve, reject) => {
+        const request = index.getAll(IDBKeyRange.only(projectId));
+        request.onsuccess = () =>
+          resolve(
+            (request.result as LocalProjectDocumentRecord[] | undefined) ?? [],
+          );
+        request.onerror = () =>
+          reject(
+            request.error ??
+              new Error("Failed to read local documents for migration"),
+          );
+      },
+    );
+    return rows.map((record) => ({
+      document: publicDocument(record),
+      blob: record.blob,
+    }));
+  } finally {
+    db.close();
+  }
+}
