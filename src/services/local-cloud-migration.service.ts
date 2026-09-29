@@ -26,7 +26,15 @@ export interface LocalCloudMigrationPreview {
 }
 
 export interface LocalCloudMigrationIssue {
-  scope: "project" | "board" | "asset" | "version" | "verification";
+  scope:
+    | "project"
+    | "board"
+    | "asset"
+    | "version"
+    | "document"
+    | "annotation"
+    | "planning"
+    | "verification";
   id: string;
   name: string;
   message: string;
