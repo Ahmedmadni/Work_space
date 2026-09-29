@@ -384,3 +384,31 @@ export async function createProjectScheduleBaseline(input: {
   writeLocal(store);
   return id;
 }
+
+
+export interface LocalPlanningMigrationData {
+  effort: Record<string, number>;
+  capacity: Record<string, number>;
+  baselines: Array<{
+    id: string;
+    name: string;
+    created_at: string;
+    created_by_name: string;
+    items: ProjectScheduleBaselineItem[];
+  }>;
+}
+
+/** Read-only migration bridge. Never mutates or clears the local planning store. */
+export function readLocalPlanningForMigration(
+  projectId: string,
+): LocalPlanningMigrationData {
+  const project = readLocal().projects[projectId] ?? emptyProject();
+  return {
+    effort: { ...project.effort },
+    capacity: { ...project.capacity },
+    baselines: project.baselines.map((baseline) => ({
+      ...baseline,
+      items: baseline.items.map((item) => ({ ...item })),
+    })),
+  };
+}
