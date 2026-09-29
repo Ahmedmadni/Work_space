@@ -2,7 +2,9 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { PageHeader } from "@/components/app/shared";
 import { CloudMigrationPanel } from "@/components/settings/CloudMigrationPanel";
+import { CloudReadinessPanel } from "@/components/settings/CloudReadinessPanel";
 import { useCurrentUser } from "@/hooks/use-auth";
+import { useCloudBackendReadiness } from "@/hooks/use-cloud-readiness";
 import { BACKEND_CONFIG } from "@/lib/backend-config";
 
 export const Route = createFileRoute("/settings")({
@@ -19,6 +21,9 @@ export const Route = createFileRoute("/settings")({
 
 function SettingsPage() {
   const { user, loading } = useCurrentUser();
+  const readiness = useCloudBackendReadiness(
+    BACKEND_CONFIG.supabaseConfigured,
+  );
 
   return (
     <>
@@ -47,7 +52,11 @@ function SettingsPage() {
         </p>
       </div>
 
-      {BACKEND_CONFIG.mode === "supabase" && <CloudMigrationPanel />}
+      <CloudReadinessPanel />
+
+      {BACKEND_CONFIG.mode === "supabase" && readiness.data?.ready && (
+        <CloudMigrationPanel />
+      )}
     </>
   );
 }
