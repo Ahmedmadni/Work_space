@@ -29,6 +29,7 @@ import { CreateBoardDialog } from "@/components/app/dialogs";
 import { ProjectShareDialog } from "@/components/collaboration/ProjectShareDialog";
 import { ProjectAutomationCenter } from "@/components/automations/ProjectAutomationCenter";
 import { ProjectExecutionCenter } from "@/components/execution/ProjectExecutionCenter";
+import { NotesToTasksPanel } from "@/components/ai/NotesToTasksPanel";
 import { ProjectGovernanceCenter } from "@/components/governance/ProjectGovernanceCenter";
 import { ProjectExecutiveDashboard } from "@/components/reports/ProjectExecutiveDashboard";
 import { ProjectPlanningCenter } from "@/components/planning/ProjectPlanningCenter";
@@ -541,6 +542,11 @@ function ProjectDetail() {
         />
       )}
 
+      <NotesToTasksPanel
+        projectName={p.name}
+        boards={(boards.data ?? []).filter((b) => !b.archived_at)}
+        canEdit={!!access.data?.can_edit}
+      />
 
       {execution.data && (
         <ProjectPlanningCenter
