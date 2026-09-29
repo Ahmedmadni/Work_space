@@ -270,15 +270,9 @@ begin
       v_node_id := nullif(v_item->>'node_id', '');
       v_board_id := nullif(v_item->>'board_id', '');
 
-      if v_node_id is null
-        or v_board_id is null
-        or not exists (
-          select 1
-          from public.boards b
-          where b.id = v_board_id
-            and b.project_id = p_project_id
-        )
-      then
+      -- Baselines are historical snapshots. Keep their board/node identifiers
+      -- even when the live board or task was deleted after the baseline.
+      if v_node_id is null or v_board_id is null then
         continue;
       end if;
 
