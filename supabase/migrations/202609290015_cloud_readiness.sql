@@ -81,16 +81,13 @@ begin
             where n.nspname = 'public'
               and p.proname = 'save_board_canvas'
           )),
-        ('function:list_project_execution',
+        ('function:update_canvas_node_execution',
           exists (
             select 1
             from pg_proc p
             join pg_namespace n on n.oid = p.pronamespace
             where n.nspname = 'public'
-              and p.proname in (
-                'list_project_execution_items',
-                'get_project_execution_summary'
-              )
+              and p.proname = 'update_canvas_node_execution'
           )),
         ('function:list_project_automation_rules',
           exists (
