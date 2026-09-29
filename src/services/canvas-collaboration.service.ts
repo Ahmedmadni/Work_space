@@ -89,7 +89,7 @@ function diffCollection<T extends { id: string; version?: number }>(
           | "edge_create"
           | "stroke_create",
         entity: item,
-      } as CanvasOperation);
+      } as unknown as CanvasOperation);
       continue;
     }
     if (!sameJson(comparable(previous), comparable(item))) {
@@ -100,7 +100,7 @@ function diffCollection<T extends { id: string; version?: number }>(
           | "stroke_update",
         entity: item,
         expected_version: entityVersion(previous),
-      } as CanvasOperation);
+      } as unknown as CanvasOperation);
     }
   }
 
@@ -113,7 +113,7 @@ function diffCollection<T extends { id: string; version?: number }>(
         | "stroke_delete",
       id: item.id,
       expected_version: entityVersion(item),
-    } as CanvasOperation);
+    } as unknown as CanvasOperation);
   }
 
   return operations;
