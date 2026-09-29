@@ -320,7 +320,7 @@ export function ProjectCard({ project: p, boards }: { project: Project; boards?:
       {canEdit && (
         <div className="absolute end-3 top-3">
           <ActionsMenu
-            onOpen={() => void navigate({ to: "/workspace/$workspaceId/project/$projectId", params })}
+            onOpen={() => void navigate({ to: "/project/$projectId", params: { projectId: p.id } })}
             onEdit={() => setEdit(true)}
             onArchive={() => archive.mutate(p.id)}
             onDelete={() => setDel(true)}
@@ -362,7 +362,7 @@ export function BoardCard({ board: b }: { board: BoardWithContext }) {
           <button aria-label={b.is_favorite ? "إزالة من المفضلة" : "إضافة للمفضلة"} onClick={() => fav.mutate(b.id)} className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground hover:text-warning">
             <Star className={cn("h-4 w-4", b.is_favorite && "fill-warning text-warning")} />
           </button>
-          <ActionsMenu onOpen={() => void navigate({ to: "/workspace/$workspaceId/project/$projectId/board/$boardId", params })} onEdit={() => setEdit(true)} onArchive={() => archive.mutate(b.id)} onDelete={() => setDel(true)} />
+          <ActionsMenu onOpen={() => void navigate({ to: "/project/$projectId/board/$boardId", params })} onEdit={() => setEdit(true)} onArchive={() => archive.mutate(b.id)} onDelete={() => setDel(true)} />
         </div>
       )}
       <EditEntityDialog open={edit} onOpenChange={setEdit} title="تعديل اللوحة" initialName={b.name} initialDescription={b.description} pending={update.isPending}

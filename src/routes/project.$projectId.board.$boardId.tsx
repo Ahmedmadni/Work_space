@@ -13,7 +13,9 @@ import { BOARD_TYPE_LABELS } from "@/lib/labels";
 import { NotFoundState } from "@/components/app/shared";
 
 export const Route = createFileRoute("/project/$projectId/board/$boardId")({
-  validateSearch: (search: Record<string, unknown>) => {
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { node?: string; doc?: string; page?: number; comment?: string } => {
     const rawPage =
       typeof search.page === "number"
         ? search.page
