@@ -425,6 +425,7 @@ async function verifyProjectExtras(
   }
 
   const planning = readLocalPlanningForMigration(project.id);
+  const liveNodes = projectNodeMap(boards);
   const remotePlanning = await supabaseRest<Record<string, unknown>>(
     "rpc/list_project_planning_data",
     {
@@ -433,21 +434,74 @@ async function verifyProjectExtras(
     },
   );
   const remoteEffort = Array.isArray(remotePlanning.effort)
-    ? remotePlanning.effort
+    ? remotePlanning.effort as Array<Record<string, unknown>>
     : [];
   const remoteCapacity = Array.isArray(remotePlanning.capacity)
-    ? remotePlanning.capacity
+    ? remotePlanning.capacity as Array<Record<string, unknown>>
     : [];
   const remoteBaselines = Array.isArray(remotePlanning.baselines)
-    ? remotePlanning.baselines
+    ? remotePlanning.baselines as Array<Record<string, unknown>>
     : [];
 
-  if (
-    remoteEffort.length < Object.keys(planning.effort).length ||
-    remoteCapacity.length < Math.min(1, Object.keys(planning.capacity).length) ||
-    remoteBaselines.length < planning.baselines.length
-  ) {
-    throw new Error("Planning verification failed.");
+  const remoteEffortMap = new Map(
+    remoteEffort
+      .filter((row) => typeof row.node_id === "string")
+      .map((row) => [
+        row.node_id as string,
+        typeof row.effort_hours === "number" ? row.effort_hours : null,
+      ] as const),
+  );
+  for (const [nodeId, hours] of Object.entries(planning.effort)) {
+    if (!liveNodes.has(nodeId)) continue;
+    if (remoteEffortMap.get(nodeId) !== hours) {
+      throw new Error(`Effort verification failed: ${nodeId}`);
+    }
+  }
+
+  const localCapacity = planning.capacity[CURRENT_USER.id];
+  if (typeof localCapacity === "number") {
+    const remoteUserCapacity = remoteCapacity.find(
+      (row) => row.user_id === remoteUserId,
+    );
+    if (remoteUserCapacity?.weekly_capacity_hours !== localCapacity) {
+      throw new Error("Capacity verification failed.");
+    }
+  }
+
+  const remoteBaselineIds = new Set(
+    remoteBaselines
+      .map((row) => row.id)
+      .filter((id): id is string => typeof id === "string"),
+  );
+  for (const baseline of planning.baselines) {
+    if (!remoteBaselineIds.has(baseline.id)) {
+      throw new Error(`Baseline verification failed: ${baseline.name}`);
+    }
+  }
+
+  if (planning.baselines.length) {
+    const remoteItems = await supabaseRest<
+      Array<{ baseline_id: string; node_id: string }>
+    >("project_schedule_baseline_items", {
+      query: {
+        select: "baseline_id,node_id",
+        project_id: `eq.${project.id}`,
+      },
+    });
+    const remoteItemKeys = new Set(
+      remoteItems.map(
+        (row) => `${row.baseline_id}:${row.node_id}`,
+      ),
+    );
+    for (const baseline of planning.baselines) {
+      for (const item of baseline.items) {
+        if (!remoteItemKeys.has(`${baseline.id}:${item.node_id}`)) {
+          throw new Error(
+            `Baseline item verification failed: ${baseline.name} / ${item.title}`,
+          );
+        }
+      }
+    }
   }
 
   for (const board of boards) {
