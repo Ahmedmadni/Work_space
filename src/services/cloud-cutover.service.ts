@@ -198,13 +198,13 @@ export async function previewCompleteCloudCutover(
 }
 
 function issue(
-  scope: LocalCloudMigrationIssue["scope"] | "document" | "annotation" | "planning",
+  scope: LocalCloudMigrationIssue["scope"],
   id: string,
   name: string,
   error: unknown,
 ): LocalCloudMigrationIssue {
   return {
-    scope: scope as LocalCloudMigrationIssue["scope"],
+    scope,
     id,
     name,
     message:
