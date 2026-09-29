@@ -44,6 +44,9 @@ export default tseslint.config(
         ...globals.node,
       },
     },
+    rules: {
+      "prefer-const": "off",
+    },
   },
   eslintPluginPrettier,
 );
