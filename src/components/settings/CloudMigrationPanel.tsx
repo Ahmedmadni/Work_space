@@ -10,12 +10,12 @@ import {
 } from "lucide-react";
 
 import {
-  migrateLocalDataToCloud,
-  previewLocalCloudMigration,
-  type LocalCloudMigrationPreview,
-  type LocalCloudMigrationProgress,
-  type LocalCloudMigrationResult,
-} from "@/services/local-cloud-migration.service";
+  migrateCompleteLocalDataToCloud,
+  previewCompleteCloudCutover,
+  type CompleteCloudCutoverPreview,
+  type CompleteCloudCutoverProgress,
+  type CompleteCloudCutoverResult,
+} from "@/services/cloud-cutover.service";
 
 function Count({
   label,
@@ -32,32 +32,35 @@ function Count({
   );
 }
 
-function phaseLabel(phase: LocalCloudMigrationProgress["phase"]) {
+function phaseLabel(phase: CompleteCloudCutoverProgress["phase"]) {
   if (phase === "preparing") return "التجهيز";
   if (phase === "projects") return "المشاريع";
   if (phase === "boards") return "اللوحات";
   if (phase === "assets") return "الصور";
   if (phase === "canvas") return "محتوى اللوحات";
   if (phase === "versions") return "سجل الإصدارات";
-  return "التحقق";
+  if (phase === "documents") return "المستندات";
+  if (phase === "annotations") return "التعليقات والرسم على المستندات";
+  if (phase === "planning") return "التخطيط والإسناد";
+  return "التحقق الكامل";
 }
 
 export function CloudMigrationPanel() {
   const queryClient = useQueryClient();
   const [includeDemo, setIncludeDemo] = useState(false);
-  const [preview, setPreview] = useState<LocalCloudMigrationPreview | null>(null);
+  const [preview, setPreview] = useState<CompleteCloudCutoverPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
-  const [progress, setProgress] = useState<LocalCloudMigrationProgress | null>(null);
-  const [result, setResult] = useState<LocalCloudMigrationResult | null>(null);
+  const [progress, setProgress] = useState<CompleteCloudCutoverProgress | null>(null);
+  const [result, setResult] = useState<CompleteCloudCutoverResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const loadPreview = async () => {
     setPreviewLoading(true);
     setError(null);
     try {
-      setPreview(await previewLocalCloudMigration(includeDemo));
+      setPreview(await previewCompleteCloudCutover(includeDemo));
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر فحص البيانات المحلية.");
     } finally {
@@ -77,7 +80,7 @@ export function CloudMigrationPanel() {
     setResult(null);
     setError(null);
     try {
-      const migrationResult = await migrateLocalDataToCloud({
+      const migrationResult = await migrateCompleteLocalDataToCloud({
         includeDemo,
         onProgress: setProgress,
       });
@@ -113,8 +116,9 @@ export function CloudMigrationPanel() {
           <div>
             <h2 className="font-semibold">نقل البيانات المحلية إلى السحابة</h2>
             <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">
-              ينقل مشاريعك ولوحاتك ومحتوى الـCanvas والصور وسجل الإصدارات إلى حساب Supabase الحالي.
-              العملية قابلة لإعادة التشغيل ولا تحذف أي بيانات من المتصفح.
+              ينقل المشاريع واللوحات والـCanvas والصور والإصدارات والمستندات والرسم عليها،
+              بالإضافة إلى الإسناد والجهد والـCapacity والـBaselines. العملية قابلة لإعادة التشغيل
+              ولا تحذف أي بيانات محلية من المتصفح.
             </p>
           </div>
         </div>
@@ -138,14 +142,28 @@ export function CloudMigrationPanel() {
         </div>
       ) : preview ? (
         <>
-          <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+          <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
             <Count label="مشاريع" value={preview.projects} />
             <Count label="لوحات" value={preview.boards} />
             <Count label="عناصر" value={preview.nodes} />
-            <Count label="روابط" value={preview.edges} />
-            <Count label="رسومات" value={preview.strokes} />
-            <Count label="صور" value={preview.assets} />
-            <Count label="إصدارات" value={preview.versions} />
+            <Count label="صور Canvas" value={preview.assets} />
+            <Count label="مستندات" value={preview.documents} />
+            <Count label="Annotations" value={preview.annotations} />
+            <Count label="إسنادات" value={preview.assignments} />
+            <Count label="Baselines" value={preview.baselines} />
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-muted-foreground">
+            <span>{preview.edges} روابط</span>
+            <span>·</span>
+            <span>{preview.strokes} رسومات</span>
+            <span>·</span>
+            <span>{preview.versions} إصدارات</span>
+            <span>·</span>
+            <span>{preview.planning_effort} تقديرات جهد</span>
+            <span>·</span>
+            <span>{preview.planning_capacity} إعدادات Capacity</span>
+            <span>·</span>
+            <span>{preview.baseline_items} عناصر Baseline</span>
           </div>
 
           {(preview.excluded_demo_projects > 0 || preview.excluded_demo_boards > 0) && (
@@ -202,7 +220,8 @@ export function CloudMigrationPanel() {
                 />
                 <span>
                   أؤكد أنني أريد رفع هذه البيانات إلى الحساب السحابي الحالي. أفهم أن البيانات
-                  المحلية ستبقى كما هي ولن تُحذف بعد الترحيل.
+                  المحلية ستبقى كما هي ولن تُحذف بعد الترحيل، ولن أعتبر الانتقال مكتملًا
+                  إلا بعد التحقق من المشاريع واللوحات والمستندات والـannotations والتخطيط والإسناد.
                 </span>
               </label>
 
@@ -258,10 +277,16 @@ export function CloudMigrationPanel() {
                   ? "اكتمل الترحيل مع عناصر تحتاج مراجعة"
                   : "اكتمل الترحيل والتحقق بنجاح"}
               </h3>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {result.projects_migrated} مشروع · {result.boards_migrated} لوحة ·
-                {" "}{result.assets_migrated} صورة · {result.versions_migrated} إصدار ·
-                {" "}{result.boards_verified} لوحة تم التحقق منها.
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                {result.projects_migrated} مشروع · {result.boards_migrated} لوحة ·{" "}
+                {result.assets_migrated} صورة · {result.documents_migrated} مستند ·{" "}
+                {result.annotations_migrated} Annotation · {result.assignments_migrated} إسناد ·{" "}
+                {result.effort_migrated} جهد · {result.capacity_migrated} Capacity ·{" "}
+                {result.baselines_migrated} Baseline.
+              </p>
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                تم التحقق من {result.boards_verified} لوحة على مستوى Canvas، و
+                {result.projects_fully_verified} مشروع على مستوى المستندات والتخطيط والإسناد.
               </p>
             </div>
           </div>

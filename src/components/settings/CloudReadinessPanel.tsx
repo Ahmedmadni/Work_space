@@ -181,7 +181,7 @@ export function CloudReadinessPanel() {
             <div className="flex flex-wrap items-center gap-2 rounded-xl bg-muted/25 p-3 text-[10px] text-muted-foreground">
               <ShieldCheck className="h-4 w-4 text-success" />
               <span>
-                Contract: {data.backend_contract ?? "projectflow.cloud.v1"}
+                Contract: {data.backend_contract ?? "projectflow.cloud.v2"}
               </span>
               <span>·</span>
               <span>

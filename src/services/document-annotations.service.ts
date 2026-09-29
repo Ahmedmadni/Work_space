@@ -267,3 +267,32 @@ export function deleteLocalDocumentAnnotations(documentId: string): void {
   delete store.documents[documentId];
   writeStore(store);
 }
+
+
+export interface LocalDocumentAnnotationMigrationPage {
+  page_number: number;
+  annotations: DocumentAnnotation[];
+}
+
+/** Read-only localStorage bridge used by the cloud cutover. */
+export function listLocalDocumentAnnotationPagesForMigration(
+  documentId: string,
+): LocalDocumentAnnotationMigrationPage[] {
+  const pages = readStore().documents[documentId] ?? {};
+  return Object.entries(pages)
+    .flatMap(([pageKey, annotations]) => {
+      const pageNumber = Number(pageKey);
+      if (!Number.isInteger(pageNumber) || pageNumber < 1) return [];
+      const normalized = annotations
+        .map((annotation) =>
+          normalizeAnnotation(annotation, documentId, pageNumber),
+        )
+        .filter(
+          (annotation): annotation is DocumentAnnotation => !!annotation,
+        );
+      return normalized.length
+        ? [{ page_number: pageNumber, annotations: normalized }]
+        : [];
+    })
+    .sort((a, b) => a.page_number - b.page_number);
+}

@@ -1,12 +1,14 @@
 import { BACKEND_CONFIG } from "@/lib/backend-config";
 import type { CloudBackendReadiness } from "@/types/cloud-readiness";
 
+const REQUIRED_SCHEMA_VERSION = 16;
+
 const EMPTY: CloudBackendReadiness = {
   configured: false,
   reachable: false,
   ready: false,
   schema_version: 0,
-  expected_schema_version: 15,
+  expected_schema_version: REQUIRED_SCHEMA_VERSION,
   checks_passed: 0,
   checks_total: 0,
   missing: [],
@@ -71,22 +73,32 @@ export async function getCloudBackendReadiness(): Promise<CloudBackendReadiness>
       };
     }
 
+    const schemaVersion = numberValue(payload.schema_version);
+    const remoteMissing = Array.isArray(payload.missing)
+      ? payload.missing.filter(
+          (item): item is string => typeof item === "string",
+        )
+      : [];
+    const migrationMissing =
+      schemaVersion < REQUIRED_SCHEMA_VERSION
+        ? ["migration:016_complete_cloud_cutover"]
+        : [];
+    const missing = Array.from(
+      new Set([...remoteMissing, ...migrationMissing]),
+    );
+
     return {
       configured: true,
       reachable: true,
-      ready: payload.ready === true,
-      schema_version: numberValue(payload.schema_version),
-      expected_schema_version: numberValue(
-        payload.expected_schema_version,
-        15,
-      ),
+      ready:
+        payload.ready === true &&
+        schemaVersion >= REQUIRED_SCHEMA_VERSION &&
+        missing.length === 0,
+      schema_version: schemaVersion,
+      expected_schema_version: REQUIRED_SCHEMA_VERSION,
       checks_passed: numberValue(payload.checks_passed),
       checks_total: numberValue(payload.checks_total),
-      missing: Array.isArray(payload.missing)
-        ? payload.missing.filter(
-            (item): item is string => typeof item === "string",
-          )
-        : [],
+      missing,
       checked_at:
         typeof payload.checked_at === "string"
           ? payload.checked_at

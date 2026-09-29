@@ -184,3 +184,79 @@ export async function remoteDeleteProjectDocument(id: string): Promise<void> {
     prefer: "return=minimal",
   });
 }
+
+
+/**
+ * Idempotent cutover upload that preserves the local document id so annotation
+ * foreign keys remain stable. This is intentionally separate from normal upload.
+ */
+export async function remoteMigrateProjectDocument(
+  document: ProjectDocument,
+  blob: Blob,
+): Promise<ProjectDocument> {
+  const file = new File([blob], document.file_name, {
+    type: document.mime_type,
+  });
+  validateFile(file);
+  const session = await requireRemoteSession();
+
+  const existing = await supabaseRest<ProjectDocumentRow[]>(
+    "project_documents",
+    {
+      query: {
+        select: "*",
+        id: `eq.${document.id}`,
+        limit: 1,
+      },
+    },
+  );
+
+  if (existing[0] && existing[0].project_id !== document.project_id) {
+    throw new Error(
+      "يوجد مستند سحابي بنفس المعرّف لكنه يتبع مشروعًا مختلفًا.",
+    );
+  }
+
+  const objectPath =
+    `${document.project_id}/${document.id}/${safeFileName(document.file_name)}`;
+
+  await storageRequest(objectPath, {
+    method: "POST",
+    headers: {
+      "Content-Type": document.mime_type,
+      "x-upsert": "true",
+    },
+    body: file,
+  });
+
+  const rows = await supabaseRest<ProjectDocumentRow[]>(
+    "project_documents",
+    {
+      method: "POST",
+      query: { on_conflict: "id" },
+      body: {
+        id: document.id,
+        project_id: document.project_id,
+        file_name: document.file_name.slice(0, 220),
+        mime_type: document.mime_type,
+        size_bytes: blob.size,
+        object_path: objectPath,
+        page_count: document.page_count,
+        created_by: session.user.id,
+        created_at: document.created_at,
+        updated_at: document.updated_at,
+      },
+      prefer: "resolution=merge-duplicates,return=representation",
+    },
+  );
+
+  const row = rows[0];
+  if (!row) throw new Error("DOCUMENT_MIGRATION_METADATA_FAILED");
+  if (
+    row.project_id !== document.project_id ||
+    row.size_bytes !== blob.size
+  ) {
+    throw new Error("DOCUMENT_MIGRATION_VERIFICATION_FAILED");
+  }
+  return mapDocument(row);
+}
