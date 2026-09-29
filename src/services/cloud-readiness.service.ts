@@ -6,7 +6,7 @@ const EMPTY: CloudBackendReadiness = {
   reachable: false,
   ready: false,
   schema_version: 0,
-  expected_schema_version: 15,
+  expected_schema_version: 16,
   checks_passed: 0,
   checks_total: 0,
   missing: [],
