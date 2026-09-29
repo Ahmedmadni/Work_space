@@ -92,7 +92,7 @@ export function CloudBackendSafetyGate({
               <div className="rounded-xl border border-border bg-background p-3">
                 <p className="text-[10px] text-muted-foreground">Schema</p>
                 <p className="mt-1 text-lg font-semibold">
-                  {data?.schema_version ?? 0}/{data?.expected_schema_version ?? 15}
+                  {data?.schema_version ?? 0}/{data?.expected_schema_version ?? 16}
                 </p>
               </div>
               <div className="rounded-xl border border-border bg-background p-3">
