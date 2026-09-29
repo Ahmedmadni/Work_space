@@ -13,6 +13,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { useRouterState } from "@tanstack/react-router";
 import { AppShell } from "@/components/app/AppShell";
 import { AuthGate } from "@/components/auth/AuthGate";
+import { CloudBackendSafetyGate } from "@/components/settings/CloudBackendSafetyGate";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
@@ -148,6 +149,7 @@ function RootComponent() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isBoard = pathname.includes("/board/");
   const isAuthRoute = pathname === "/login";
+  const isSettingsRoute = pathname === "/settings";
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -156,9 +158,11 @@ function RootComponent() {
         {isAuthRoute ? (
           <Outlet />
         ) : (
-          <AuthGate>
-            {isBoard ? <Outlet /> : <AppShell><Outlet /></AppShell>}
-          </AuthGate>
+          <CloudBackendSafetyGate bypass={isSettingsRoute}>
+            <AuthGate>
+              {isBoard ? <Outlet /> : <AppShell><Outlet /></AppShell>}
+            </AuthGate>
+          </CloudBackendSafetyGate>
         )}
       </AppErrorBoundary>
       <Toaster position="bottom-left" richColors />
