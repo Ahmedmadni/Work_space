@@ -14,10 +14,10 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import {
+  addReviewedCopilotTask,
   askProjectCopilot,
   buildCopilotProjectContext,
 } from "@/services/ai-copilot.service";
-import { addTasksToBoard } from "@/services/ai-tasks.service";
 import type {
   BoardWithContext,
   CanvasPriority,
@@ -68,11 +68,13 @@ const INSIGHT_TONE = {
 } as const;
 
 function CreateTaskCard({
+  projectId,
   action,
   boards,
   canEdit,
   onApplied,
 }: {
+  projectId: string;
   action: CopilotCreateTaskAction;
   boards: BoardWithContext[];
   canEdit: boolean;
@@ -87,14 +89,13 @@ function CreateTaskCard({
 
   const apply = useMutation({
     mutationFn: () =>
-      addTasksToBoard(boardId, [
-        {
-          title: title.trim(),
-          description: description.trim(),
-          priority,
-          reason: action.reason,
-        },
-      ]),
+      addReviewedCopilotTask({
+        projectId,
+        boardId,
+        title,
+        description,
+        priority,
+      }),
     onSuccess: () => {
       toast.success("تمت إضافة المهمة إلى اللوحة.");
       void queryClient.invalidateQueries();
@@ -422,6 +423,7 @@ export function ProjectCopilotPanel({
                     return (
                       <CreateTaskCard
                         key={action.title + index}
+                        projectId={project.id}
                         action={action}
                         boards={boards.filter((board) => !board.archived_at)}
                         canEdit={canEdit}
