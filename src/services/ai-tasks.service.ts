@@ -1,5 +1,6 @@
 import { generateTasksFromNotes } from "@/lib/ai-tasks.functions";
-import { createCanvasNode, getBoardCanvas, saveBoardCanvas } from "@/services/canvas.service";
+import { saveCollaborativeBoardCanvas } from "@/services/canvas-collaboration.service";
+import { createCanvasNode, getBoardCanvas } from "@/services/canvas.service";
 import type { CanvasPriority } from "@/types";
 
 export interface DraftTask {
@@ -34,6 +35,12 @@ export async function addTasksToBoard(boardId: string, tasks: DraftTask[]): Prom
       tags: ["ذكاء اصطناعي"],
     };
   });
-  await saveBoardCanvas({ ...snapshot, nodes: [...snapshot.nodes, ...nodes] });
-  return nodes.length;
+  const result = await saveCollaborativeBoardCanvas(
+    { ...snapshot, nodes: [...snapshot.nodes, ...nodes] },
+    snapshot,
+  );
+  if (result.conflicts.length) {
+    throw new Error("حدث تعارض أثناء إضافة المهام. حدّث اللوحة وحاول مجددًا.");
+  }
+  return result.applied_count;
 }
