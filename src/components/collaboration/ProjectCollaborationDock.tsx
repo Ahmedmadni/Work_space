@@ -78,6 +78,7 @@ function activityLabel(item: ProjectActivity) {
     automation_disabled: "أوقف قاعدة أتمتة",
     automation_task_status_changed: "غيّرت الأتمتة حالة مهمة",
     automation_task_due_changed: "غيّرت الأتمتة تاريخ استحقاق مهمة",
+    ai_copilot_task_accepted: "أضاف مهمة مقترحة من مساعد المشروع",
     document_uploaded: "رفع ملفًا",
     document_deleted: "حذف ملفًا",
     member_invited: "أرسل دعوة للمشروع",
