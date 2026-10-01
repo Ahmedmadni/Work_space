@@ -1,6 +1,11 @@
+import { isSupabaseBackend } from "@/lib/backend-config";
 import { runProjectCopilotFn } from "@/lib/ai-copilot.functions";
+import { saveCollaborativeBoardCanvas } from "@/services/canvas-collaboration.service";
+import { createCanvasNode, getBoardCanvas } from "@/services/canvas.service";
+import { supabaseRest } from "@/services/supabase-rest";
 import type {
   BoardWithContext,
+  CanvasPriority,
   Project,
   ProjectExecutionSummary,
 } from "@/types";
@@ -91,4 +96,62 @@ export async function askProjectCopilot(input: {
   const response = await runProjectCopilotFn({ data: input });
   if (!response.ok) throw new Error(response.message);
   return response.result;
+}
+
+export async function addReviewedCopilotTask(input: {
+  projectId: string;
+  boardId: string;
+  title: string;
+  description: string;
+  priority: CanvasPriority;
+}): Promise<string> {
+  const snapshot = await getBoardCanvas(input.boardId);
+  const baseY =
+    snapshot.nodes.reduce(
+      (max, node) => Math.max(max, node.y + node.height),
+      0,
+    ) + 80;
+  const node = createCanvasNode(
+    input.boardId,
+    { x: 0, y: baseY },
+    "task",
+  );
+  node.title = input.title.trim().slice(0, 300);
+  node.description = input.description.trim().slice(0, 1200) || null;
+  node.priority = input.priority;
+  node.tags = ["ذكاء اصطناعي", "مراجَع"];
+
+  const result = await saveCollaborativeBoardCanvas(
+    {
+      ...snapshot,
+      nodes: [...snapshot.nodes, node],
+    },
+    snapshot,
+  );
+
+  if (result.conflicts.length || result.applied_count < 1) {
+    throw new Error(
+      "حدث تعارض أثناء إضافة المهمة. حدّث اللوحة وحاول مجددًا.",
+    );
+  }
+
+  if (isSupabaseBackend()) {
+    void supabaseRest<null>("rpc/record_ai_copilot_task_accepted", {
+      method: "POST",
+      body: {
+        p_project_id: input.projectId,
+        p_board_id: input.boardId,
+        p_node_id: node.id,
+      },
+    }).catch((error) => {
+      if (import.meta.env.DEV) {
+        console.warn(
+          "[ai-copilot] تعذر تسجيل قبول المهمة في Audit.",
+          error,
+        );
+      }
+    });
+  }
+
+  return node.id;
 }
