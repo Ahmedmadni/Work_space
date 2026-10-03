@@ -434,15 +434,7 @@ export async function applyProjectPlanningScenario(input: {
         method: "POST",
         body: {
           p_project_id: input.projectId,
-          p_changes: input.changes.map((change) => ({
-            board_id: change.board_id,
-            node_id: change.node_id,
-            expected_version: change.expected_version,
-            start_date: change.start_date,
-            due_date: change.due_date,
-            effort_hours: change.effort_hours,
-            assignee_user_id: change.assignee_user_id,
-          })),
+          p_changes: input.changes.map(({ assignee_name: _assigneeName, ...change }) => change),
         },
       },
     );
@@ -467,16 +459,20 @@ export async function applyProjectPlanningScenario(input: {
         "تم تعديل إحدى المهام أثناء مراجعة السيناريو. حدّث البيانات وأعد المحاولة.",
       );
     }
-    if (
-      change.start_date &&
-      change.due_date &&
-      change.start_date > change.due_date
-    ) {
+    const nextStart = Object.prototype.hasOwnProperty.call(change, "start_date")
+      ? change.start_date ?? null
+      : current.start_date;
+    const nextDue = Object.prototype.hasOwnProperty.call(change, "due_date")
+      ? change.due_date ?? null
+      : current.due_date;
+    if (nextStart && nextDue && nextStart > nextDue) {
       throw new Error("يوجد تغيير بتاريخ بداية بعد تاريخ الاستحقاق.");
     }
     if (
+      Object.prototype.hasOwnProperty.call(change, "effort_hours") &&
       change.effort_hours !== null &&
-      (change.effort_hours < 0 || change.effort_hours > 10000)
+      change.effort_hours !== undefined &&
+      (change.effort_hours < 0.25 || change.effort_hours > 10000)
     ) {
       throw new Error("يوجد جهد مقدّر خارج النطاق المسموح.");
     }
@@ -501,15 +497,33 @@ export async function applyProjectPlanningScenario(input: {
       nodes: snapshot.nodes.map((node) => {
         const change = changeMap.get(node.id);
         if (!change) return node;
+        const scheduleChanged =
+          Object.prototype.hasOwnProperty.call(change, "start_date") ||
+          Object.prototype.hasOwnProperty.call(change, "due_date") ||
+          Object.prototype.hasOwnProperty.call(change, "effort_hours");
+        const assigneeChanged = Object.prototype.hasOwnProperty.call(
+          change,
+          "assignee_user_id",
+        );
         return {
           ...node,
-          start_date: change.start_date,
-          due_date: change.due_date,
-          effort_hours: change.effort_hours,
-          assignee_user_id: change.assignee_user_id,
-          assignee_name: change.assignee_name ?? null,
-          owner: change.assignee_name ?? null,
-          version: (node.version ?? 1) + 1,
+          start_date: Object.prototype.hasOwnProperty.call(change, "start_date")
+            ? change.start_date ?? null
+            : node.start_date,
+          due_date: Object.prototype.hasOwnProperty.call(change, "due_date")
+            ? change.due_date ?? null
+            : node.due_date,
+          effort_hours: Object.prototype.hasOwnProperty.call(change, "effort_hours")
+            ? change.effort_hours ?? null
+            : node.effort_hours,
+          assignee_user_id: assigneeChanged
+            ? change.assignee_user_id ?? null
+            : node.assignee_user_id,
+          assignee_name: assigneeChanged
+            ? change.assignee_name ?? null
+            : node.assignee_name,
+          owner: assigneeChanged ? change.assignee_name ?? null : node.owner,
+          version: scheduleChanged ? (node.version ?? 1) + 1 : node.version,
           updated_at: now,
         };
       }),
@@ -518,6 +532,7 @@ export async function applyProjectPlanningScenario(input: {
   }
 
   for (const change of input.changes) {
+    if (!Object.prototype.hasOwnProperty.call(change, "effort_hours")) continue;
     if (change.effort_hours == null) delete project.effort[change.node_id];
     else project.effort[change.node_id] = change.effort_hours;
   }
