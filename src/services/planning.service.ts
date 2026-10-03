@@ -3,6 +3,8 @@ import { getBoardCanvas, saveBoardCanvas } from "@/services/canvas.service";
 import { supabaseRest } from "@/services/supabase-rest";
 import type {
   CanvasNodeScheduleUpdate,
+  PlanningScenarioApplyResult,
+  PlanningScenarioChange,
   ProjectPlanningData,
   ProjectScheduleBaselineItem,
   UpdateCanvasNodeScheduleInput,
@@ -411,4 +413,116 @@ export function readLocalPlanningForMigration(
       items: baseline.items.map((item) => ({ ...item })),
     })),
   };
+}
+
+
+export async function applyProjectPlanningScenario(input: {
+  projectId: string;
+  changes: PlanningScenarioChange[];
+}): Promise<PlanningScenarioApplyResult> {
+  if (!input.changes.length) {
+    throw new Error("لا توجد تغييرات لاعتمادها.");
+  }
+  if (input.changes.length > 50) {
+    throw new Error("السيناريو يدعم حتى 50 تغييرًا في عملية اعتماد واحدة.");
+  }
+
+  if (isSupabaseBackend()) {
+    const raw = await supabaseRest<Record<string, unknown>>(
+      "rpc/apply_project_planning_scenario",
+      {
+        method: "POST",
+        body: {
+          p_project_id: input.projectId,
+          p_changes: input.changes.map((change) => ({
+            board_id: change.board_id,
+            node_id: change.node_id,
+            expected_version: change.expected_version,
+            start_date: change.start_date,
+            due_date: change.due_date,
+            effort_hours: change.effort_hours,
+            assignee_user_id: change.assignee_user_id,
+          })),
+        },
+      },
+    );
+
+    if (raw.ok !== true || typeof raw.applied_count !== "number") {
+      throw new Error("لم يتم اعتماد السيناريو.");
+    }
+    return { ok: true, applied_count: raw.applied_count };
+  }
+
+  // Local fallback: pre-validate the entire change set before any write.
+  const snapshots = new Map<string, Awaited<ReturnType<typeof getBoardCanvas>>>();
+  for (const change of input.changes) {
+    const snapshot =
+      snapshots.get(change.board_id) ?? (await getBoardCanvas(change.board_id));
+    snapshots.set(change.board_id, snapshot);
+
+    const current = snapshot.nodes.find((node) => node.id === change.node_id);
+    if (!current) throw new Error(`المهمة «${change.node_id}» غير موجودة.`);
+    if ((current.version ?? 1) !== change.expected_version) {
+      throw new Error(
+        "تم تعديل إحدى المهام أثناء مراجعة السيناريو. حدّث البيانات وأعد المحاولة.",
+      );
+    }
+    if (
+      change.start_date &&
+      change.due_date &&
+      change.start_date > change.due_date
+    ) {
+      throw new Error("يوجد تغيير بتاريخ بداية بعد تاريخ الاستحقاق.");
+    }
+    if (
+      change.effort_hours !== null &&
+      (change.effort_hours < 0 || change.effort_hours > 10000)
+    ) {
+      throw new Error("يوجد جهد مقدّر خارج النطاق المسموح.");
+    }
+  }
+
+  const store = readLocal();
+  const project = store.projects[input.projectId] ?? emptyProject();
+  const changesByBoard = new Map<string, PlanningScenarioChange[]>();
+  for (const change of input.changes) {
+    const rows = changesByBoard.get(change.board_id) ?? [];
+    rows.push(change);
+    changesByBoard.set(change.board_id, rows);
+  }
+
+  for (const [boardId, changes] of changesByBoard) {
+    const snapshot = snapshots.get(boardId)!;
+    const now = new Date().toISOString();
+    const changeMap = new Map(changes.map((change) => [change.node_id, change]));
+    await saveBoardCanvas({
+      ...snapshot,
+      revision: (snapshot.revision ?? 0) + changes.length,
+      nodes: snapshot.nodes.map((node) => {
+        const change = changeMap.get(node.id);
+        if (!change) return node;
+        return {
+          ...node,
+          start_date: change.start_date,
+          due_date: change.due_date,
+          effort_hours: change.effort_hours,
+          assignee_user_id: change.assignee_user_id,
+          assignee_name: change.assignee_name ?? null,
+          owner: change.assignee_name ?? null,
+          version: (node.version ?? 1) + 1,
+          updated_at: now,
+        };
+      }),
+      updated_at: now,
+    });
+  }
+
+  for (const change of input.changes) {
+    if (change.effort_hours == null) delete project.effort[change.node_id];
+    else project.effort[change.node_id] = change.effort_hours;
+  }
+  store.projects[input.projectId] = project;
+  writeLocal(store);
+
+  return { ok: true, applied_count: input.changes.length };
 }
