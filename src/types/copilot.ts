@@ -46,6 +46,27 @@ export interface CopilotProjectContext {
   };
   boards: Array<{ id: string; name: string }>;
   team: Array<{ name: string; role: string }>;
+  risks: Array<{
+    id: string;
+    title: string;
+    description: string;
+    severity: string;
+    status: string;
+    owner_name: string | null;
+    mitigation: string;
+    due_date: string | null;
+    node_id: string | null;
+  }>;
+  decisions: Array<{
+    id: string;
+    title: string;
+    decision: string;
+    rationale: string;
+    status: string;
+    owner_name: string | null;
+    decided_at: string | null;
+    node_id: string | null;
+  }>;
   items: CopilotProjectItem[];
 }
 

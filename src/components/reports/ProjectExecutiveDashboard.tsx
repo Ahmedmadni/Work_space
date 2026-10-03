@@ -24,6 +24,7 @@ import type {
   ProjectExecutionSummary,
 } from "@/types";
 import type { ProjectCollaborator } from "@/types/collaboration";
+import type { ProjectActionCenterData } from "@/types/action-center";
 import type {
   ProjectHealthLevel,
   ProjectReportRisk,
@@ -112,17 +113,22 @@ export function ProjectExecutiveDashboard({
   boards,
   collaborators,
   canManage,
+  actionCenter,
+  actionCenterLoading,
 }: {
   project: Project;
   execution: ProjectExecutionSummary;
   boards: BoardWithContext[];
   collaborators: ProjectCollaborator[];
   canManage: boolean;
+  actionCenter: ProjectActionCenterData | null;
+  actionCenterLoading: boolean;
 }) {
   const automation = useProjectAutomationHealth(project.id);
   const governance = useProjectAuditSummary(project.id, canManage);
   const reportReady =
     !automation.isLoading &&
+    !actionCenterLoading &&
     (!canManage || !governance.isLoading);
 
   const report = useMemo(
@@ -134,6 +140,7 @@ export function ProjectExecutiveDashboard({
         collaborators,
         automation: automation.data ?? null,
         governance: canManage ? governance.data ?? null : null,
+        action_center: actionCenter,
       }),
     [
       project,
@@ -142,6 +149,7 @@ export function ProjectExecutiveDashboard({
       collaborators,
       automation.data,
       governance.data,
+      actionCenter,
       canManage,
     ],
   );
@@ -314,6 +322,52 @@ export function ProjectExecutiveDashboard({
           <div className="mt-2 rounded-xl bg-muted/25 p-3 text-[10px] text-muted-foreground">
             {report.milestones.upcoming} معلمًا ضمن نافذة الاستحقاق القريب الحالية.
           </div>
+
+          {report.action_center && (
+            <div className="mt-4 border-t border-border pt-3">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-brand" />
+                <h3 className="text-sm font-semibold">قرارات ومخاطر مسجلة</h3>
+              </div>
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                <div className="rounded-lg bg-danger/5 p-2 text-center">
+                  <p className="text-lg font-semibold text-danger">
+                    {report.action_center.summary.critical_high_risks}
+                  </p>
+                  <p className="text-[8px] text-muted-foreground">مرتفعة / حرجة</p>
+                </div>
+                <div className="rounded-lg bg-warning/5 p-2 text-center">
+                  <p className="text-lg font-semibold text-warning">
+                    {report.action_center.summary.overdue_mitigations}
+                  </p>
+                  <p className="text-[8px] text-muted-foreground">معالجة متأخرة</p>
+                </div>
+                <div className="rounded-lg bg-info/5 p-2 text-center">
+                  <p className="text-lg font-semibold text-info">
+                    {report.action_center.summary.pending_decisions}
+                  </p>
+                  <p className="text-[8px] text-muted-foreground">قرار معلق</p>
+                </div>
+              </div>
+              {report.action_center.decisions.filter((decision) => decision.status === "decided").length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {report.action_center.decisions
+                    .filter((decision) => decision.status === "decided")
+                    .slice(0, 3)
+                    .map((decision) => (
+                      <div
+                        key={decision.id}
+                        className="truncate rounded-lg bg-muted/25 px-2 py-1.5 text-[9px] text-muted-foreground"
+                      >
+                        <strong className="text-foreground">{decision.title}</strong>
+                        {" · "}
+                        {decision.decision}
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+          )}
         </aside>
       </div>
 

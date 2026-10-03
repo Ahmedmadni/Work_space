@@ -93,6 +93,30 @@ function buildRisks(
     });
   }
 
+  const registeredActive =
+    input.action_center?.risks.filter(
+      (risk) => risk.status === "open" || risk.status === "mitigating",
+    ) ?? [];
+  const registeredCritical = registeredActive.filter(
+    (risk) => risk.severity === "critical",
+  ).length;
+  const registeredHigh = registeredActive.filter(
+    (risk) => risk.severity === "high",
+  ).length;
+  const registeredOverdue =
+    input.action_center?.summary.overdue_mitigations ?? 0;
+
+  if (registeredCritical > 0) {
+    risks.push({
+      id: "registered-critical-risks",
+      severity: "critical",
+      title: "مخاطر حرجة مسجلة",
+      description:
+        "يتضمن Risk Register مخاطر حرجة مفتوحة أو قيد المعالجة وتتطلب متابعة إدارية مباشرة.",
+      count: registeredCritical,
+    });
+  }
+
   if ((input.automation?.exhausted_runs ?? 0) > 0) {
     risks.push({
       id: "automation-exhausted",
@@ -105,6 +129,18 @@ function buildRisks(
   }
 
   const warningRisks: Array<[string, string, string, number]> = [
+    [
+      "registered-high-risks",
+      "مخاطر مرتفعة مسجلة",
+      "يتضمن Risk Register مخاطر مرتفعة ما زالت مفتوحة أو قيد المعالجة.",
+      registeredHigh,
+    ],
+    [
+      "registered-overdue-mitigation",
+      "خطط معالجة مخاطر متأخرة",
+      "توجد مخاطر تجاوزت موعد المعالجة المسجل وما زالت مفتوحة أو قيد المعالجة.",
+      registeredOverdue,
+    ],
     [
       "overdue",
       "مهام متأخرة",
@@ -254,6 +290,7 @@ export function buildProjectExecutiveReport(
     risks,
     automation: input.automation,
     governance: input.governance,
+    action_center: input.action_center,
     team: {
       total: input.collaborators.length,
       ...roleCounts,
@@ -347,6 +384,47 @@ export function projectExecutiveReportCsv(report: ProjectExecutiveReport) {
         risk.description,
       ]),
     );
+  }
+
+  if (report.action_center) {
+    lines.push("");
+    lines.push(
+      csvLine([
+        "Section",
+        "Title",
+        "Severity/Status",
+        "Owner",
+        "Due/Decided At",
+        "Linked Item",
+        "Detail",
+      ]),
+    );
+    for (const risk of report.action_center.risks) {
+      lines.push(
+        csvLine([
+          "Risk Register",
+          risk.title,
+          risk.severity + " / " + risk.status,
+          risk.owner_name ?? "",
+          risk.due_date ?? "",
+          risk.node_title ?? "",
+          risk.mitigation ?? risk.description ?? "",
+        ]),
+      );
+    }
+    for (const decision of report.action_center.decisions) {
+      lines.push(
+        csvLine([
+          "Decision Log",
+          decision.title,
+          decision.status,
+          decision.owner_name ?? "",
+          decision.decided_at ?? "",
+          decision.node_title ?? "",
+          decision.decision,
+        ]),
+      );
+    }
   }
 
   return "\uFEFF" + lines.join("\r\n");

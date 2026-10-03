@@ -25,6 +25,7 @@ import type {
   ProjectExecutionSummary,
 } from "@/types";
 import type { ProjectCollaborator } from "@/types/collaboration";
+import type { ProjectActionCenterData } from "@/types/action-center";
 import type {
   CopilotAction,
   CopilotCreateTaskAction,
@@ -216,12 +217,14 @@ export function ProjectCopilotPanel({
   boards,
   collaborators,
   canEdit,
+  actionCenter,
 }: {
   project: Project;
   execution: ProjectExecutionSummary;
   boards: BoardWithContext[];
   collaborators: ProjectCollaborator[];
   canEdit: boolean;
+  actionCenter: ProjectActionCenterData | null;
 }) {
   const context = useMemo(
     () =>
@@ -230,8 +233,9 @@ export function ProjectCopilotPanel({
         execution,
         boards,
         collaborators,
+        actionCenter,
       }),
-    [project, execution, boards, collaborators],
+    [project, execution, boards, collaborators, actionCenter],
   );
 
   const [question, setQuestion] = useState("");
@@ -334,6 +338,12 @@ export function ProjectCopilotPanel({
           </span>
           <span className="rounded-full bg-muted px-2 py-1">
             {context.team.length} عضو
+          </span>
+          <span className="rounded-full bg-muted px-2 py-1">
+            {context.risks.length} خطر مسجل
+          </span>
+          <span className="rounded-full bg-muted px-2 py-1">
+            {context.decisions.length} قرار موثق
           </span>
           <span className="rounded-full bg-muted px-2 py-1">
             الحد الأقصى للسياق: 80 عنصرًا مرتبة حسب الأهمية

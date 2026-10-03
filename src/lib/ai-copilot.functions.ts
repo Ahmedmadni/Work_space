@@ -43,6 +43,35 @@ const contextSchema = z.object({
   team: z
     .array(z.object({ name: z.string().max(200), role: z.string().max(50) }))
     .max(100),
+  risks: z
+    .array(
+      z.object({
+        id: z.string().max(100),
+        title: z.string().max(200),
+        description: z.string().max(1200),
+        severity: z.string().max(30),
+        status: z.string().max(30),
+        owner_name: z.string().max(200).nullable(),
+        mitigation: z.string().max(1200),
+        due_date: z.string().max(20).nullable(),
+        node_id: z.string().max(200).nullable(),
+      }),
+    )
+    .max(40),
+  decisions: z
+    .array(
+      z.object({
+        id: z.string().max(100),
+        title: z.string().max(200),
+        decision: z.string().max(1600),
+        rationale: z.string().max(1200),
+        status: z.string().max(30),
+        owner_name: z.string().max(200).nullable(),
+        decided_at: z.string().max(50).nullable(),
+        node_id: z.string().max(200).nullable(),
+      }),
+    )
+    .max(40),
   items: z
     .array(
       z.object({

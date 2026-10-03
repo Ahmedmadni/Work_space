@@ -66,6 +66,10 @@ const ACTION_LABELS: Record<string, string> = {
   planning_baseline_created: "إنشاء Baseline للتخطيط",
   planning_baseline_deleted: "حذف Baseline للتخطيط",
   planning_scenario_applied: "اعتماد سيناريو تخطيط",
+  risk_created: "تسجيل خطر",
+  risk_updated: "تحديث خطر",
+  decision_created: "تسجيل قرار",
+  decision_updated: "تحديث قرار",
 };
 
 const CATEGORY_LABELS: Record<ProjectAuditCategory, string> = {
