@@ -33,6 +33,7 @@ import { ProjectCopilotPanel } from "@/components/ai/ProjectCopilotPanel";
 import { ProjectGovernanceCenter } from "@/components/governance/ProjectGovernanceCenter";
 import { ProjectExecutiveDashboard } from "@/components/reports/ProjectExecutiveDashboard";
 import { ProjectPlanningCenter } from "@/components/planning/ProjectPlanningCenter";
+import { ProjectActionCenter } from "@/components/actions/ProjectActionCenter";
 import { useProject } from "@/hooks/use-projects";
 import {
   useProjectAccess,
@@ -42,6 +43,7 @@ import { useProjectPresence } from "@/hooks/use-live-collaboration";
 import { useBoards } from "@/hooks/use-boards";
 import { useCanvasNodeSearch, useProjectExecutionSummary } from "@/hooks/use-canvas";
 import { useCurrentTaskUserId } from "@/hooks/use-task-execution";
+import { useProjectActionCenter } from "@/hooks/use-action-center";
 import type {
   BoardWithContext,
   CanvasNodeStatus,
@@ -454,6 +456,7 @@ function ProjectDetail() {
     [boards.data],
   );
   const execution = useProjectExecutionSummary(boardIds);
+  const actionCenter = useProjectActionCenter(projectId);
 
   const visibleBoards = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("ar");
@@ -539,12 +542,26 @@ function ProjectDetail() {
           boards={boards.data ?? []}
           collaborators={collaborators.data ?? []}
           canManage={!!access.data?.can_manage}
+          actionCenter={actionCenter.data ?? null}
+          actionCenterLoading={actionCenter.isLoading}
         />
       )}
 
       {execution.data && (
         <ProjectCopilotPanel
           project={p}
+          execution={execution.data}
+          boards={boards.data ?? []}
+          collaborators={collaborators.data ?? []}
+          canEdit={!!access.data?.can_edit}
+          actionCenter={actionCenter.data ?? null}
+        />
+      )}
+
+      {execution.data && actionCenter.data && (
+        <ProjectActionCenter
+          projectId={projectId}
+          data={actionCenter.data}
           execution={execution.data}
           boards={boards.data ?? []}
           collaborators={collaborators.data ?? []}
