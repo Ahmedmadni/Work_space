@@ -82,10 +82,10 @@ export interface PlanningScenarioChange {
   board_id: string;
   node_id: string;
   expected_version: number;
-  start_date: string | null;
-  due_date: string | null;
-  effort_hours: number | null;
-  assignee_user_id: string | null;
+  start_date?: string | null;
+  due_date?: string | null;
+  effort_hours?: number | null;
+  assignee_user_id?: string | null;
   /** Local fallback display label. Supabase resolves the canonical name server-side. */
   assignee_name?: string | null;
 }
