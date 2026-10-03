@@ -113,14 +113,19 @@ declare
   v_recipient uuid;
   v_should_notify boolean := false;
 begin
-  v_should_notify :=
-    new.status in ('open','mitigating')
-    and new.severity = 'critical'
-    and (
-      tg_op = 'INSERT'
-      or old.severity is distinct from 'critical'
-      or old.status not in ('open','mitigating')
-    );
+  if tg_op = 'INSERT' then
+    v_should_notify :=
+      new.status in ('open','mitigating')
+      and new.severity = 'critical';
+  else
+    v_should_notify :=
+      new.status in ('open','mitigating')
+      and new.severity = 'critical'
+      and (
+        old.severity is distinct from 'critical'
+        or old.status not in ('open','mitigating')
+      );
+  end if;
 
   if not v_should_notify then
     return new;
@@ -178,7 +183,7 @@ $projectflow$;
 drop trigger if exists project_risks_notify_escalation
   on public.project_risks;
 create trigger project_risks_notify_escalation
-after insert or update of severity, status on public.project_risks
+after insert or update on public.project_risks
 for each row
 execute function public.notify_project_risk_escalation();
 
@@ -261,6 +266,91 @@ $projectflow$;
 
 revoke all on function public.refresh_risk_escalation_notifications() from public;
 grant execute on function public.refresh_risk_escalation_notifications() to authenticated;
+
+create or replace function public.refresh_all_risk_escalation_notifications()
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $projectflow$
+declare
+  v_row record;
+  v_recipient uuid;
+  v_inserted integer := 0;
+  v_id uuid;
+begin
+  for v_row in
+    select
+      r.id,
+      r.project_id,
+      r.title,
+      r.severity,
+      r.status,
+      r.due_date,
+      r.board_id,
+      r.node_id,
+      r.owner_user_id,
+      p.created_by
+    from public.project_risks r
+    join public.projects p on p.id = r.project_id
+    where r.status in ('open','mitigating')
+      and r.due_date is not null
+      and r.due_date < current_date
+  loop
+    for v_recipient in
+      select distinct recipient
+      from (
+        select v_row.created_by as recipient
+
+        union
+
+        select pm.user_id as recipient
+        from public.project_members pm
+        where pm.project_id = v_row.project_id
+          and pm.role in ('owner','admin')
+
+        union
+
+        select v_row.owner_user_id as recipient
+      ) recipients
+      where recipient is not null
+    loop
+      v_id := public.enqueue_user_notification(
+        v_recipient,
+        v_row.project_id,
+        'risk_escalation',
+        null,
+        null,
+        v_row.board_id,
+        null,
+        null,
+        jsonb_build_object(
+          'event', 'overdue',
+          'risk_id', v_row.id,
+          'title', v_row.title,
+          'severity', v_row.severity,
+          'status', v_row.status,
+          'due_date', v_row.due_date,
+          'target_type', case when v_row.node_id is null then 'project' else 'node' end,
+          'target_id', coalesce(v_row.node_id, v_row.project_id),
+          'source', 'server_scheduler'
+        ),
+        'risk:overdue:' || v_row.id::text || ':' ||
+          v_row.due_date::text || ':' || v_recipient::text
+      );
+
+      if v_id is not null then
+        v_inserted := v_inserted + 1;
+      end if;
+    end loop;
+  end loop;
+
+  return v_inserted;
+end;
+$projectflow$;
+
+revoke all on function public.refresh_all_risk_escalation_notifications()
+  from public;
 
 create or replace function public.list_user_notifications(
   p_filter text default 'all',
@@ -472,3 +562,55 @@ $projectflow$;
 revoke all on function public.list_portfolio_action_center() from public;
 grant execute on function public.list_portfolio_action_center()
   to authenticated;
+
+
+-- Best-effort 24/7 overdue-risk escalation. App refresh remains the fallback.
+do $projectflow$
+declare
+  v_job_id bigint;
+  v_installed boolean := false;
+begin
+  begin
+    if exists (
+      select 1
+      from pg_available_extensions
+      where name = 'pg_cron'
+    ) and not exists (
+      select 1
+      from pg_extension
+      where extname = 'pg_cron'
+    ) then
+      execute 'create extension if not exists pg_cron';
+    end if;
+  exception when others then
+    -- App fallback continues to call refresh_risk_escalation_notifications().
+    null;
+  end;
+
+  select exists (
+    select 1
+    from pg_extension
+    where extname = 'pg_cron'
+  ) into v_installed;
+
+  if v_installed and to_regnamespace('cron') is not null then
+    begin
+      for v_job_id in
+        execute 'select jobid from cron.job where jobname = ''projectflow-risk-escalations'''
+      loop
+        execute 'select cron.unschedule($1)' using v_job_id;
+      end loop;
+
+      execute 'select cron.schedule($1, $2, $3)'
+        into v_job_id
+        using
+          'projectflow-risk-escalations',
+          '15 * * * *',
+          'select public.refresh_all_risk_escalation_notifications();';
+    exception when others then
+      -- Do not fail deployment when cron permissions/capability are unavailable.
+      null;
+    end;
+  end if;
+end;
+$projectflow$;
