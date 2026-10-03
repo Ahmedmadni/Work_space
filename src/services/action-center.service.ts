@@ -464,7 +464,6 @@ export async function listPortfolioActionCenter(
     ] as const),
   );
 
-  const store = readLocal();
   const names = new Map<string, string>();
   // Local mode has no canonical project names in this store. Callers may map
   // project_id to the project catalog for display; keep a stable fallback.
