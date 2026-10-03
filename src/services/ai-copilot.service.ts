@@ -10,6 +10,7 @@ import type {
   ProjectExecutionSummary,
 } from "@/types";
 import type { ProjectCollaborator } from "@/types/collaboration";
+import type { ProjectActionCenterData } from "@/types/action-center";
 import type {
   CopilotMode,
   CopilotProjectContext,
@@ -21,6 +22,7 @@ export function buildCopilotProjectContext(input: {
   execution: ProjectExecutionSummary;
   boards: BoardWithContext[];
   collaborators: ProjectCollaborator[];
+  actionCenter: ProjectActionCenterData | null;
 }): CopilotProjectContext {
   const boardNames = new Map(
     input.boards.map((board) => [board.id, board.name] as const),
@@ -64,6 +66,27 @@ export function buildCopilotProjectContext(input: {
     team: input.collaborators.slice(0, 100).map((member) => ({
       name: member.full_name,
       role: member.role,
+    })),
+    risks: (input.actionCenter?.risks ?? []).slice(0, 40).map((risk) => ({
+      id: risk.id,
+      title: risk.title.slice(0, 200),
+      description: risk.description?.slice(0, 1200) ?? "",
+      severity: risk.severity,
+      status: risk.status,
+      owner_name: risk.owner_name,
+      mitigation: risk.mitigation?.slice(0, 1200) ?? "",
+      due_date: risk.due_date,
+      node_id: risk.node_id,
+    })),
+    decisions: (input.actionCenter?.decisions ?? []).slice(0, 40).map((decision) => ({
+      id: decision.id,
+      title: decision.title.slice(0, 200),
+      decision: decision.decision.slice(0, 1600),
+      rationale: decision.rationale?.slice(0, 1200) ?? "",
+      status: decision.status,
+      owner_name: decision.owner_name,
+      decided_at: decision.decided_at,
+      node_id: decision.node_id,
     })),
     items: rankedItems.slice(0, 80).map((item) => ({
       id: item.node.id,
