@@ -6,6 +6,7 @@ import type {
 import type { ProjectAuditSummary } from "@/types/audit";
 import type { ProjectAutomationHealth } from "@/types/automations";
 import type { ProjectCollaborator } from "@/types/collaboration";
+import type { ProjectActionCenterData } from "@/types/action-center";
 
 export type ProjectHealthLevel = "healthy" | "attention" | "critical";
 
@@ -75,6 +76,7 @@ export interface ProjectExecutiveReport {
   risks: ProjectReportRisk[];
   automation: ProjectAutomationHealth | null;
   governance: ProjectAuditSummary | null;
+  action_center: ProjectActionCenterData | null;
   team: {
     total: number;
     owner: number;
@@ -93,4 +95,5 @@ export interface BuildProjectExecutiveReportInput {
   collaborators: ProjectCollaborator[];
   automation: ProjectAutomationHealth | null;
   governance: ProjectAuditSummary | null;
+  action_center: ProjectActionCenterData | null;
 }
