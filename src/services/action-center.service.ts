@@ -443,16 +443,23 @@ export async function listPortfolioActionCenter(
         body: {},
       },
     );
+    const allowed = new Set(projectIds);
     return {
       risks: Array.isArray(raw.risks)
         ? raw.risks
             .map(normalizePortfolioRisk)
-            .filter((item): item is PortfolioRisk => !!item)
+            .filter(
+              (item): item is PortfolioRisk =>
+                !!item && allowed.has(item.project_id),
+            )
         : [],
       decisions: Array.isArray(raw.decisions)
         ? raw.decisions
             .map(normalizePortfolioDecision)
-            .filter((item): item is PortfolioDecision => !!item)
+            .filter(
+              (item): item is PortfolioDecision =>
+                !!item && allowed.has(item.project_id),
+            )
         : [],
     };
   }
