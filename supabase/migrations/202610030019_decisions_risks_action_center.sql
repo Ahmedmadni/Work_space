@@ -420,6 +420,7 @@ begin
       decided_at = case
         when p_status = 'decided' and v_old.status <> 'decided' then now()
         when p_status = 'decided' then v_old.decided_at
+        when p_status = 'proposed' then null
         else v_old.decided_at
       end,
       board_id = p_board_id,
