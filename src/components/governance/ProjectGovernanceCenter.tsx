@@ -65,6 +65,7 @@ const ACTION_LABELS: Record<string, string> = {
   member_capacity_changed: "تغيير السعة الأسبوعية لعضو",
   planning_baseline_created: "إنشاء Baseline للتخطيط",
   planning_baseline_deleted: "حذف Baseline للتخطيط",
+  planning_scenario_applied: "اعتماد سيناريو تخطيط",
 };
 
 const CATEGORY_LABELS: Record<ProjectAuditCategory, string> = {
