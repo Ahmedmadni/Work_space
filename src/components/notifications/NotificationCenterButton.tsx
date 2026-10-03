@@ -7,6 +7,7 @@ import {
   FileText,
   ListTodo,
   MessageSquareReply,
+  ShieldAlert,
   ShieldCheck,
   UserCheck,
   UserMinus,
@@ -39,6 +40,7 @@ const FILTERS: Array<{ value: NotificationFilter; label: string }> = [
   { value: "unread", label: "غير المقروء" },
   { value: "mentions", label: "الإشارات والردود" },
   { value: "tasks", label: "المهام" },
+  { value: "risks", label: "المخاطر" },
 ];
 
 const ROLE_LABELS: Record<string, string> = {
@@ -56,6 +58,7 @@ function notificationIcon(notification: UserNotification) {
   if (notification.kind === "task_assigned") return UserCheck;
   if (notification.kind === "task_status") return ListTodo;
   if (notification.kind === "task_due") return Clock3;
+  if (notification.kind === "risk_escalation") return ShieldAlert;
   return UserMinus;
 }
 
@@ -96,6 +99,21 @@ function notificationTitle(notification: UserNotification) {
     }
     return `تغيّرت حالة «${taskTitle}»`;
   }
+  if (notification.kind === "risk_escalation") {
+    const event =
+      typeof notification.metadata.event === "string"
+        ? notification.metadata.event
+        : "";
+    const riskTitle =
+      typeof notification.metadata.title === "string"
+        ? notification.metadata.title
+        : "خطر";
+    return event === "critical"
+      ? `تصعيد خطر حرج: «${riskTitle}»`
+      : event === "overdue"
+        ? `تأخرت معالجة الخطر «${riskTitle}»`
+        : `تنبيه مخاطر: «${riskTitle}»`;
+  }
   if (notification.kind === "task_due") {
     const event =
       typeof notification.metadata.event === "string"
@@ -119,6 +137,9 @@ function notificationContext(notification: UserNotification) {
   if (notification.board_name) {
     if (typeof notification.metadata.automation_rule_id === "string") {
       return `${notification.board_name} · أتمتة سير العمل`;
+    }
+    if (notification.kind === "risk_escalation") {
+      return `${notification.board_name} · خطر مرتبط بالتنفيذ`;
     }
     if (
       notification.kind === "task_assigned" ||
@@ -223,7 +244,7 @@ export function NotificationCenterButton() {
                 الإشعارات
               </SheetTitle>
               <SheetDescription className="mt-1">
-                الإشارات، الردود، تكليفات المهام، الأتمتة، الاستحقاقات وتغييرات الوصول.
+                الإشارات، الردود، تكليفات المهام، الاستحقاقات، تصعيد المخاطر وتغييرات الوصول.
               </SheetDescription>
             </div>
 
@@ -241,7 +262,7 @@ export function NotificationCenterButton() {
           </div>
         </SheetHeader>
 
-        <div className="grid grid-cols-2 gap-1 border-b border-border bg-muted/20 p-1.5 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-1 border-b border-border bg-muted/20 p-1.5 sm:grid-cols-5">
           {FILTERS.map((item) => (
             <button
               key={item.value}

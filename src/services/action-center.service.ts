@@ -12,6 +12,11 @@ import type {
   SaveProjectDecisionInput,
   SaveProjectRiskInput,
 } from "@/types/action-center";
+import type {
+  PortfolioActionCenterData,
+  PortfolioDecision,
+  PortfolioRisk,
+} from "@/types/portfolio-actions";
 
 const LOCAL_KEY = "projectflow.action-center.v1";
 
@@ -408,4 +413,93 @@ export async function saveProjectDecision(
   store.projects[projectId] = project;
   writeLocal(store);
   return decision;
+}
+
+
+function normalizePortfolioRisk(value: unknown): PortfolioRisk | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const risk = normalizeRisk(value);
+  if (!risk || typeof row.project_name !== "string") return null;
+  return { ...risk, project_name: row.project_name };
+}
+
+function normalizePortfolioDecision(value: unknown): PortfolioDecision | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const decision = normalizeDecision(value);
+  if (!decision || typeof row.project_name !== "string") return null;
+  return { ...decision, project_name: row.project_name };
+}
+
+export async function listPortfolioActionCenter(
+  projectIds: string[],
+): Promise<PortfolioActionCenterData> {
+  if (isSupabaseBackend()) {
+    const raw = await supabaseRest<Record<string, unknown>>(
+      "rpc/list_portfolio_action_center",
+      {
+        method: "POST",
+        body: {},
+      },
+    );
+    const allowed = new Set(projectIds);
+    return {
+      risks: Array.isArray(raw.risks)
+        ? raw.risks
+            .map(normalizePortfolioRisk)
+            .filter(
+              (item): item is PortfolioRisk =>
+                !!item && allowed.has(item.project_id),
+            )
+        : [],
+      decisions: Array.isArray(raw.decisions)
+        ? raw.decisions
+            .map(normalizePortfolioDecision)
+            .filter(
+              (item): item is PortfolioDecision =>
+                !!item && allowed.has(item.project_id),
+            )
+        : [],
+    };
+  }
+
+  const entries = await Promise.all(
+    projectIds.map(async (projectId) => [
+      projectId,
+      await listProjectActionCenter(projectId),
+    ] as const),
+  );
+
+  const names = new Map<string, string>();
+  // Local mode has no canonical project names in this store. Callers may map
+  // project_id to the project catalog for display; keep a stable fallback.
+  for (const [projectId] of entries) names.set(projectId, "المشروع");
+
+  return {
+    risks: entries.flatMap(([projectId, data]) =>
+      data.risks.map((risk) => ({
+        ...risk,
+        project_name: names.get(projectId) ?? "المشروع",
+      })),
+    ),
+    decisions: entries.flatMap(([projectId, data]) =>
+      data.decisions.map((decision) => ({
+        ...decision,
+        project_name: names.get(projectId) ?? "المشروع",
+      })),
+    ),
+  };
+}
+
+export async function refreshRiskEscalationNotifications(): Promise<number> {
+  if (!isSupabaseBackend()) return 0;
+  const count = await supabaseRest<unknown>(
+    "rpc/refresh_risk_escalation_notifications",
+    {
+      method: "POST",
+      body: {},
+    },
+  );
+  return typeof count === "number" && Number.isFinite(count) ? count : 0;
 }

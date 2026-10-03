@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import {
+  listPortfolioActionCenter,
   listProjectActionCenter,
   saveProjectDecision,
   saveProjectRisk,
@@ -25,6 +26,9 @@ function useInvalidate(projectId: string) {
   return () => {
     void queryClient.invalidateQueries({
       queryKey: ["project-action-center", projectId],
+    });
+    void queryClient.invalidateQueries({
+      queryKey: ["portfolio-action-center"],
     });
     void queryClient.invalidateQueries({
       queryKey: ["project-execution-summary"],
@@ -70,5 +74,17 @@ export function useSaveProjectDecision(projectId: string) {
       toast.error(
         error instanceof Error ? error.message : "تعذر حفظ سجل القرار.",
       ),
+  });
+}
+
+
+export function usePortfolioActionCenter(projectIds: string[]) {
+  const normalizedIds = [...new Set(projectIds)].sort();
+
+  return useQuery({
+    queryKey: ["portfolio-action-center", normalizedIds],
+    queryFn: () => listPortfolioActionCenter(normalizedIds),
+    enabled: normalizedIds.length > 0,
+    refetchInterval: 20_000,
   });
 }

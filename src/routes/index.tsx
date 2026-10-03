@@ -12,10 +12,12 @@ import {
 import { CreateProjectDialog } from "@/components/app/dialogs";
 import { PortfolioCommandCenter } from "@/components/portfolio/PortfolioCommandCenter";
 import { PortfolioCapacityCenter } from "@/components/portfolio/PortfolioCapacityCenter";
+import { PortfolioRiskRadar } from "@/components/portfolio/PortfolioRiskRadar";
 import { useProjects } from "@/hooks/use-projects";
 import { useBoards } from "@/hooks/use-boards";
 import { useProjectExecutionSummary } from "@/hooks/use-canvas";
 import { usePortfolioPlanningData } from "@/hooks/use-planning";
+import { usePortfolioActionCenter } from "@/hooks/use-action-center";
 import { useCurrentUser } from "@/hooks/use-auth";
 import { arabicNumber, greeting, longDate } from "@/lib/format";
 
@@ -48,6 +50,7 @@ function Dashboard() {
   );
   const execution = useProjectExecutionSummary(allBoardIds);
   const portfolioPlanning = usePortfolioPlanningData(projectIds);
+  const portfolioActions = usePortfolioActionCenter(projectIds);
 
   const stats = [
     { label: "المشاريع", value: projects.data?.length ?? 0 },
@@ -107,6 +110,12 @@ function Dashboard() {
           projects={projects.data ?? []}
         />
       )}
+
+      <PortfolioRiskRadar
+        data={portfolioActions.data}
+        projects={projects.data ?? []}
+        isLoading={projects.isLoading || portfolioActions.isLoading}
+      />
 
       {execution.data && (
         <PortfolioCapacityCenter
