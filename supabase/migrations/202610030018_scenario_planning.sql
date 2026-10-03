@@ -93,7 +93,7 @@ begin
         using errcode = '22023';
     end if;
 
-    if v_effort is not null and (v_effort < 0 or v_effort > 10000) then
+    if v_effort is not null and (v_effort < 0.25 or v_effort > 10000) then
       raise exception 'SCENARIO_INVALID_EFFORT:%', v_current.id
         using errcode = '22023';
     end if;
