@@ -6,9 +6,15 @@ export type NotificationKind =
   | "project_removed"
   | "task_assigned"
   | "task_status"
-  | "task_due";
+  | "task_due"
+  | "risk_escalation";
 
-export type NotificationFilter = "all" | "unread" | "mentions" | "tasks";
+export type NotificationFilter =
+  | "all"
+  | "unread"
+  | "mentions"
+  | "tasks"
+  | "risks";
 
 export interface UserNotification {
   id: string;
