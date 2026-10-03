@@ -253,6 +253,7 @@ export function PortfolioCapacityCenter({
     let overloadedWeeks = 0;
     let nearCapacityWeeks = 0;
     let capacityConflicts = 0;
+    let unknownCapacity = 0;
     let unestimated = 0;
     let unscheduled = 0;
     let crossProjectWeeks = 0;
@@ -260,6 +261,9 @@ export function PortfolioCapacityCenter({
     for (const resource of resources) {
       let personOverloaded = false;
       if (resource.capacity_conflict) capacityConflicts += 1;
+      if (!resource.capacity_conflict && resource.capacity == null) {
+        unknownCapacity += 1;
+      }
       unestimated += resource.unestimated_items;
       unscheduled += resource.unscheduled_items;
 
@@ -282,6 +286,7 @@ export function PortfolioCapacityCenter({
       overloadedWeeks,
       nearCapacityWeeks,
       capacityConflicts,
+      unknownCapacity,
       unestimated,
       unscheduled,
       crossProjectWeeks,
@@ -340,8 +345,8 @@ export function PortfolioCapacityCenter({
       className: "text-warning",
     },
     {
-      label: "تعارضات السعة",
-      value: analysis.capacityConflicts,
+      label: "سعة غير محسومة",
+      value: analysis.capacityConflicts + analysis.unknownCapacity,
       icon: UsersRound,
       className: "text-warning",
     },
@@ -437,11 +442,15 @@ export function PortfolioCapacityCenter({
                     <div className="mt-2 rounded-lg bg-warning/10 px-2 py-1.5 text-[9px] text-warning">
                       تعارض سعة: {resource.capacity_values.map((value) => `${value}h`).join(" / ")}
                     </div>
+                  ) : resource.capacity == null ? (
+                    <div className="mt-2 rounded-lg bg-muted/50 px-2 py-1.5 text-[9px] text-muted-foreground">
+                      السعة غير متاحة — الإسناد غير مرتبط بحساب مستخدم مؤكد
+                    </div>
                   ) : (
                     <p className="mt-2 text-[9px] text-muted-foreground">
                       السعة:{" "}
                       <strong className="text-foreground">
-                        {resource.capacity ?? 40}h / أسبوع
+                        {resource.capacity}h / أسبوع
                       </strong>
                     </p>
                   )}
@@ -468,10 +477,15 @@ export function PortfolioCapacityCenter({
                   const projectEntries = [...(week?.projects.entries() ?? [])].sort(
                     (a, b) => b[1] - a[1],
                   );
+                  const missingCapacity =
+                    !resource.capacity_conflict && resource.capacity == null;
                   const overloaded =
-                    !resource.capacity_conflict && ratio > 1;
+                    !resource.capacity_conflict && !missingCapacity && ratio > 1;
                   const near =
-                    !resource.capacity_conflict && ratio >= 0.85 && ratio <= 1;
+                    !resource.capacity_conflict &&
+                    !missingCapacity &&
+                    ratio >= 0.85 &&
+                    ratio <= 1;
                   const multipleProjects = projectEntries.length > 1;
 
                   return (
@@ -480,13 +494,15 @@ export function PortfolioCapacityCenter({
                         className={
                           resource.capacity_conflict && hours > 0
                             ? "min-h-[78px] rounded-lg bg-warning/10 p-2 text-warning"
-                            : overloaded
-                              ? "min-h-[78px] rounded-lg bg-danger/10 p-2 text-danger"
-                              : near
-                                ? "min-h-[78px] rounded-lg bg-warning/10 p-2 text-warning"
-                                : hours > 0
-                                  ? "min-h-[78px] rounded-lg bg-success/5 p-2 text-foreground"
-                                  : "min-h-[78px] rounded-lg bg-muted/20 p-2 text-muted-foreground"
+                            : missingCapacity && hours > 0
+                              ? "min-h-[78px] rounded-lg bg-muted/50 p-2 text-muted-foreground"
+                              : overloaded
+                                ? "min-h-[78px] rounded-lg bg-danger/10 p-2 text-danger"
+                                : near
+                                  ? "min-h-[78px] rounded-lg bg-warning/10 p-2 text-warning"
+                                  : hours > 0
+                                    ? "min-h-[78px] rounded-lg bg-success/5 p-2 text-foreground"
+                                    : "min-h-[78px] rounded-lg bg-muted/20 p-2 text-muted-foreground"
                         }
                       >
                         <div className="flex items-start justify-between gap-1">
@@ -501,9 +517,13 @@ export function PortfolioCapacityCenter({
                             ? hours > 0
                               ? "السعة غير موحدة"
                               : "—"
-                            : resource.capacity === 0 && hours > 0
-                              ? "بدون سعة"
-                              : `${Math.round(ratio * 100)}%`}
+                            : missingCapacity
+                              ? hours > 0
+                                ? "السعة غير متاحة"
+                                : "—"
+                              : resource.capacity === 0 && hours > 0
+                                ? "بدون سعة"
+                                : `${Math.round(ratio * 100)}%`}
                         </p>
 
                         {projectEntries.length > 0 && (
