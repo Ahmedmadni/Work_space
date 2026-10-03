@@ -385,8 +385,12 @@ export async function saveProjectDecision(
         : input.owner_name ?? null,
     decided_at:
       input.status === "decided"
-        ? existing?.decided_at ?? now
-        : existing?.decided_at ?? null,
+        ? existing?.status === "decided"
+          ? existing.decided_at ?? now
+          : now
+        : input.status === "proposed"
+          ? null
+          : existing?.decided_at ?? null,
     board_id: input.board_id ?? null,
     board_name: existing?.board_name ?? null,
     node_id: input.node_id ?? null,
