@@ -30,6 +30,25 @@ export function useProjectPlanningData(projectId: string) {
   });
 }
 
+export function usePortfolioPlanningData(projectIds: string[]) {
+  const normalizedIds = [...new Set(projectIds)].sort();
+
+  return useQuery({
+    queryKey: ["portfolio-planning", normalizedIds],
+    queryFn: async () => {
+      const entries = await Promise.all(
+        normalizedIds.map(async (projectId) => [
+          projectId,
+          await listProjectPlanningData(projectId),
+        ] as const),
+      );
+      return Object.fromEntries(entries);
+    },
+    enabled: normalizedIds.length > 0,
+    refetchInterval: 20_000,
+  });
+}
+
 export function useUpdateCanvasNodeSchedule(
   projectId: string,
   boardId: string,
@@ -147,6 +166,9 @@ export function useSetProjectMemberCapacity(projectId: string) {
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: ["project-planning", projectId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["portfolio-planning"],
       });
       toast.success("تم تحديث السعة الأسبوعية.");
     },

@@ -11,9 +11,11 @@ import {
 } from "@/components/app/shared";
 import { CreateProjectDialog } from "@/components/app/dialogs";
 import { PortfolioCommandCenter } from "@/components/portfolio/PortfolioCommandCenter";
+import { PortfolioCapacityCenter } from "@/components/portfolio/PortfolioCapacityCenter";
 import { useProjects } from "@/hooks/use-projects";
 import { useBoards } from "@/hooks/use-boards";
 import { useProjectExecutionSummary } from "@/hooks/use-canvas";
+import { usePortfolioPlanningData } from "@/hooks/use-planning";
 import { useCurrentUser } from "@/hooks/use-auth";
 import { arabicNumber, greeting, longDate } from "@/lib/format";
 
@@ -40,7 +42,12 @@ function Dashboard() {
     () => allBoards.data?.map((board) => board.id) ?? [],
     [allBoards.data],
   );
+  const projectIds = useMemo(
+    () => projects.data?.map((project) => project.id) ?? [],
+    [projects.data],
+  );
   const execution = useProjectExecutionSummary(allBoardIds);
+  const portfolioPlanning = usePortfolioPlanningData(projectIds);
 
   const stats = [
     { label: "المشاريع", value: projects.data?.length ?? 0 },
@@ -98,6 +105,16 @@ function Dashboard() {
           summary={execution.data}
           boards={allBoards.data ?? []}
           projects={projects.data ?? []}
+        />
+      )}
+
+      {execution.data && (
+        <PortfolioCapacityCenter
+          summary={execution.data}
+          boards={allBoards.data ?? []}
+          projects={projects.data ?? []}
+          planningByProject={portfolioPlanning.data ?? {}}
+          isLoading={portfolioPlanning.isLoading}
         />
       )}
 
