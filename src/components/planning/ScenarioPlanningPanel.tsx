@@ -311,19 +311,31 @@ export function ScenarioPlanningPanel({
         !!draft.due_date &&
         draft.start_date > draft.due_date) ||
       (draft.effort_hours !== null &&
-        (draft.effort_hours < 0 || draft.effort_hours > 10000)),
+        (draft.effort_hours < 0.25 || draft.effort_hours > 10000)),
   );
 
-  const changes: PlanningScenarioChange[] = changedDrafts.map((draft) => ({
-    board_id: draft.board_id,
-    node_id: draft.node_id,
-    expected_version: draft.expected_version,
-    start_date: draft.start_date,
-    due_date: draft.due_date,
-    effort_hours: draft.effort_hours,
-    assignee_user_id: draft.assignee_user_id,
-    assignee_name: draft.assignee_name,
-  }));
+  const changes: PlanningScenarioChange[] = changedDrafts.map((draft) => {
+    const current = itemMap.get(draft.node_id)!;
+    const change: PlanningScenarioChange = {
+      board_id: draft.board_id,
+      node_id: draft.node_id,
+      expected_version: draft.expected_version,
+    };
+    if (draft.start_date !== current.node.start_date) {
+      change.start_date = draft.start_date;
+    }
+    if (draft.due_date !== current.node.due_date) {
+      change.due_date = draft.due_date;
+    }
+    if (draft.effort_hours !== current.node.effort_hours) {
+      change.effort_hours = draft.effort_hours;
+    }
+    if (draft.assignee_user_id !== current.node.assignee_user_id) {
+      change.assignee_user_id = draft.assignee_user_id;
+      change.assignee_name = draft.assignee_name;
+    }
+    return change;
+  });
 
   return (
     <div className="grid gap-4 p-4 xl:grid-cols-[320px_minmax(0,1fr)]">
@@ -464,7 +476,7 @@ export function ScenarioPlanningPanel({
                   الجهد / ساعة
                   <input
                     type="number"
-                    min={0}
+                    min={0.25}
                     max={10000}
                     step={0.25}
                     value={selectedDraft.effort_hours ?? ""}
