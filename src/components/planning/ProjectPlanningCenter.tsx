@@ -6,6 +6,7 @@ import {
   Clock3,
   Flag,
   GitBranch,
+  FlaskConical,
   Milestone,
   Save,
   UsersRound,
@@ -32,8 +33,9 @@ import type {
   ProjectPlanningData,
   ProjectScheduleBaselineItem,
 } from "@/types/planning";
+import { ScenarioPlanningPanel } from "@/components/planning/ScenarioPlanningPanel";
 
-type PlanningTab = "gantt" | "capacity" | "baseline";
+type PlanningTab = "gantt" | "capacity" | "baseline" | "scenario";
 type Zoom = "week" | "month" | "quarter";
 
 const DAY_WIDTH: Record<Zoom, number> = {
@@ -975,6 +977,7 @@ export function ProjectPlanningCenter({
               ["gantt", "Gantt / Roadmap", CalendarDays],
               ["capacity", "Capacity", UsersRound],
               ["baseline", "Baseline", BarChart3],
+              ["scenario", "Scenario", FlaskConical],
             ] as const).map(([value, label, Icon]) => (
               <button
                 key={String(value)}
@@ -1019,12 +1022,20 @@ export function ProjectPlanningCenter({
           planning={planning.data}
           canManage={canManage}
         />
-      ) : (
+      ) : tab === "baseline" ? (
         <BaselineView
           projectId={projectId}
           summary={summary}
           planning={planning.data}
           canManage={canManage}
+        />
+      ) : (
+        <ScenarioPlanningPanel
+          projectId={projectId}
+          summary={summary}
+          collaborators={collaborators}
+          planning={planning.data}
+          canEdit={canEdit}
         />
       )}
     </section>
