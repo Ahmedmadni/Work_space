@@ -33,6 +33,9 @@ function useInvalidate(projectId: string) {
       queryKey: ["project-audit"],
     });
     void queryClient.invalidateQueries({
+      queryKey: ["project-audit-summary", projectId],
+    });
+    void queryClient.invalidateQueries({
       queryKey: ["project-activity", projectId],
     });
   };
