@@ -6,6 +6,7 @@ import {
 import { toast } from "sonner";
 
 import {
+  applyProjectPlanningScenario,
   createProjectScheduleBaseline,
   listProjectPlanningData,
   setProjectMemberCapacity,
@@ -17,6 +18,7 @@ import type {
 } from "@/types";
 import type {
   CanvasNodeScheduleUpdate,
+  PlanningScenarioChange,
   ProjectScheduleBaselineItem,
   UpdateCanvasNodeScheduleInput,
 } from "@/types/planning";
@@ -204,5 +206,41 @@ export function useCreateProjectScheduleBaseline(projectId: string) {
           ? error.message
           : "تعذر إنشاء Baseline.",
       ),
+  });
+}
+
+
+export function useApplyProjectPlanningScenario(projectId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (changes: PlanningScenarioChange[]) =>
+      applyProjectPlanningScenario({ projectId, changes }),
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: ["canvas"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["project-execution-summary"],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["project-planning", projectId],
+      });
+      void queryClient.invalidateQueries({ queryKey: ["portfolio-planning"] });
+      void queryClient.invalidateQueries({ queryKey: ["canvas-search"] });
+      toast.success(
+        `تم اعتماد السيناريو وتطبيق ${result.applied_count} تغييرًا.`,
+      );
+    },
+    onError: (error) => {
+      void queryClient.invalidateQueries({ queryKey: ["canvas"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["project-execution-summary"],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["project-planning", projectId],
+      });
+      toast.error(
+        error instanceof Error ? error.message : "تعذر اعتماد السيناريو.",
+      );
+    },
   });
 }
