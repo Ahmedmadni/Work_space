@@ -22,6 +22,7 @@ declare
   v_start date;
   v_due date;
   v_effort numeric;
+  v_current_effort numeric;
   v_assignee uuid;
   v_result jsonb;
   v_applied integer := 0;
@@ -62,6 +63,11 @@ begin
         using errcode = '40001';
     end if;
 
+    select effort_hours into v_current_effort
+    from public.project_node_planning
+    where project_id = p_project_id
+      and node_id = v_current.id;
+
     v_start := case
       when v_change ? 'start_date' and nullif(v_change->>'start_date', '') is not null
         then (v_change->>'start_date')::date
@@ -79,7 +85,7 @@ begin
         and jsonb_typeof(v_change->'effort_hours') <> 'null'
         then (v_change->>'effort_hours')::numeric
       when v_change ? 'effort_hours' then null
-      else v_current.effort_hours
+      else v_current_effort
     end;
 
     if v_start is not null and v_due is not null and v_start > v_due then
@@ -127,7 +133,7 @@ begin
     if v_change ? 'start_date'
        or v_change ? 'due_date'
        or v_change ? 'effort_hours' then
-      v_result := public.update_canvas_node_planning(
+      v_result := public.update_canvas_node_schedule(
         p_project_id,
         v_change->>'board_id',
         v_change->>'node_id',
@@ -152,9 +158,7 @@ begin
             and jsonb_typeof(v_change->'effort_hours') <> 'null'
             then (v_change->>'effort_hours')::numeric
           else null
-        end,
-        false,
-        null
+        end
       );
 
       if coalesce((v_result->>'ok')::boolean, false) is not true then
