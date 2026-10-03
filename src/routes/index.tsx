@@ -114,7 +114,7 @@ function Dashboard() {
       <PortfolioRiskRadar
         data={portfolioActions.data}
         projects={projects.data ?? []}
-        isLoading={portfolioActions.isLoading}
+        isLoading={projects.isLoading || portfolioActions.isLoading}
       />
 
       {execution.data && (
