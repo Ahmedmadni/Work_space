@@ -82,13 +82,13 @@ export function ProjectStrategicAlignment({
                   {objective.title}
                 </p>
                 <span className="text-[10px] font-semibold text-brand">
-                  {progress == null ? "—" : \`\${Math.round(progress)}%\`}
+                  {progress == null ? "—" : `${Math.round(progress)}%`}
                 </span>
               </div>
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
                 <div
                   className="h-full rounded-full bg-brand"
-                  style={{ width: \`\${progress ?? 0}%\` }}
+                  style={{ width: `${progress ?? 0}%` }}
                 />
               </div>
               <p className="mt-2 text-[9px] text-muted-foreground">
