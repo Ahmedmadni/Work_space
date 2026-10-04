@@ -1,5 +1,6 @@
 import { Target } from "lucide-react";
 
+import { buildObjectiveForecast } from "@/services/strategy-forecast.service";
 import type {
   PortfolioObjective,
   StrategyReviewData,
@@ -82,6 +83,10 @@ export function ProjectStrategicAlignment({
           const realizedBenefits = benefits.filter(
             (benefit) => benefit.status === "realized",
           ).length;
+          const forecast = buildObjectiveForecast(
+            objective,
+            reviewData?.reviews ?? [],
+          );
           const latestReview = (reviewData?.reviews ?? [])
             .filter((review) => review.objective_id === objective.id)
             .slice()
