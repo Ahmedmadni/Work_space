@@ -178,20 +178,6 @@ begin
     raise exception 'OBJECTIVE_LIMIT_EXCEEDED' using errcode = '22023';
   end if;
 
-  if p_owner_user_id is not null and p_owner_user_id <> auth.uid() and not exists (
-    select 1
-    from public.projects p
-    where p.created_by = p_owner_user_id
-       or exists (
-         select 1
-         from public.project_members pm
-         where pm.project_id = p.id
-           and pm.user_id = p_owner_user_id
-       )
-  ) then
-    raise exception 'OBJECTIVE_OWNER_INVALID' using errcode = '22023';
-  end if;
-
   for v_row in
     select value from jsonb_array_elements(coalesce(p_project_ids, '[]'::jsonb))
   loop
@@ -200,7 +186,9 @@ begin
       raise exception 'OBJECTIVE_PROJECT_ACCESS_DENIED:%', v_project_id
         using errcode = '42501';
     end if;
-    v_linked_projects := array_append(v_linked_projects, v_project_id);
+    if not (v_project_id = any(v_linked_projects)) then
+      v_linked_projects := array_append(v_linked_projects, v_project_id);
+    end if;
   end loop;
 
   for v_row in
@@ -230,6 +218,25 @@ begin
       v_linked_projects := array_append(v_linked_projects, v_project_id);
     end if;
   end loop;
+
+  if p_owner_user_id is not null and p_owner_user_id <> auth.uid() then
+    if coalesce(array_length(v_linked_projects, 1), 0) = 0
+       or not exists (
+         select 1
+         from unnest(v_linked_projects) as linked(project_id)
+         join public.projects p on p.id = linked.project_id
+         where p.created_by = p_owner_user_id
+            or exists (
+              select 1
+              from public.project_members pm
+              where pm.project_id = linked.project_id
+                and pm.user_id = p_owner_user_id
+            )
+       )
+    then
+      raise exception 'OBJECTIVE_OWNER_INVALID' using errcode = '22023';
+    end if;
+  end if;
 
   if p_objective_id is null then
     insert into public.portfolio_objectives (
@@ -370,6 +377,30 @@ begin
         'due_date', v_new.due_date
       ),
       jsonb_build_object('source', 'portfolio_strategy')
+    );
+
+    insert into public.project_activity (
+      project_id,
+      actor_user_id,
+      action,
+      entity_type,
+      entity_id,
+      metadata
+    )
+    values (
+      v_project_id,
+      auth.uid(),
+      case when p_objective_id is null
+        then 'strategic_objective_linked'
+        else 'strategic_objective_updated'
+      end,
+      'portfolio_objective',
+      v_id::text,
+      jsonb_build_object(
+        'title', v_new.title,
+        'status', v_new.status,
+        'due_date', v_new.due_date
+      )
     );
   end loop;
 
