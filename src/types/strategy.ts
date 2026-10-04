@@ -174,3 +174,42 @@ export interface RecordStrategyReviewInput {
   local_critical_risks?: number;
   local_pending_decisions?: number;
 }
+
+
+export type StrategyForecastStatus =
+  | "achieved"
+  | "overdue"
+  | "projected_on_time"
+  | "projected_late"
+  | "stalled"
+  | "insufficient_data";
+
+export type ForecastEvidenceStrength = "low" | "medium" | "high";
+
+export interface StrategyForecastPoint {
+  review_id: string;
+  review_date: string;
+  progress: number;
+}
+
+export interface ObjectiveForecast {
+  objective_id: string;
+  status: StrategyForecastStatus;
+  latest_progress: number | null;
+  latest_review_date: string | null;
+  review_count: number;
+  history_span_days: number;
+  daily_progress_rate: number | null;
+  projected_due_progress: number | null;
+  projected_completion_date: string | null;
+  days_to_due: number | null;
+  evidence_strength: ForecastEvidenceStrength;
+  points: StrategyForecastPoint[];
+}
+
+export interface BenefitForecastWarning {
+  benefit_id: string;
+  objective_id: string;
+  severity: "warning" | "critical";
+  reason: "overdue" | "objective_projected_late" | "objective_stalled";
+}
