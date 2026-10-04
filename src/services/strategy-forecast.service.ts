@@ -5,6 +5,8 @@ import type {
   ObjectiveStrategyReview,
   PortfolioObjective,
   StrategyReviewData,
+  StrategicScenarioInput,
+  StrategicScenarioResult,
 } from "@/types/strategy";
 
 function dateFromKey(value: string) {
@@ -370,4 +372,152 @@ export function buildBenefitForecastWarnings(
   }
 
   return warnings;
+}
+
+
+function completionDeltaDays(
+  baseline: string | null,
+  scenario: string | null,
+) {
+  if (!baseline || !scenario) return null;
+  return diffDays(dateFromKey(baseline), dateFromKey(scenario));
+}
+
+function forecastWithRateMultiplier(
+  objective: PortfolioObjective,
+  reviews: ObjectiveStrategyReview[],
+  multiplier: number,
+  now = todayUtc(),
+) {
+  const base = buildObjectiveForecast(objective, reviews, now);
+  const safeMultiplier = Number.isFinite(multiplier)
+    ? Math.max(0, Math.min(3, multiplier))
+    : 1;
+
+  if (
+    safeMultiplier === 1 ||
+    base.status === "achieved" ||
+    base.status === "overdue" ||
+    base.latest_progress == null ||
+    base.daily_progress_rate == null ||
+    base.review_count < 2 ||
+    base.history_span_days <= 0
+  ) {
+    return base;
+  }
+
+  const rate = base.daily_progress_rate * safeMultiplier;
+  const dueDate = objective.due_date
+    ? dateFromKey(objective.due_date)
+    : null;
+  const daysToDue = dueDate ? diffDays(now, dueDate) : null;
+  const projectedDueProgress =
+    daysToDue == null
+      ? null
+      : clampProgress(
+          base.latest_progress + rate * Math.max(0, daysToDue),
+        );
+  const projectedCompletionDate =
+    rate > 0 && base.latest_progress < 100
+      ? dateKey(
+          addDays(
+            now,
+            Math.ceil((100 - base.latest_progress) / rate),
+          ),
+        )
+      : rate > 0
+        ? dateKey(now)
+        : null;
+
+  let status: ObjectiveForecast["status"];
+  if (rate <= 0) {
+    status = "stalled";
+  } else if (!dueDate || daysToDue == null) {
+    status = "insufficient_data";
+  } else {
+    const projectedCompletion = projectedCompletionDate
+      ? dateFromKey(projectedCompletionDate)
+      : null;
+    status =
+      !projectedCompletion ||
+      projectedCompletion.getTime() > dueDate.getTime() ||
+      (projectedDueProgress != null && projectedDueProgress < 100)
+        ? "projected_late"
+        : "projected_on_time";
+  }
+
+  return {
+    ...base,
+    status,
+    daily_progress_rate: rate,
+    projected_due_progress: projectedDueProgress,
+    projected_completion_date: projectedCompletionDate,
+    days_to_due: daysToDue,
+  };
+}
+
+export function buildStrategicScenario(
+  objective: PortfolioObjective,
+  reviews: ObjectiveStrategyReview[],
+  scenario: StrategicScenarioInput,
+  now = todayUtc(),
+): StrategicScenarioResult {
+  const overrides = new Map(
+    scenario.key_results.map((row) => [
+      row.key_result_id,
+      row,
+    ] as const),
+  );
+
+  const scenarioObjective: PortfolioObjective = {
+    ...objective,
+    due_date: scenario.due_date,
+    key_results: objective.key_results.map((kr) => {
+      const override = overrides.get(kr.id);
+      return override
+        ? {
+            ...kr,
+            current_value: override.current_value,
+            target_value: override.target_value,
+          }
+        : { ...kr };
+    }),
+  };
+
+  const baselineForecast = buildObjectiveForecast(
+    objective,
+    reviews,
+    now,
+  );
+  const scenarioForecast = forecastWithRateMultiplier(
+    scenarioObjective,
+    reviews,
+    scenario.trend_multiplier,
+    now,
+  );
+  const baselineProgress = progressOf(objective);
+  const scenarioProgress = progressOf(scenarioObjective);
+
+  return {
+    objective_id: objective.id,
+    scenario_objective: scenarioObjective,
+    baseline_forecast: baselineForecast,
+    scenario_forecast: scenarioForecast,
+    baseline_progress: baselineProgress,
+    scenario_progress: scenarioProgress,
+    progress_delta:
+      baselineProgress == null || scenarioProgress == null
+        ? null
+        : scenarioProgress - baselineProgress,
+    projected_due_delta:
+      baselineForecast.projected_due_progress == null ||
+      scenarioForecast.projected_due_progress == null
+        ? null
+        : scenarioForecast.projected_due_progress -
+          baselineForecast.projected_due_progress,
+    completion_date_delta_days: completionDeltaDays(
+      baselineForecast.projected_completion_date,
+      scenarioForecast.projected_completion_date,
+    ),
+  };
 }
