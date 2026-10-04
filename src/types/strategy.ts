@@ -213,3 +213,29 @@ export interface BenefitForecastWarning {
   severity: "warning" | "critical";
   reason: "overdue" | "objective_projected_late" | "objective_stalled";
 }
+
+
+export interface StrategicScenarioKrOverride {
+  key_result_id: string;
+  current_value: number;
+  target_value: number;
+}
+
+export interface StrategicScenarioInput {
+  objective_id: string;
+  due_date: string | null;
+  trend_multiplier: number;
+  key_results: StrategicScenarioKrOverride[];
+}
+
+export interface StrategicScenarioResult {
+  objective_id: string;
+  scenario_objective: PortfolioObjective;
+  baseline_forecast: ObjectiveForecast;
+  scenario_forecast: ObjectiveForecast;
+  baseline_progress: number | null;
+  scenario_progress: number | null;
+  progress_delta: number | null;
+  projected_due_delta: number | null;
+  completion_date_delta_days: number | null;
+}
