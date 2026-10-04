@@ -13,11 +13,13 @@ import { CreateProjectDialog } from "@/components/app/dialogs";
 import { PortfolioCommandCenter } from "@/components/portfolio/PortfolioCommandCenter";
 import { PortfolioCapacityCenter } from "@/components/portfolio/PortfolioCapacityCenter";
 import { PortfolioRiskRadar } from "@/components/portfolio/PortfolioRiskRadar";
+import { StrategicAlignmentCenter } from "@/components/portfolio/StrategicAlignmentCenter";
 import { useProjects } from "@/hooks/use-projects";
 import { useBoards } from "@/hooks/use-boards";
 import { useProjectExecutionSummary } from "@/hooks/use-canvas";
 import { usePortfolioPlanningData } from "@/hooks/use-planning";
 import { usePortfolioActionCenter } from "@/hooks/use-action-center";
+import { usePortfolioStrategy } from "@/hooks/use-strategy";
 import { useCurrentUser } from "@/hooks/use-auth";
 import { arabicNumber, greeting, longDate } from "@/lib/format";
 
@@ -51,6 +53,7 @@ function Dashboard() {
   const execution = useProjectExecutionSummary(allBoardIds);
   const portfolioPlanning = usePortfolioPlanningData(projectIds);
   const portfolioActions = usePortfolioActionCenter(projectIds);
+  const portfolioStrategy = usePortfolioStrategy();
 
   const stats = [
     { label: "المشاريع", value: projects.data?.length ?? 0 },
@@ -102,6 +105,19 @@ function Dashboard() {
           ))}
         </div>
       </section>
+
+      <StrategicAlignmentCenter
+        data={portfolioStrategy.data}
+        projects={projects.data ?? []}
+        boards={allBoards.data ?? []}
+        execution={execution.data}
+        portfolioActions={portfolioActions.data}
+        isLoading={
+          projects.isLoading ||
+          allBoards.isLoading ||
+          portfolioStrategy.isLoading
+        }
+      />
 
       {execution.data && (
         <PortfolioCommandCenter
