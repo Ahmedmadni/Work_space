@@ -72,6 +72,9 @@ const ACTION_LABELS: Record<string, string> = {
   decision_updated: "تحديث قرار",
   strategic_objective_linked: "ربط هدف استراتيجي بالمشروع",
   strategic_objective_updated: "تحديث هدف استراتيجي مرتبط",
+  strategic_benefit_created: "تسجيل منفعة استراتيجية",
+  strategic_benefit_updated: "تحديث منفعة استراتيجية",
+  strategy_review_recorded: "تسجيل مراجعة استراتيجية",
 };
 
 const CATEGORY_LABELS: Record<ProjectAuditCategory, string> = {
