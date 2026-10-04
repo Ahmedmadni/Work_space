@@ -266,6 +266,26 @@ begin
         'source', 'strategy_review'
       )
     );
+
+    insert into public.project_activity (
+      project_id, actor_user_id, action, entity_type, entity_id, metadata
+    )
+    values (
+      v_project_id,
+      auth.uid(),
+      case when p_benefit_id is null
+        then 'strategic_benefit_created'
+        else 'strategic_benefit_updated'
+      end,
+      'objective_benefit',
+      v_id::text,
+      jsonb_build_object(
+        'objective_id', p_objective_id,
+        'title', v_new.title,
+        'status', v_new.status,
+        'target_date', v_new.target_date
+      )
+    );
   end loop;
 
   return to_jsonb(v_new);
@@ -397,6 +417,22 @@ begin
       jsonb_build_object(
         'objective_id', p_objective_id,
         'source', 'strategy_review'
+      )
+    );
+
+    insert into public.project_activity (
+      project_id, actor_user_id, action, entity_type, entity_id, metadata
+    )
+    values (
+      v_project_id,
+      auth.uid(),
+      'strategy_review_recorded',
+      'objective_strategy_review',
+      v_review.id::text,
+      jsonb_build_object(
+        'objective_id', p_objective_id,
+        'period_label', v_review.period_label,
+        'assessment', v_review.assessment
       )
     );
   end loop;
