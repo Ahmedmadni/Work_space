@@ -34,6 +34,7 @@ import { ProjectGovernanceCenter } from "@/components/governance/ProjectGovernan
 import { ProjectExecutiveDashboard } from "@/components/reports/ProjectExecutiveDashboard";
 import { ProjectPlanningCenter } from "@/components/planning/ProjectPlanningCenter";
 import { ProjectActionCenter } from "@/components/actions/ProjectActionCenter";
+import { ProjectStrategicAlignment } from "@/components/strategy/ProjectStrategicAlignment";
 import { useProject } from "@/hooks/use-projects";
 import {
   useProjectAccess,
@@ -44,6 +45,7 @@ import { useBoards } from "@/hooks/use-boards";
 import { useCanvasNodeSearch, useProjectExecutionSummary } from "@/hooks/use-canvas";
 import { useCurrentTaskUserId } from "@/hooks/use-task-execution";
 import { useProjectActionCenter } from "@/hooks/use-action-center";
+import { usePortfolioStrategy } from "@/hooks/use-strategy";
 import type {
   BoardWithContext,
   CanvasNodeStatus,
@@ -457,6 +459,7 @@ function ProjectDetail() {
   );
   const execution = useProjectExecutionSummary(boardIds);
   const actionCenter = useProjectActionCenter(projectId);
+  const portfolioStrategy = usePortfolioStrategy();
 
   const visibleBoards = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("ar");
@@ -533,6 +536,11 @@ function ProjectDetail() {
             {create}
           </>
         }
+      />
+
+      <ProjectStrategicAlignment
+        projectId={projectId}
+        objectives={portfolioStrategy.data?.objectives ?? []}
       />
 
       {execution.data && (
