@@ -178,19 +178,6 @@ export function StrategicAlignmentCenter({
     [execution?.items, boardMap],
   );
 
-  const linkedMilestoneSet = useMemo(
-    () =>
-      new Map(
-        objectives.flatMap((objective) =>
-          objective.milestones.map((milestone) => [
-            `${objective.id}:${milestone.node_id}`,
-            milestone,
-          ] as const),
-        ),
-      ),
-    [objectives],
-  );
-
   const cards = useMemo(
     () =>
       objectives.map((objective) => {
