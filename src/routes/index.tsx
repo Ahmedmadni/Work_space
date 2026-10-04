@@ -16,6 +16,7 @@ import { PortfolioRiskRadar } from "@/components/portfolio/PortfolioRiskRadar";
 import { StrategicAlignmentCenter } from "@/components/portfolio/StrategicAlignmentCenter";
 import { ExecutiveStrategyReviewCenter } from "@/components/portfolio/ExecutiveStrategyReviewCenter";
 import { StrategicForecastCenter } from "@/components/portfolio/StrategicForecastCenter";
+import { StrategicScenarioLab } from "@/components/portfolio/StrategicScenarioLab";
 import { useProjects } from "@/hooks/use-projects";
 import { useBoards } from "@/hooks/use-boards";
 import { useProjectExecutionSummary } from "@/hooks/use-canvas";
@@ -141,6 +142,12 @@ function Dashboard() {
       />
 
       <StrategicForecastCenter
+        strategy={portfolioStrategy.data}
+        reviewData={strategyReviews.data}
+        isLoading={portfolioStrategy.isLoading || strategyReviews.isLoading}
+      />
+
+      <StrategicScenarioLab
         strategy={portfolioStrategy.data}
         reviewData={strategyReviews.data}
         isLoading={portfolioStrategy.isLoading || strategyReviews.isLoading}
