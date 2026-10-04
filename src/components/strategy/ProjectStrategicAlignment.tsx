@@ -1,6 +1,9 @@
 import { Target } from "lucide-react";
 
-import type { PortfolioObjective } from "@/types/strategy";
+import type {
+  PortfolioObjective,
+  StrategyReviewData,
+} from "@/types/strategy";
 
 function progressOf(objective: PortfolioObjective) {
   if (!objective.key_results.length) return null;
@@ -43,9 +46,11 @@ function progressOf(objective: PortfolioObjective) {
 export function ProjectStrategicAlignment({
   projectId,
   objectives,
+  reviewData,
 }: {
   projectId: string;
   objectives: PortfolioObjective[];
+  reviewData?: StrategyReviewData;
 }) {
   const linked = objectives.filter((objective) =>
     objective.project_ids.includes(projectId),
@@ -71,6 +76,21 @@ export function ProjectStrategicAlignment({
           const milestones = objective.milestones.filter(
             (milestone) => milestone.project_id === projectId,
           );
+          const benefits = (reviewData?.benefits ?? []).filter(
+            (benefit) => benefit.objective_id === objective.id,
+          );
+          const realizedBenefits = benefits.filter(
+            (benefit) => benefit.status === "realized",
+          ).length;
+          const latestReview = (reviewData?.reviews ?? [])
+            .filter((review) => review.objective_id === objective.id)
+            .slice()
+            .sort((a, b) => {
+              const byDate = b.review_date.localeCompare(a.review_date);
+              return byDate !== 0
+                ? byDate
+                : b.created_at.localeCompare(a.created_at);
+            })[0];
 
           return (
             <div
@@ -95,6 +115,23 @@ export function ProjectStrategicAlignment({
                 {objective.key_results.length} Key Results · {milestones.length}{" "}
                 Milestones مرتبطة من هذا المشروع
               </p>
+              <div className="mt-2 flex flex-wrap gap-1.5 text-[8px]">
+                <span className="rounded-full bg-success/10 px-2 py-0.5 text-success">
+                  Benefits {realizedBenefits}/{benefits.length}
+                </span>
+                {latestReview && (
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-muted-foreground">
+                    آخر مراجعة: {latestReview.period_label} ·{" "}
+                    {latestReview.assessment === "on_track"
+                      ? "على المسار"
+                      : latestReview.assessment === "at_risk"
+                        ? "معرض للخطر"
+                        : latestReview.assessment === "off_track"
+                          ? "خارج المسار"
+                          : "متحقق"}
+                  </span>
+                )}
+              </div>
               {!!milestones.length && (
                 <div className="mt-2 flex flex-wrap gap-1">
                   {milestones.slice(0, 4).map((milestone) => (
