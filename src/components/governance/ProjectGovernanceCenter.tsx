@@ -70,6 +70,8 @@ const ACTION_LABELS: Record<string, string> = {
   risk_updated: "تحديث خطر",
   decision_created: "تسجيل قرار",
   decision_updated: "تحديث قرار",
+  strategic_objective_linked: "ربط هدف استراتيجي بالمشروع",
+  strategic_objective_updated: "تحديث هدف استراتيجي مرتبط",
 };
 
 const CATEGORY_LABELS: Record<ProjectAuditCategory, string> = {

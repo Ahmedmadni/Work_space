@@ -83,6 +83,8 @@ function activityLabel(item: ProjectActivity) {
     risk_updated: "حدّث خطرًا",
     decision_created: "سجّل قرارًا",
     decision_updated: "حدّث قرارًا",
+    strategic_objective_linked: "ربط هدفًا استراتيجيًا بالمشروع",
+    strategic_objective_updated: "حدّث هدفًا استراتيجيًا مرتبطًا",
     document_uploaded: "رفع ملفًا",
     document_deleted: "حذف ملفًا",
     member_invited: "أرسل دعوة للمشروع",
