@@ -83,3 +83,94 @@ export interface SavedObjectiveRef {
   id: string;
   version: number;
 }
+
+
+export type BenefitType =
+  | "financial"
+  | "customer"
+  | "operational"
+  | "risk"
+  | "capability"
+  | "other";
+
+export type BenefitStatus =
+  | "planned"
+  | "realizing"
+  | "realized"
+  | "not_realized";
+
+export type StrategyReviewAssessment =
+  | "on_track"
+  | "at_risk"
+  | "off_track"
+  | "achieved";
+
+export interface ObjectiveBenefit {
+  id: string;
+  objective_id: string;
+  title: string;
+  description: string | null;
+  benefit_type: BenefitType;
+  status: BenefitStatus;
+  owner_user_id: string | null;
+  owner_name: string | null;
+  target_date: string | null;
+  expected_outcome: string | null;
+  realized_outcome: string | null;
+  evidence: string | null;
+  realized_at: string | null;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ObjectiveStrategyReview {
+  id: string;
+  objective_id: string;
+  review_date: string;
+  period_label: string;
+  assessment: StrategyReviewAssessment;
+  summary: string | null;
+  decisions_needed: string | null;
+  objective_progress_snapshot: number | null;
+  delivery_progress_snapshot: number | null;
+  active_risks_snapshot: number;
+  critical_risks_snapshot: number;
+  pending_decisions_snapshot: number;
+  key_results_snapshot: ObjectiveKeyResult[];
+  created_by: string;
+  created_at: string;
+}
+
+export interface StrategyReviewData {
+  benefits: ObjectiveBenefit[];
+  reviews: ObjectiveStrategyReview[];
+}
+
+export interface SaveObjectiveBenefitInput {
+  objective_id: string;
+  id?: string | null;
+  expected_version?: number | null;
+  title: string;
+  description?: string | null;
+  benefit_type: BenefitType;
+  status: BenefitStatus;
+  owner_user_id?: string | null;
+  target_date?: string | null;
+  expected_outcome?: string | null;
+  realized_outcome?: string | null;
+  evidence?: string | null;
+}
+
+export interface RecordStrategyReviewInput {
+  objective_id: string;
+  period_label: string;
+  assessment: StrategyReviewAssessment;
+  summary?: string | null;
+  decisions_needed?: string | null;
+  /** Used only by Local mode to mirror the server snapshot experience. */
+  local_delivery_progress?: number | null;
+  local_active_risks?: number;
+  local_critical_risks?: number;
+  local_pending_decisions?: number;
+}
