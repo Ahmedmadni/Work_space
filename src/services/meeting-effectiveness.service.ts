@@ -45,11 +45,14 @@ function finalizedMeetings(data: ExecutiveMeetingGovernanceData) {
 function countLaterMeetings(
   meetings: ExecutiveStrategyMeeting[],
   origin: ExecutiveStrategyMeeting,
+  closedAt: string | null,
 ) {
+  const closedDate = closedAt ? dateKey(closedAt) : null;
   return meetings.filter(
     (meeting) =>
       meeting.id !== origin.id &&
-      meeting.meeting_date > origin.meeting_date,
+      meeting.meeting_date > origin.meeting_date &&
+      (!closedDate || meeting.meeting_date <= closedDate),
   ).length;
 }
 
@@ -82,7 +85,11 @@ function buildActionRows(
         action,
         origin_meeting: meeting,
         age_days: daysBetween(action.created_at, end),
-        carryover_meetings: countLaterMeetings(meetings, meeting),
+        carryover_meetings: countLaterMeetings(
+          meetings,
+          meeting,
+          completed ? action.completed_at : null,
+        ),
         overdue,
         late_completed: lateCompleted,
         completion_days: completionDays,
