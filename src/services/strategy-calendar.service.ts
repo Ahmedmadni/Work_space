@@ -487,6 +487,9 @@ export async function saveObjectiveStrategyCadence(
   input: SaveObjectiveStrategyCadenceInput,
 ): Promise<ObjectiveStrategyCadence> {
   if (
+    !Number.isFinite(input.review_interval_days) ||
+    !Number.isFinite(input.kr_update_interval_days) ||
+    !Number.isFinite(input.reminder_days_before) ||
     input.review_interval_days < 1 ||
     input.review_interval_days > 366 ||
     input.kr_update_interval_days < 1 ||
@@ -595,6 +598,8 @@ export async function saveRecoveryCheckpointCadence(
   input: SaveRecoveryCheckpointCadenceInput,
 ): Promise<RecoveryCheckpointCadence> {
   if (
+    !Number.isFinite(input.checkpoint_interval_days) ||
+    !Number.isFinite(input.reminder_days_before) ||
     input.checkpoint_interval_days < 1 ||
     input.checkpoint_interval_days > 180 ||
     input.reminder_days_before < 0 ||
@@ -623,7 +628,8 @@ export async function saveRecoveryCheckpointCadence(
     return row;
   }
 
-  const [store, recoveryData] = [readLocal(), await listObjectiveRecoveryPlans()];
+  const store = readLocal();
+  const recoveryData = await listObjectiveRecoveryPlans();
   const plan = recoveryData.plans.find((row) => row.id === input.plan_id);
   if (!plan) throw new Error("Recovery Plan غير موجودة.");
   const existing = store.recovery_cadences.find(
