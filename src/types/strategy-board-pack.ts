@@ -8,6 +8,7 @@ import type {
   ProjectRisk,
 } from "@/types/action-center";
 import type {
+  ObjectiveBenefit,
   ObjectiveForecast,
   ObjectiveRecoveryPlan,
   ObjectiveStrategyReview,
@@ -85,6 +86,7 @@ export interface ExecutiveStrategyBoardPack {
   };
   decisions_required: ExecutiveDecisionRequired[];
   top_risks: ExecutiveRiskItem[];
+  benefits: ObjectiveBenefit[];
   active_recovery_plans: ObjectiveRecoveryPlan[];
   upcoming_agenda: StrategyCalendarEvent[];
   projects: Project[];
