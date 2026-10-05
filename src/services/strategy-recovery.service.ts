@@ -14,6 +14,9 @@ import type {
   RecoveryTriggerReason,
   SaveObjectiveRecoveryPlanInput,
   SavedRecoveryPlanRef,
+  PortfolioObjective,
+  ObjectiveStrategyReview,
+  RecoveryPlanEffectiveness,
 } from "@/types/strategy";
 
 const LOCAL_KEY = "projectflow.strategy-recovery.v1";
@@ -341,4 +344,45 @@ export async function saveObjectiveRecoveryPlan(
     : [plan, ...store.plans];
   writeLocal(store);
   return { id: plan.id, version: plan.version };
+}
+
+
+export function assessRecoveryPlanEffectiveness(
+  plan: ObjectiveRecoveryPlan,
+  objective: PortfolioObjective,
+  reviews: ObjectiveStrategyReview[],
+): RecoveryPlanEffectiveness {
+  const current = buildObjectiveForecast(objective, reviews);
+  const baselineWeekly =
+    plan.baseline_daily_progress_rate == null
+      ? null
+      : plan.baseline_daily_progress_rate * 7;
+  const currentWeekly =
+    current.daily_progress_rate == null ? null : current.daily_progress_rate * 7;
+  const delta =
+    baselineWeekly == null || currentWeekly == null
+      ? null
+      : currentWeekly - baselineWeekly;
+  const progressDelta =
+    plan.baseline_objective_progress == null || current.latest_progress == null
+      ? null
+      : current.latest_progress - plan.baseline_objective_progress;
+
+  return {
+    plan_id: plan.id,
+    assessment:
+      delta == null
+        ? "insufficient_data"
+        : delta > 0.1
+          ? "improved"
+          : delta < -0.1
+            ? "worsened"
+            : "unchanged",
+    baseline_weekly_rate: baselineWeekly,
+    current_weekly_rate: currentWeekly,
+    weekly_rate_delta: delta,
+    baseline_progress: plan.baseline_objective_progress,
+    current_progress: current.latest_progress,
+    progress_delta: progressDelta,
+  };
 }
