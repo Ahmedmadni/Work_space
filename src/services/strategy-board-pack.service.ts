@@ -422,6 +422,7 @@ export function buildExecutiveStrategyBoardPack(
     },
     decisions_required: buildDecisionAgenda(input),
     top_risks: buildTopRisks(input),
+    benefits: [...benefits],
     active_recovery_plans: activeRecoveryPlans,
     upcoming_agenda: upcomingAgenda,
     projects: input.projects,
