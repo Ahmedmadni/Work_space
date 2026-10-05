@@ -77,6 +77,10 @@ const ACTION_LABELS: Record<string, string> = {
   strategy_review_recorded: "تسجيل مراجعة استراتيجية",
   recovery_plan_created: "إنشاء خطة تعافٍ استراتيجية",
   recovery_plan_updated: "تحديث خطة تعافٍ استراتيجية",
+  strategy_cadence_updated: "تحديث دورية المراجعة الاستراتيجية",
+  strategy_kr_checkin_recorded: "تسجيل تحديث Key Results",
+  recovery_checkpoint_cadence_updated: "تحديث دورية Recovery Checkpoint",
+  recovery_checkpoint_recorded: "تسجيل Recovery Checkpoint",
 };
 
 const CATEGORY_LABELS: Record<ProjectAuditCategory, string> = {
