@@ -1004,11 +1004,20 @@ export function ExecutiveMeetingGovernanceCenter({
                           className="mt-1 w-full rounded-lg border border-border bg-card px-2 py-2 text-xs"
                         >
                           <option value="">بدون Objective مباشر</option>
-                          {objectives.map((objective) => (
-                            <option key={objective.id} value={objective.id}>
-                              {objective.title}
-                            </option>
-                          ))}
+                          {objectives
+                            .filter(
+                              (objective) =>
+                                !sourceLocked ||
+                                !decision.project_id ||
+                                objective.project_ids.includes(
+                                  decision.project_id,
+                                ),
+                            )
+                            .map((objective) => (
+                              <option key={objective.id} value={objective.id}>
+                                {objective.title}
+                              </option>
+                            ))}
                         </select>
                       </label>
 
