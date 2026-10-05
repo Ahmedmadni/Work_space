@@ -239,3 +239,111 @@ export interface StrategicScenarioResult {
   projected_due_delta: number | null;
   completion_date_delta_days: number | null;
 }
+
+
+export type RecoveryPlanStatus =
+  | "draft"
+  | "active"
+  | "recovered"
+  | "closed"
+  | "cancelled";
+
+export type RecoveryTriggerReason =
+  | "manual"
+  | "projected_late"
+  | "stalled"
+  | "overdue";
+
+export type RecoveryCommitmentStatus =
+  | "open"
+  | "in_progress"
+  | "done"
+  | "cancelled";
+
+export interface RecoveryCommitment {
+  id: string;
+  title: string;
+  description: string | null;
+  owner_user_id: string | null;
+  owner_name: string | null;
+  due_date: string | null;
+  status: RecoveryCommitmentStatus;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ObjectiveRecoveryPlan {
+  id: string;
+  objective_id: string;
+  title: string;
+  summary: string | null;
+  success_criteria: string | null;
+  trigger_reason: RecoveryTriggerReason;
+  status: RecoveryPlanStatus;
+  owner_user_id: string | null;
+  owner_name: string | null;
+  target_recovery_date: string | null;
+  baseline_objective_progress: number | null;
+  baseline_daily_progress_rate: number | null;
+  baseline_review_count: number;
+  activated_at: string | null;
+  recovered_at: string | null;
+  closed_at: string | null;
+  version: number;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  commitments: RecoveryCommitment[];
+}
+
+export interface RecoveryPlanData {
+  plans: ObjectiveRecoveryPlan[];
+}
+
+export interface SaveRecoveryCommitmentInput {
+  id?: string | null;
+  title: string;
+  description?: string | null;
+  owner_user_id?: string | null;
+  owner_name?: string | null;
+  due_date?: string | null;
+  status: RecoveryCommitmentStatus;
+}
+
+export interface SaveObjectiveRecoveryPlanInput {
+  objective_id: string;
+  id?: string | null;
+  expected_version?: number | null;
+  title: string;
+  summary?: string | null;
+  success_criteria?: string | null;
+  trigger_reason: RecoveryTriggerReason;
+  status: RecoveryPlanStatus;
+  owner_user_id?: string | null;
+  owner_name?: string | null;
+  target_recovery_date?: string | null;
+  commitments: SaveRecoveryCommitmentInput[];
+}
+
+export interface SavedRecoveryPlanRef {
+  id: string;
+  version: number;
+}
+
+export type RecoveryTrendAssessment =
+  | "improved"
+  | "unchanged"
+  | "worsened"
+  | "insufficient_data";
+
+export interface RecoveryPlanEffectiveness {
+  plan_id: string;
+  assessment: RecoveryTrendAssessment;
+  baseline_weekly_rate: number | null;
+  current_weekly_rate: number | null;
+  weekly_rate_delta: number | null;
+  baseline_progress: number | null;
+  current_progress: number | null;
+  progress_delta: number | null;
+}
