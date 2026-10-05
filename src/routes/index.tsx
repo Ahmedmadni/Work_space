@@ -20,6 +20,7 @@ import { StrategicScenarioLab } from "@/components/portfolio/StrategicScenarioLa
 import { StrategyRecoveryCenter } from "@/components/portfolio/StrategyRecoveryCenter";
 import { StrategyCalendarCenter } from "@/components/portfolio/StrategyCalendarCenter";
 import { ExecutiveStrategyBoardPack } from "@/components/portfolio/ExecutiveStrategyBoardPack";
+import { ExecutiveMeetingGovernanceCenter } from "@/components/portfolio/ExecutiveMeetingGovernanceCenter";
 import { useProjects } from "@/hooks/use-projects";
 import { useBoards } from "@/hooks/use-boards";
 import { useProjectExecutionSummary } from "@/hooks/use-canvas";
@@ -33,6 +34,7 @@ import { useCurrentUser } from "@/hooks/use-auth";
 import { usePortfolioCollaborators } from "@/hooks/use-collaboration";
 import { useStrategyRecoveryPlans } from "@/hooks/use-strategy-recovery";
 import { useStrategyCalendar } from "@/hooks/use-strategy-calendar";
+import { useExecutiveStrategyMeetings } from "@/hooks/use-executive-meetings";
 import { arabicNumber, greeting, longDate } from "@/lib/format";
 
 export const Route = createFileRoute("/")({
@@ -70,6 +72,7 @@ function Dashboard() {
   const strategyRecovery = useStrategyRecoveryPlans();
   const portfolioCollaborators = usePortfolioCollaborators(projectIds);
   const strategyCalendar = useStrategyCalendar();
+  const executiveMeetings = useExecutiveStrategyMeetings();
 
   const stats = [
     { label: "المشاريع", value: projects.data?.length ?? 0 },
@@ -132,6 +135,7 @@ function Dashboard() {
         projects={projects.data ?? []}
         boards={allBoards.data ?? []}
         execution={execution.data}
+        meetingData={executiveMeetings.data}
         isLoading={
           portfolioStrategy.isLoading ||
           strategyReviews.isLoading ||
@@ -140,7 +144,33 @@ function Dashboard() {
           portfolioActions.isLoading ||
           projects.isLoading ||
           allBoards.isLoading ||
-          execution.isLoading
+          execution.isLoading ||
+          executiveMeetings.isLoading
+        }
+      />
+
+      <ExecutiveMeetingGovernanceCenter
+        meetingData={executiveMeetings.data}
+        strategy={portfolioStrategy.data}
+        reviewData={strategyReviews.data}
+        actionCenter={portfolioActions.data}
+        projects={projects.data ?? []}
+        collaboratorsByProject={portfolioCollaborators.data ?? {}}
+        currentUser={
+          user
+            ? {
+                id: user.id,
+                full_name: user.full_name,
+                email: user.email,
+              }
+            : null
+        }
+        isLoading={
+          executiveMeetings.isLoading ||
+          portfolioStrategy.isLoading ||
+          strategyReviews.isLoading ||
+          portfolioActions.isLoading ||
+          portfolioCollaborators.isLoading
         }
       />
 
