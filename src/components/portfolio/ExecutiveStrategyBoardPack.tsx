@@ -916,6 +916,12 @@ export function ExecutiveStrategyBoardPack({
     ],
   );
 
+  const meetingEffectiveness = useMemo(
+    () =>
+      meetingData ? buildExecutiveMeetingEffectiveness(meetingData) : null,
+    [meetingData],
+  );
+
   if (isLoading) {
     return (
       <section className="rounded-2xl border border-border bg-card p-6 shadow-[var(--shadow-frost)]">
@@ -926,12 +932,6 @@ export function ExecutiveStrategyBoardPack({
       </section>
     );
   }
-
-  const meetingEffectiveness = useMemo(
-    () =>
-      meetingData ? buildExecutiveMeetingEffectiveness(meetingData) : null,
-    [meetingData],
-  );
 
   if (!pack || !strategy?.objectives.length) return null;
 
