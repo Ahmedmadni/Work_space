@@ -385,6 +385,23 @@ begin
         'source', 'strategy_calendar'
       )
     );
+
+    insert into public.project_activity (
+      project_id, actor_user_id, action, entity_type, entity_id, metadata
+    )
+    values (
+      v_project_id,
+      auth.uid(),
+      'recovery_checkpoint_cadence_updated',
+      'recovery_checkpoint_cadence',
+      p_plan_id::text,
+      jsonb_build_object(
+        'objective_id', v_plan.objective_id,
+        'checkpoint_interval_days', v_new.checkpoint_interval_days,
+        'reminder_days_before', v_new.reminder_days_before,
+        'is_enabled', v_new.is_enabled
+      )
+    );
   end loop;
 
   return to_jsonb(v_new);
