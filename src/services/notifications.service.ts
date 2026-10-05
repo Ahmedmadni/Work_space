@@ -4,6 +4,7 @@ import { refreshMyProjectAutomations } from "@/services/automations.service";
 import { refreshTaskDueNotifications } from "@/services/task-execution.service";
 import { refreshRiskEscalationNotifications } from "@/services/action-center.service";
 import { refreshStrategyScheduleNotifications } from "@/services/strategy-calendar.service";
+import { refreshExecutiveActionNotifications } from "@/services/executive-meetings.service";
 import type {
   NotificationFilter,
   NotificationKind,
@@ -43,6 +44,12 @@ async function refreshScheduledWorkIfNeeded() {
       }
       return 0;
     }),
+    refreshExecutiveActionNotifications().catch((error) => {
+      if (import.meta.env.DEV) {
+        console.warn("[notifications] تعذر تحديث تنبيهات الإجراءات التنفيذية.", error);
+      }
+      return 0;
+    }),
   ]).then(() => {
     lastScheduleRefreshAt = Date.now();
   }).finally(() => {
@@ -63,7 +70,8 @@ function normalizeKind(value: unknown): NotificationKind {
     value === "task_status" ||
     value === "task_due" ||
     value === "risk_escalation" ||
-    value === "strategy_schedule"
+    value === "strategy_schedule" ||
+    value === "executive_action"
     ? value
     : "mention";
 }
