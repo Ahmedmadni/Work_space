@@ -7,14 +7,16 @@ export type NotificationKind =
   | "task_assigned"
   | "task_status"
   | "task_due"
-  | "risk_escalation";
+  | "risk_escalation"
+  | "strategy_schedule";
 
 export type NotificationFilter =
   | "all"
   | "unread"
   | "mentions"
   | "tasks"
-  | "risks";
+  | "risks"
+  | "strategy";
 
 export interface UserNotification {
   id: string;

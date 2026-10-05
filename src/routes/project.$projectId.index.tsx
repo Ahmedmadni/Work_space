@@ -50,6 +50,7 @@ import {
   useStrategyReviewData,
 } from "@/hooks/use-strategy";
 import { useStrategyRecoveryPlans } from "@/hooks/use-strategy-recovery";
+import { useStrategyCalendar } from "@/hooks/use-strategy-calendar";
 import type {
   BoardWithContext,
   CanvasNodeStatus,
@@ -466,6 +467,7 @@ function ProjectDetail() {
   const portfolioStrategy = usePortfolioStrategy();
   const strategyReviewData = useStrategyReviewData();
   const strategyRecovery = useStrategyRecoveryPlans();
+  const strategyCalendar = useStrategyCalendar();
 
   const visibleBoards = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("ar");
@@ -549,6 +551,7 @@ function ProjectDetail() {
         objectives={portfolioStrategy.data?.objectives ?? []}
         reviewData={strategyReviewData.data}
         recoveryData={strategyRecovery.data}
+        calendarData={strategyCalendar.data}
       />
 
       {execution.data && (

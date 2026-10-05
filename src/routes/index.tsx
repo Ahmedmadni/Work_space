@@ -18,6 +18,7 @@ import { ExecutiveStrategyReviewCenter } from "@/components/portfolio/ExecutiveS
 import { StrategicForecastCenter } from "@/components/portfolio/StrategicForecastCenter";
 import { StrategicScenarioLab } from "@/components/portfolio/StrategicScenarioLab";
 import { StrategyRecoveryCenter } from "@/components/portfolio/StrategyRecoveryCenter";
+import { StrategyCalendarCenter } from "@/components/portfolio/StrategyCalendarCenter";
 import { useProjects } from "@/hooks/use-projects";
 import { useBoards } from "@/hooks/use-boards";
 import { useProjectExecutionSummary } from "@/hooks/use-canvas";
@@ -30,6 +31,7 @@ import {
 import { useCurrentUser } from "@/hooks/use-auth";
 import { usePortfolioCollaborators } from "@/hooks/use-collaboration";
 import { useStrategyRecoveryPlans } from "@/hooks/use-strategy-recovery";
+import { useStrategyCalendar } from "@/hooks/use-strategy-calendar";
 import { arabicNumber, greeting, longDate } from "@/lib/format";
 
 export const Route = createFileRoute("/")({
@@ -66,6 +68,7 @@ function Dashboard() {
   const strategyReviews = useStrategyReviewData();
   const strategyRecovery = useStrategyRecoveryPlans();
   const portfolioCollaborators = usePortfolioCollaborators(projectIds);
+  const strategyCalendar = useStrategyCalendar();
 
   const stats = [
     { label: "المشاريع", value: projects.data?.length ?? 0 },
@@ -168,6 +171,17 @@ function Dashboard() {
           strategyReviews.isLoading ||
           strategyRecovery.isLoading ||
           portfolioCollaborators.isLoading
+        }
+      />
+
+      <StrategyCalendarCenter
+        strategy={portfolioStrategy.data}
+        calendar={strategyCalendar.data}
+        recoveryData={strategyRecovery.data}
+        isLoading={
+          portfolioStrategy.isLoading ||
+          strategyCalendar.isLoading ||
+          strategyRecovery.isLoading
         }
       />
 

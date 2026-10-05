@@ -3,6 +3,7 @@ import { supabaseRest } from "@/services/supabase-rest";
 import { refreshMyProjectAutomations } from "@/services/automations.service";
 import { refreshTaskDueNotifications } from "@/services/task-execution.service";
 import { refreshRiskEscalationNotifications } from "@/services/action-center.service";
+import { refreshStrategyScheduleNotifications } from "@/services/strategy-calendar.service";
 import type {
   NotificationFilter,
   NotificationKind,
@@ -36,6 +37,12 @@ async function refreshScheduledWorkIfNeeded() {
       }
       return 0;
     }),
+    refreshStrategyScheduleNotifications().catch((error) => {
+      if (import.meta.env.DEV) {
+        console.warn("[notifications] تعذر تحديث تنبيهات التقويم الاستراتيجي.", error);
+      }
+      return 0;
+    }),
   ]).then(() => {
     lastScheduleRefreshAt = Date.now();
   }).finally(() => {
@@ -55,7 +62,8 @@ function normalizeKind(value: unknown): NotificationKind {
     value === "task_assigned" ||
     value === "task_status" ||
     value === "task_due" ||
-    value === "risk_escalation"
+    value === "risk_escalation" ||
+    value === "strategy_schedule"
     ? value
     : "mention";
 }
