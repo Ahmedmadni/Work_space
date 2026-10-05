@@ -364,6 +364,8 @@ declare
   v_display_name text;
   v_email text;
   v_decision_id uuid;
+  v_source_id uuid;
+  v_source_version bigint;
   v_source public.project_decisions%rowtype;
   v_objective_id uuid;
   v_project_id text;
@@ -529,7 +531,8 @@ begin
     begin
       v_decision_id := coalesce(nullif(v_row->>'id', '')::uuid, gen_random_uuid());
       v_objective_id := nullif(v_row->>'objective_id', '')::uuid;
-      v_source.id := nullif(v_row->>'source_decision_id', '')::uuid;
+      v_source_id := nullif(v_row->>'source_decision_id', '')::uuid;
+      v_source_version := nullif(v_row->>'source_decision_version', '')::bigint;
       v_owner_id := nullif(v_row->>'owner_user_id', '')::uuid;
     exception when invalid_text_representation then
       raise exception 'EXECUTIVE_MEETING_DECISION_INVALID_ID'
@@ -553,14 +556,21 @@ begin
         using errcode = '22023';
     end if;
 
-    if v_source.id is not null then
+    if v_source_id is not null then
       select * into v_source
       from public.project_decisions d
-      where d.id = v_source.id;
+      where d.id = v_source_id;
 
       if not found or not public.can_access_project(v_source.project_id) then
         raise exception 'EXECUTIVE_MEETING_SOURCE_DECISION_DENIED'
           using errcode = '42501';
+      end if;
+
+      if v_source_version is null
+         or v_source.version <> v_source_version
+      then
+        raise exception 'MEETING_SOURCE_DECISION_VERSION_MISMATCH'
+          using errcode = '40001';
       end if;
 
       if v_project_id is null then
@@ -570,7 +580,7 @@ begin
           using errcode = '22023';
       end if;
     else
-      v_source.version := null;
+      v_source_version := null;
     end if;
 
     if not public.projectflow_meeting_participant_allowed(
@@ -591,8 +601,8 @@ begin
     values (
       v_decision_id,
       v_id,
-      case when v_source.id is null then null else v_source.id end,
-      v_source.version,
+      v_source_id,
+      v_source_version,
       v_objective_id,
       v_project_id,
       trim(v_row->>'title'),
