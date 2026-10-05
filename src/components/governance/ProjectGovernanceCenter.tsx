@@ -81,6 +81,10 @@ const ACTION_LABELS: Record<string, string> = {
   strategy_kr_checkin_recorded: "تسجيل تحديث Key Results",
   recovery_checkpoint_cadence_updated: "تحديث دورية Recovery Checkpoint",
   recovery_checkpoint_recorded: "تسجيل Recovery Checkpoint",
+  executive_meeting_created: "إنشاء اجتماع تنفيذي",
+  executive_meeting_updated: "تحديث اجتماع تنفيذي",
+  executive_meeting_finalized: "اعتماد محضر اجتماع تنفيذي",
+  executive_meeting_action_updated: "تحديث Action Item من اجتماع تنفيذي",
 };
 
 const CATEGORY_LABELS: Record<ProjectAuditCategory, string> = {
