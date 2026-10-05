@@ -17,6 +17,7 @@ import {
   buildExecutiveStrategyBoardPack,
   downloadExecutiveStrategyBoardPackCsv,
 } from "@/services/strategy-board-pack.service";
+import { buildExecutiveMeetingEffectiveness } from "@/services/meeting-effectiveness.service";
 import { arabicNumber } from "@/lib/format";
 import type {
   BoardWithContext,
@@ -150,7 +151,13 @@ function SummaryMetric({
   );
 }
 
-function BoardPackContents({ pack }: { pack: ExecutiveStrategyBoardPack }) {
+function BoardPackContents({
+  pack,
+  meetingEffectiveness,
+}: {
+  pack: ExecutiveStrategyBoardPack;
+  meetingEffectiveness: ReturnType<typeof buildExecutiveMeetingEffectiveness> | null;
+}) {
   const today = todayKeyLocal();
   const projectMap = new Map(
     pack.projects.map((project) => [project.id, project] as const),
@@ -357,6 +364,95 @@ function BoardPackContents({ pack }: { pack: ExecutiveStrategyBoardPack }) {
           })}
         </div>
       </section>
+
+      {meetingEffectiveness &&
+        meetingEffectiveness.summary.finalized_meetings > 0 && (
+          <section className="board-pack-avoid-break border-b border-border p-4 md:p-5">
+            <div className="mb-3 flex items-center gap-2">
+              <Gavel className="h-4 w-4 text-brand" />
+              <div>
+                <h3 className="text-sm font-semibold">
+                  Meeting Effectiveness & Follow-through
+                </h3>
+                <p className="text-[9px] text-muted-foreground">
+                  قياسات مباشرة من Outcomes وAction Items المسجلة، بدون Score مركب.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+              <SummaryMetric
+                label="Finalized meetings"
+                value={arabicNumber(
+                  meetingEffectiveness.summary.finalized_meetings,
+                )}
+              />
+              <SummaryMetric
+                label="Decision resolution"
+                value={
+                  meetingEffectiveness.summary.decision_resolution_rate == null
+                    ? "—"
+                    : arabicNumber(
+                        meetingEffectiveness.summary.decision_resolution_rate,
+                      ) + "%"
+                }
+                tone="text-success"
+              />
+              <SummaryMetric
+                label="Action completion"
+                value={
+                  meetingEffectiveness.summary.action_completion_rate == null
+                    ? "—"
+                    : arabicNumber(
+                        meetingEffectiveness.summary.action_completion_rate,
+                      ) + "%"
+                }
+                tone="text-success"
+              />
+              <SummaryMetric
+                label="Repeated deferrals"
+                value={arabicNumber(
+                  meetingEffectiveness.summary.unresolved_repeated_deferrals,
+                )}
+                tone="text-warning"
+              />
+              <SummaryMetric
+                label="Open actions"
+                value={arabicNumber(
+                  meetingEffectiveness.summary.actions_open,
+                )}
+                tone="text-warning"
+              />
+              <SummaryMetric
+                label="Overdue actions"
+                value={arabicNumber(
+                  meetingEffectiveness.summary.actions_overdue,
+                )}
+                tone="text-danger"
+              />
+              <SummaryMetric
+                label="Median close"
+                value={
+                  meetingEffectiveness.summary.median_completion_days == null
+                    ? "—"
+                    : arabicNumber(
+                        meetingEffectiveness.summary.median_completion_days,
+                      ) + " يوم"
+                }
+                tone="text-info"
+              />
+              <SummaryMetric
+                label="Max carryover"
+                value={
+                  arabicNumber(
+                    meetingEffectiveness.summary.max_carryover_meetings,
+                  ) + " اجتماع"
+                }
+                tone="text-warning"
+              />
+            </div>
+          </section>
+        )}
 
       <section className="board-pack-page-break grid gap-4 border-b border-border p-4 md:p-5 xl:grid-cols-2">
         <div>
@@ -831,6 +927,12 @@ export function ExecutiveStrategyBoardPack({
     );
   }
 
+  const meetingEffectiveness = useMemo(
+    () =>
+      meetingData ? buildExecutiveMeetingEffectiveness(meetingData) : null,
+    [meetingData],
+  );
+
   if (!pack || !strategy?.objectives.length) return null;
 
   return (
@@ -872,7 +974,10 @@ export function ExecutiveStrategyBoardPack({
           </div>
         </div>
 
-        <BoardPackContents pack={pack} />
+        <BoardPackContents
+          pack={pack}
+          meetingEffectiveness={meetingEffectiveness}
+        />
       </section>
     </>
   );
