@@ -98,6 +98,15 @@ const EVENT_LABELS: Record<string, string> = {
   recovery_commitment: "Recovery Commitment",
 };
 
+function todayKeyLocal() {
+  const now = new Date();
+  return [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
 function formatDate(value: string | null) {
   if (!value) return "—";
   const date =
@@ -142,6 +151,7 @@ function SummaryMetric({
 }
 
 function BoardPackContents({ pack }: { pack: ExecutiveStrategyBoardPack }) {
+  const today = todayKeyLocal();
   const projectMap = new Map(
     pack.projects.map((project) => [project.id, project] as const),
   );
@@ -654,8 +664,7 @@ function BoardPackContents({ pack }: { pack: ExecutiveStrategyBoardPack }) {
                     <span
                       className={
                         action.due_date &&
-                        action.due_date <
-                          new Date().toISOString().slice(0, 10)
+                        action.due_date < today
                           ? "rounded-full bg-danger/10 px-2 py-0.5 text-[8px] text-danger"
                           : "rounded-full bg-warning/10 px-2 py-0.5 text-[8px] text-warning"
                       }
