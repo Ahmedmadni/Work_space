@@ -8,6 +8,7 @@ import {
   FileText,
   ListTodo,
   MessageSquareReply,
+  Gavel,
   ShieldAlert,
   ShieldCheck,
   UserCheck,
@@ -43,6 +44,7 @@ const FILTERS: Array<{ value: NotificationFilter; label: string }> = [
   { value: "tasks", label: "المهام" },
   { value: "risks", label: "المخاطر" },
   { value: "strategy", label: "الاستراتيجية" },
+  { value: "executive", label: "تنفيذي" },
 ];
 
 const ROLE_LABELS: Record<string, string> = {
@@ -62,6 +64,7 @@ function notificationIcon(notification: UserNotification) {
   if (notification.kind === "task_due") return Clock3;
   if (notification.kind === "risk_escalation") return ShieldAlert;
   if (notification.kind === "strategy_schedule") return CalendarClock;
+  if (notification.kind === "executive_action") return Gavel;
   return UserMinus;
 }
 
@@ -117,6 +120,17 @@ function notificationTitle(notification: UserNotification) {
         ? `تأخرت معالجة الخطر «${riskTitle}»`
         : `تنبيه مخاطر: «${riskTitle}»`;
   }
+  if (notification.kind === "executive_action") {
+    const meeting =
+      typeof notification.metadata.meeting_title === "string"
+        ? notification.metadata.meeting_title
+        : "اجتماع تنفيذي";
+    const dueDate =
+      typeof notification.metadata.due_date === "string"
+        ? notification.metadata.due_date
+        : "";
+    return dueDate ? `${meeting} · ${dueDate}` : meeting;
+  }
   if (notification.kind === "strategy_schedule") {
     const event =
       typeof notification.metadata.event === "string"
@@ -129,6 +143,19 @@ function notificationTitle(notification: UserNotification) {
     return event === "overdue"
       ? `تأخر الموعد: «${title}»`
       : `اقترب الموعد: «${title}»`;
+  }
+  if (notification.kind === "executive_action") {
+    const event =
+      typeof notification.metadata.event === "string"
+        ? notification.metadata.event
+        : "";
+    const title =
+      typeof notification.metadata.title === "string"
+        ? notification.metadata.title
+        : "Action Item";
+    return event === "overdue"
+      ? `تصعيد إجراء تنفيذي متأخر: «${title}»`
+      : `اقترب استحقاق الإجراء التنفيذي «${title}»`;
   }
   if (notification.kind === "task_due") {
     const event =
@@ -209,7 +236,10 @@ export function NotificationCenterButton() {
 
     setOpen(false);
 
-    if (notification.kind === "strategy_schedule") {
+    if (
+      notification.kind === "strategy_schedule" ||
+      notification.kind === "executive_action"
+    ) {
       void navigate({ to: "/" });
       return;
     }
@@ -276,7 +306,7 @@ export function NotificationCenterButton() {
                 الإشعارات
               </SheetTitle>
               <SheetDescription className="mt-1">
-                الإشارات، المهام، تصعيد المخاطر، المواعيد الاستراتيجية وتغييرات الوصول.
+                الإشارات، المهام، المخاطر، المواعيد الاستراتيجية والإجراءات التنفيذية.
               </SheetDescription>
             </div>
 
@@ -294,7 +324,7 @@ export function NotificationCenterButton() {
           </div>
         </SheetHeader>
 
-        <div className="grid grid-cols-2 gap-1 border-b border-border bg-muted/20 p-1.5 sm:grid-cols-6">
+        <div className="grid grid-cols-2 gap-1 border-b border-border bg-muted/20 p-1.5 sm:grid-cols-7">
           {FILTERS.map((item) => (
             <button
               key={item.value}
