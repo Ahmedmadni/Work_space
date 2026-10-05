@@ -685,3 +685,13 @@ export async function updateExecutiveMeetingActionItem(
   writeLocal(store);
   return result;
 }
+
+
+export async function refreshExecutiveActionNotifications(): Promise<number> {
+  if (!isSupabaseBackend()) return 0;
+  const count = await supabaseRest<unknown>(
+    "rpc/refresh_executive_action_notifications",
+    { method: "POST", body: {} },
+  );
+  return typeof count === "number" && Number.isFinite(count) ? count : 0;
+}
