@@ -78,8 +78,8 @@ create index if not exists executive_meeting_attendees_meeting_idx
   on public.executive_meeting_attendees(meeting_id, attendance_status);
 create index if not exists executive_meeting_decisions_meeting_idx
   on public.executive_meeting_decisions(meeting_id, outcome);
-create index if not exists executive_meeting_decisions_source_idx
-  on public.executive_meeting_decisions(source_decision_id)
+create unique index if not exists executive_meeting_decisions_source_unique_idx
+  on public.executive_meeting_decisions(meeting_id, source_decision_id)
   where source_decision_id is not null;
 create index if not exists executive_meeting_actions_meeting_status_idx
   on public.executive_meeting_action_items(meeting_id, status, due_date);
