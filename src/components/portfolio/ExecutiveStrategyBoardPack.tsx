@@ -5,6 +5,8 @@ import {
   Download,
   FileBarChart,
   Flag,
+  Gavel,
+  ListChecks,
   Printer,
   ShieldAlert,
   Target,
@@ -22,6 +24,7 @@ import type {
   ProjectExecutionSummary,
 } from "@/types";
 import type { ProjectDecision, ProjectRisk } from "@/types/action-center";
+import type { ExecutiveMeetingGovernanceData } from "@/types/executive-meetings";
 import type {
   PortfolioStrategyData,
   RecoveryPlanData,
@@ -541,7 +544,143 @@ function BoardPackContents({ pack }: { pack: ExecutiveStrategyBoardPack }) {
         </div>
       </section>
 
-      <section className="board-pack-page-break p-4 md:p-5">
+      <section className="board-pack-page-break grid gap-4 border-b border-border p-4 md:p-5 xl:grid-cols-2">
+        <div>
+          <div className="mb-3 flex items-center gap-2">
+            <Gavel className="h-4 w-4 text-brand" />
+            <div>
+              <h3 className="text-sm font-semibold">Latest Meeting Outcomes</h3>
+              <p className="text-[9px] text-muted-foreground">
+                آخر اجتماع معتمد والقرارات الناتجة عنه.
+              </p>
+            </div>
+          </div>
+
+          {!pack.latest_completed_meeting ? (
+            <div className="rounded-xl border border-dashed border-border p-4 text-xs text-muted-foreground">
+              لا يوجد محضر اجتماع تنفيذي معتمد بعد.
+            </div>
+          ) : (
+            <div className="rounded-xl border border-border bg-background p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-xs font-semibold">
+                  {pack.latest_completed_meeting.title}
+                </p>
+                <span className="rounded-full bg-success/10 px-2 py-0.5 text-[8px] text-success">
+                  Finalized
+                </span>
+              </div>
+              <p className="mt-1 text-[8px] text-muted-foreground">
+                {formatDate(pack.latest_completed_meeting.meeting_date)}
+                {pack.latest_completed_meeting.chair_name
+                  ? " · " + pack.latest_completed_meeting.chair_name
+                  : ""}
+              </p>
+              <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[9px]">
+                <div className="rounded-lg bg-success/5 p-2">
+                  <strong className="text-success">
+                    {
+                      pack.latest_completed_meeting.decisions.filter(
+                        (row) => row.outcome === "decided",
+                      ).length
+                    }
+                  </strong>
+                  <p className="text-muted-foreground">Decided</p>
+                </div>
+                <div className="rounded-lg bg-warning/5 p-2">
+                  <strong className="text-warning">
+                    {
+                      pack.latest_completed_meeting.decisions.filter(
+                        (row) => row.outcome === "deferred",
+                      ).length
+                    }
+                  </strong>
+                  <p className="text-muted-foreground">Deferred</p>
+                </div>
+                <div className="rounded-lg bg-info/5 p-2">
+                  <strong className="text-info">
+                    {
+                      pack.latest_completed_meeting.action_items.filter(
+                        (row) =>
+                          row.status === "open" ||
+                          row.status === "in_progress",
+                      ).length
+                    }
+                  </strong>
+                  <p className="text-muted-foreground">Open Actions</p>
+                </div>
+              </div>
+              {pack.latest_completed_meeting.summary && (
+                <p className="mt-3 text-[9px] leading-4 text-muted-foreground">
+                  {pack.latest_completed_meeting.summary}
+                </p>
+              )}
+              {pack.latest_completed_meeting.next_meeting_date && (
+                <p className="mt-2 text-[8px] text-muted-foreground">
+                  الاجتماع التالي:{" "}
+                  {formatDate(pack.latest_completed_meeting.next_meeting_date)}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <div className="mb-3 flex items-center gap-2">
+            <ListChecks className="h-4 w-4 text-warning" />
+            <div>
+              <h3 className="text-sm font-semibold">Meeting Carryover</h3>
+              <p className="text-[9px] text-muted-foreground">
+                Action Items غير المغلقة من الاجتماعات السابقة.
+              </p>
+            </div>
+          </div>
+
+          {!pack.open_meeting_actions.length ? (
+            <div className="rounded-xl border border-success/20 bg-success/5 p-4 text-xs text-success">
+              لا توجد Action Items مرحّلة.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {pack.open_meeting_actions.slice(0, 12).map((action) => (
+                <div
+                  key={action.id}
+                  className="board-pack-avoid-break rounded-xl border border-border bg-background p-3"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="min-w-0 flex-1 text-xs font-semibold">
+                      {action.title}
+                    </p>
+                    <span
+                      className={
+                        action.due_date &&
+                        action.due_date <
+                          new Date().toISOString().slice(0, 10)
+                          ? "rounded-full bg-danger/10 px-2 py-0.5 text-[8px] text-danger"
+                          : "rounded-full bg-warning/10 px-2 py-0.5 text-[8px] text-warning"
+                      }
+                    >
+                      {action.status === "in_progress" ? "In Progress" : "Open"}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-[8px] text-muted-foreground">
+                    {action.owner_name ?? "بدون مسؤول"}
+                    {action.objective_title
+                      ? " · " + action.objective_title
+                      : ""}
+                    {action.project_name ? " · " + action.project_name : ""}
+                    {action.due_date
+                      ? " · Due " + formatDate(action.due_date)
+                      : ""}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="p-4 md:p-5">
         <div className="mb-3 flex items-center gap-2">
           <CalendarClock className="h-4 w-4 text-brand" />
           <div>
@@ -627,6 +766,7 @@ export function ExecutiveStrategyBoardPack({
   projects,
   boards,
   execution,
+  meetingData,
   isLoading,
 }: {
   strategy: PortfolioStrategyData | undefined;
@@ -638,11 +778,12 @@ export function ExecutiveStrategyBoardPack({
   projects: Project[];
   boards: BoardWithContext[];
   execution: ProjectExecutionSummary | undefined;
+  meetingData: ExecutiveMeetingGovernanceData | undefined;
   isLoading: boolean;
 }) {
   const pack = useMemo(
     () =>
-      strategy && reviewData && recoveryData && calendarData
+      strategy && reviewData && recoveryData && calendarData && meetingData
         ? buildExecutiveStrategyBoardPack({
             strategy,
             reviews: reviewData,
@@ -653,6 +794,7 @@ export function ExecutiveStrategyBoardPack({
             projects,
             boards,
             execution: execution ?? null,
+            meetings: meetingData,
           })
         : null,
     [
@@ -665,6 +807,7 @@ export function ExecutiveStrategyBoardPack({
       projects,
       boards,
       execution,
+      meetingData,
     ],
   );
 
