@@ -347,3 +347,109 @@ export interface RecoveryPlanEffectiveness {
   current_progress: number | null;
   progress_delta: number | null;
 }
+
+
+export type StrategyCalendarEventType =
+  | "strategy_review"
+  | "kr_update"
+  | "benefit_review"
+  | "recovery_checkpoint"
+  | "recovery_commitment";
+
+export type StrategyCalendarEventStatus =
+  | "overdue"
+  | "due_soon"
+  | "upcoming";
+
+export interface StrategyCalendarEvent {
+  event_type: StrategyCalendarEventType;
+  source_id: string;
+  objective_id: string;
+  objective_title: string;
+  project_id: string | null;
+  title: string;
+  due_date: string;
+  primary_owner_user_id: string | null;
+  reminder_days_before: number;
+  status: StrategyCalendarEventStatus;
+  metadata: Record<string, unknown>;
+}
+
+export interface ObjectiveStrategyCadence {
+  objective_id: string;
+  review_interval_days: number;
+  kr_update_interval_days: number;
+  reminder_days_before: number;
+  review_anchor_date: string;
+  kr_anchor_date: string;
+  last_kr_checkin_date: string | null;
+  is_enabled: boolean;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RecoveryCheckpointCadence {
+  plan_id: string;
+  objective_id: string;
+  checkpoint_interval_days: number;
+  reminder_days_before: number;
+  anchor_date: string;
+  is_enabled: boolean;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type RecoveryCheckpointAssessment =
+  | "on_track"
+  | "at_risk"
+  | "off_track"
+  | "recovered";
+
+export interface RecoveryPlanCheckpoint {
+  id: string;
+  plan_id: string;
+  objective_id: string;
+  checkpoint_date: string;
+  assessment: RecoveryCheckpointAssessment;
+  note: string | null;
+  objective_progress_snapshot: number | null;
+  daily_progress_rate_snapshot: number | null;
+  created_by: string;
+  created_at: string;
+}
+
+export interface StrategyCalendarData {
+  events: StrategyCalendarEvent[];
+  objective_cadences: ObjectiveStrategyCadence[];
+  recovery_cadences: RecoveryCheckpointCadence[];
+  recovery_checkpoints: RecoveryPlanCheckpoint[];
+}
+
+export interface SaveObjectiveStrategyCadenceInput {
+  objective_id: string;
+  expected_version?: number | null;
+  review_interval_days: number;
+  kr_update_interval_days: number;
+  reminder_days_before: number;
+  review_anchor_date: string;
+  kr_anchor_date: string;
+  is_enabled: boolean;
+}
+
+export interface SaveRecoveryCheckpointCadenceInput {
+  plan_id: string;
+  expected_version?: number | null;
+  checkpoint_interval_days: number;
+  reminder_days_before: number;
+  anchor_date: string;
+  is_enabled: boolean;
+}
+
+export interface RecordRecoveryCheckpointInput {
+  plan_id: string;
+  assessment: RecoveryCheckpointAssessment;
+  note?: string | null;
+  checkpoint_date?: string | null;
+}
