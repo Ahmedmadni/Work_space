@@ -90,6 +90,16 @@ function todayKey() {
   ].join("-");
 }
 
+function addDaysKey(value: string, days: number) {
+  const date = new Date(value + "T12:00:00Z");
+  date.setUTCDate(date.getUTCDate() + days);
+  return [
+    date.getUTCFullYear(),
+    String(date.getUTCMonth() + 1).padStart(2, "0"),
+    String(date.getUTCDate()).padStart(2, "0"),
+  ].join("-");
+}
+
 function formatDate(value: string | null) {
   if (!value) return "—";
   const date = new Date(
@@ -369,6 +379,75 @@ export function ExecutiveMeetingGovernanceCenter({
   const overdueCarryover = carryover.filter(
     ({ action }) => !!action.due_date && action.due_date < today,
   );
+  const dueSoonLimit = addDaysKey(today, 3);
+  const dueSoonCarryover = carryover.filter(
+    ({ action }) =>
+      !!action.due_date &&
+      action.due_date >= today &&
+      action.due_date <= dueSoonLimit,
+  );
+  const unownedCarryover = carryover.filter(
+    ({ action }) => !action.owner_user_id,
+  );
+  const finalizedActions = completedMeetings
+    .flatMap((meeting) => meeting.action_items)
+    .filter((action) => action.status !== "cancelled");
+  const completedActions = finalizedActions.filter(
+    (action) => action.status === "done",
+  );
+  const closureRate = finalizedActions.length
+    ? Math.round((completedActions.length / finalizedActions.length) * 100)
+    : null;
+  const accountabilityByOwner = (() => {
+    const rows = new Map<
+      string,
+      {
+        key: string;
+        name: string;
+        total: number;
+        open: number;
+        overdue: number;
+        dueSoon: number;
+        done: number;
+      }
+    >();
+
+    for (const action of finalizedActions) {
+      const key = action.owner_user_id ?? "unowned";
+      const row = rows.get(key) ?? {
+        key,
+        name: action.owner_name ?? "بدون مسؤول",
+        total: 0,
+        open: 0,
+        overdue: 0,
+        dueSoon: 0,
+        done: 0,
+      };
+      row.total += 1;
+      if (action.status === "done") {
+        row.done += 1;
+      } else if (action.status === "open" || action.status === "in_progress") {
+        row.open += 1;
+        if (action.due_date && action.due_date < today) {
+          row.overdue += 1;
+        } else if (
+          action.due_date &&
+          action.due_date >= today &&
+          action.due_date <= dueSoonLimit
+        ) {
+          row.dueSoon += 1;
+        }
+      }
+      rows.set(key, row);
+    }
+
+    return [...rows.values()].sort(
+      (a, b) =>
+        b.overdue - a.overdue ||
+        b.open - a.open ||
+        a.name.localeCompare(b.name, "ar"),
+    );
+  })();
   const deferredDecisions = completedMeetings.flatMap((meeting) =>
     meeting.decisions.filter((decision) => decision.outcome === "deferred"),
   );
@@ -534,7 +613,7 @@ export function ExecutiveMeetingGovernanceCenter({
         اعتماد Outcome فوق قرار تغيّر منذ تجهيز الاجتماع.
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
         {[
           {
             label: "Carryover مفتوح",
@@ -547,6 +626,24 @@ export function ExecutiveMeetingGovernanceCenter({
             value: overdueCarryover.length,
             tone: "text-danger",
             icon: CalendarDays,
+          },
+          {
+            label: "Due Soon ≤ 3 أيام",
+            value: dueSoonCarryover.length,
+            tone: "text-warning",
+            icon: CalendarDays,
+          },
+          {
+            label: "بدون مسؤول",
+            value: unownedCarryover.length,
+            tone: unownedCarryover.length ? "text-danger" : "text-success",
+            icon: UsersRound,
+          },
+          {
+            label: "نسبة الإغلاق",
+            value: closureRate == null ? "—" : closureRate + "%",
+            tone: "text-success",
+            icon: CheckCircle2,
           },
           {
             label: "قرارات مؤجلة",
@@ -581,6 +678,44 @@ export function ExecutiveMeetingGovernanceCenter({
           </div>
         ))}
       </div>
+
+      {!!accountabilityByOwner.length && (
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-[var(--shadow-frost)]">
+          <div className="flex items-center gap-2">
+            <UsersRound className="h-4 w-4 text-brand" />
+            <div>
+              <h3 className="text-sm font-semibold">Executive Action Accountability</h3>
+              <p className="text-[9px] text-muted-foreground">
+                عرض صريح للمسؤولية والتنفيذ؛ لا توجد درجة مركبة أو Ranking مخفي.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-3 overflow-hidden rounded-xl border border-border">
+            <div className="hidden grid-cols-[minmax(180px,1.2fr)_90px_90px_90px_90px_90px] gap-2 bg-muted/30 px-3 py-2 text-[8px] text-muted-foreground md:grid">
+              <span>المسؤول</span>
+              <span>Total</span>
+              <span>Open</span>
+              <span>Overdue</span>
+              <span>Due Soon</span>
+              <span>Done</span>
+            </div>
+            {accountabilityByOwner.slice(0, 20).map((row) => (
+              <div
+                key={row.key}
+                className="border-t border-border p-3 first:border-t-0 md:grid md:grid-cols-[minmax(180px,1.2fr)_90px_90px_90px_90px_90px] md:items-center md:gap-2"
+              >
+                <p className="text-xs font-semibold">{row.name}</p>
+                <p className="mt-1 text-[10px] md:mt-0">{row.total}</p>
+                <p className="mt-1 text-[10px] text-warning md:mt-0">{row.open}</p>
+                <p className="mt-1 text-[10px] text-danger md:mt-0">{row.overdue}</p>
+                <p className="mt-1 text-[10px] text-warning md:mt-0">{row.dueSoon}</p>
+                <p className="mt-1 text-[10px] text-success md:mt-0">{row.done}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {!!carryover.length && (
         <div className="rounded-2xl border border-warning/20 bg-card p-4 shadow-[var(--shadow-frost)]">
