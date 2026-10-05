@@ -372,6 +372,7 @@ declare
   v_owner_id uuid;
   v_action_id uuid;
   v_linked_decision uuid;
+  v_meeting_decision public.executive_meeting_decisions%rowtype;
   v_title text := trim(coalesce(p_title, ''));
   v_period_label text := nullif(trim(coalesce(p_period_label, '')), '');
   v_summary text := nullif(trim(coalesce(p_summary, '')), '');
@@ -583,6 +584,13 @@ begin
       v_source_version := null;
     end if;
 
+    -- Source decisions may supply the project after the first validation.
+    -- Revalidate the final Objective/Project pair to prevent mismatched links.
+    perform public.projectflow_validate_meeting_link(
+      v_objective_id,
+      v_project_id
+    );
+
     if not public.projectflow_meeting_participant_allowed(
       v_id,
       v_owner_id,
@@ -647,16 +655,39 @@ begin
         using errcode = '22023';
     end if;
 
-    if v_linked_decision is not null
-       and not exists (
-         select 1
-         from public.executive_meeting_decisions d
-         where d.id = v_linked_decision
-           and d.meeting_id = v_id
-       )
-    then
-      raise exception 'EXECUTIVE_MEETING_ACTION_DECISION_MISMATCH'
-        using errcode = '22023';
+    if v_linked_decision is not null then
+      select * into v_meeting_decision
+      from public.executive_meeting_decisions d
+      where d.id = v_linked_decision
+        and d.meeting_id = v_id;
+
+      if not found then
+        raise exception 'EXECUTIVE_MEETING_ACTION_DECISION_MISMATCH'
+          using errcode = '22023';
+      end if;
+
+      if v_objective_id is null then
+        v_objective_id := v_meeting_decision.objective_id;
+      elsif v_meeting_decision.objective_id is not null
+         and v_objective_id <> v_meeting_decision.objective_id
+      then
+        raise exception 'EXECUTIVE_MEETING_ACTION_OBJECTIVE_MISMATCH'
+          using errcode = '22023';
+      end if;
+
+      if v_project_id is null then
+        v_project_id := v_meeting_decision.project_id;
+      elsif v_meeting_decision.project_id is not null
+         and v_project_id <> v_meeting_decision.project_id
+      then
+        raise exception 'EXECUTIVE_MEETING_ACTION_PROJECT_MISMATCH'
+          using errcode = '22023';
+      end if;
+
+      perform public.projectflow_validate_meeting_link(
+        v_objective_id,
+        v_project_id
+      );
     end if;
 
     if not public.projectflow_meeting_participant_allowed(
