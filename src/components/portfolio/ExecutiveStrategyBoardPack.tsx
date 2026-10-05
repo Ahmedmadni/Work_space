@@ -212,6 +212,34 @@ function BoardPackContents({ pack }: { pack: ExecutiveStrategyBoardPack }) {
         />
       </section>
 
+      <section className="board-pack-avoid-break border-b border-border p-4 md:p-5">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <SummaryMetric
+            label="Portfolio delivery progress"
+            value={pack.summary.execution_average_progress + "%"}
+          />
+          <SummaryMetric
+            label="عناصر تنفيذ مكتملة"
+            value={
+              arabicNumber(pack.summary.execution_completed) +
+              "/" +
+              arabicNumber(pack.summary.execution_total)
+            }
+            tone="text-success"
+          />
+          <SummaryMetric
+            label="عناصر تنفيذ متأخرة"
+            value={arabicNumber(pack.summary.execution_overdue)}
+            tone="text-danger"
+          />
+          <SummaryMetric
+            label="عناصر تنفيذ معطلة"
+            value={arabicNumber(pack.summary.execution_blocked)}
+            tone="text-warning"
+          />
+        </div>
+      </section>
+
       <section className="border-b border-border p-4 md:p-5">
         <div className="mb-3 flex items-center gap-2">
           <Target className="h-4 w-4 text-brand" />
