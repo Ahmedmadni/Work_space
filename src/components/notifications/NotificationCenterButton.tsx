@@ -2,6 +2,7 @@ import { useNavigate } from "@tanstack/react-router";
 import {
   AtSign,
   Bell,
+  CalendarClock,
   CheckCheck,
   Clock3,
   FileText,
@@ -41,6 +42,7 @@ const FILTERS: Array<{ value: NotificationFilter; label: string }> = [
   { value: "mentions", label: "الإشارات والردود" },
   { value: "tasks", label: "المهام" },
   { value: "risks", label: "المخاطر" },
+  { value: "strategy", label: "الاستراتيجية" },
 ];
 
 const ROLE_LABELS: Record<string, string> = {
@@ -59,6 +61,7 @@ function notificationIcon(notification: UserNotification) {
   if (notification.kind === "task_status") return ListTodo;
   if (notification.kind === "task_due") return Clock3;
   if (notification.kind === "risk_escalation") return ShieldAlert;
+  if (notification.kind === "strategy_schedule") return CalendarClock;
   return UserMinus;
 }
 
@@ -114,6 +117,19 @@ function notificationTitle(notification: UserNotification) {
         ? `تأخرت معالجة الخطر «${riskTitle}»`
         : `تنبيه مخاطر: «${riskTitle}»`;
   }
+  if (notification.kind === "strategy_schedule") {
+    const event =
+      typeof notification.metadata.event === "string"
+        ? notification.metadata.event
+        : "";
+    const title =
+      typeof notification.metadata.title === "string"
+        ? notification.metadata.title
+        : "موعد استراتيجي";
+    return event === "overdue"
+      ? `تأخر الموعد: «${title}»`
+      : `اقترب الموعد: «${title}»`;
+  }
   if (notification.kind === "task_due") {
     const event =
       typeof notification.metadata.event === "string"
@@ -129,6 +145,17 @@ function notificationTitle(notification: UserNotification) {
 }
 
 function notificationContext(notification: UserNotification) {
+  if (notification.kind === "strategy_schedule") {
+    const objective =
+      typeof notification.metadata.objective_title === "string"
+        ? notification.metadata.objective_title
+        : "Objective";
+    const dueDate =
+      typeof notification.metadata.due_date === "string"
+        ? notification.metadata.due_date
+        : "";
+    return dueDate ? `${objective} · ${dueDate}` : objective;
+  }
   if (notification.document_name) {
     return notification.page_number
       ? `${notification.document_name} · صفحة ${notification.page_number}`
@@ -181,6 +208,11 @@ export function NotificationCenterButton() {
     }
 
     setOpen(false);
+
+    if (notification.kind === "strategy_schedule") {
+      void navigate({ to: "/" });
+      return;
+    }
 
     if (notification.board_id) {
       const nodeId =
@@ -244,7 +276,7 @@ export function NotificationCenterButton() {
                 الإشعارات
               </SheetTitle>
               <SheetDescription className="mt-1">
-                الإشارات، الردود، تكليفات المهام، الاستحقاقات، تصعيد المخاطر وتغييرات الوصول.
+                الإشارات، المهام، تصعيد المخاطر، المواعيد الاستراتيجية وتغييرات الوصول.
               </SheetDescription>
             </div>
 
@@ -262,7 +294,7 @@ export function NotificationCenterButton() {
           </div>
         </SheetHeader>
 
-        <div className="grid grid-cols-2 gap-1 border-b border-border bg-muted/20 p-1.5 sm:grid-cols-5">
+        <div className="grid grid-cols-2 gap-1 border-b border-border bg-muted/20 p-1.5 sm:grid-cols-6">
           {FILTERS.map((item) => (
             <button
               key={item.value}
