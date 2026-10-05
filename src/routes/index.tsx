@@ -21,6 +21,7 @@ import { StrategyRecoveryCenter } from "@/components/portfolio/StrategyRecoveryC
 import { StrategyCalendarCenter } from "@/components/portfolio/StrategyCalendarCenter";
 import { ExecutiveStrategyBoardPack } from "@/components/portfolio/ExecutiveStrategyBoardPack";
 import { ExecutiveMeetingGovernanceCenter } from "@/components/portfolio/ExecutiveMeetingGovernanceCenter";
+import { ExecutiveMeetingEffectivenessCenter } from "@/components/portfolio/ExecutiveMeetingEffectivenessCenter";
 import { useProjects } from "@/hooks/use-projects";
 import { useBoards } from "@/hooks/use-boards";
 import { useProjectExecutionSummary } from "@/hooks/use-canvas";
@@ -172,6 +173,11 @@ function Dashboard() {
           portfolioActions.isLoading ||
           portfolioCollaborators.isLoading
         }
+      />
+
+      <ExecutiveMeetingEffectivenessCenter
+        meetingData={executiveMeetings.data}
+        isLoading={executiveMeetings.isLoading}
       />
 
       <StrategicAlignmentCenter
