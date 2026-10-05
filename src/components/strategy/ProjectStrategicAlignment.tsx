@@ -6,6 +6,7 @@ import type {
   PortfolioObjective,
   StrategyReviewData,
   RecoveryPlanData,
+  StrategyCalendarData,
 } from "@/types/strategy";
 
 function progressOf(objective: PortfolioObjective) {
@@ -51,11 +52,13 @@ export function ProjectStrategicAlignment({
   objectives,
   reviewData,
   recoveryData,
+  calendarData,
 }: {
   projectId: string;
   objectives: PortfolioObjective[];
   reviewData?: StrategyReviewData;
   recoveryData?: RecoveryPlanData;
+  calendarData?: StrategyCalendarData;
 }) {
   const linked = objectives.filter((objective) =>
     objective.project_ids.includes(projectId),
@@ -120,6 +123,14 @@ export function ProjectStrategicAlignment({
                   ].join("-"),
             ),
           ).length;
+          const nextStrategicEvent = (calendarData?.events ?? [])
+            .filter(
+              (event) =>
+                event.objective_id === objective.id &&
+                (event.project_id === projectId || event.project_id == null),
+            )
+            .slice()
+            .sort((a, b) => a.due_date.localeCompare(b.due_date))[0];
           const latestReview = (reviewData?.reviews ?? [])
             .filter((review) => review.objective_id === objective.id)
             .slice()
