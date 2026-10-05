@@ -19,6 +19,7 @@ import { StrategicForecastCenter } from "@/components/portfolio/StrategicForecas
 import { StrategicScenarioLab } from "@/components/portfolio/StrategicScenarioLab";
 import { StrategyRecoveryCenter } from "@/components/portfolio/StrategyRecoveryCenter";
 import { StrategyCalendarCenter } from "@/components/portfolio/StrategyCalendarCenter";
+import { ExecutiveStrategyBoardPack } from "@/components/portfolio/ExecutiveStrategyBoardPack";
 import { useProjects } from "@/hooks/use-projects";
 import { useBoards } from "@/hooks/use-boards";
 import { useProjectExecutionSummary } from "@/hooks/use-canvas";
@@ -120,6 +121,28 @@ function Dashboard() {
           ))}
         </div>
       </section>
+
+      <ExecutiveStrategyBoardPack
+        strategy={portfolioStrategy.data}
+        reviewData={strategyReviews.data}
+        recoveryData={strategyRecovery.data}
+        calendarData={strategyCalendar.data}
+        risks={portfolioActions.data?.risks ?? []}
+        decisions={portfolioActions.data?.decisions ?? []}
+        projects={projects.data ?? []}
+        boards={allBoards.data ?? []}
+        execution={execution.data}
+        isLoading={
+          portfolioStrategy.isLoading ||
+          strategyReviews.isLoading ||
+          strategyRecovery.isLoading ||
+          strategyCalendar.isLoading ||
+          portfolioActions.isLoading ||
+          projects.isLoading ||
+          allBoards.isLoading ||
+          execution.isLoading
+        }
+      />
 
       <StrategicAlignmentCenter
         data={portfolioStrategy.data}
