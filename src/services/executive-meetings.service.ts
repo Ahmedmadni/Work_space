@@ -362,6 +362,37 @@ export async function saveExecutiveStrategyMeeting(
     };
   }
 
+  const sourceProjects = new Map<
+    string,
+    Awaited<ReturnType<typeof listProjectActionCenter>>
+  >();
+
+  for (const decision of input.decisions) {
+    if (!decision.source_decision_id) continue;
+    if (!decision.project_id) {
+      throw new Error("القرار المصدر يجب أن يكون مرتبطًا بمشروع.");
+    }
+    let center = sourceProjects.get(decision.project_id);
+    if (!center) {
+      center = await listProjectActionCenter(decision.project_id);
+      sourceProjects.set(decision.project_id, center);
+    }
+    const source = center.decisions.find(
+      (row) => row.id === decision.source_decision_id,
+    );
+    if (!source) {
+      throw new Error("القرار المصدر لم يعد موجودًا.");
+    }
+    if (
+      decision.source_decision_version == null ||
+      source.version !== decision.source_decision_version
+    ) {
+      throw new Error(
+        "تغير أحد القرارات المصدر منذ تجهيز الاجتماع. حدّث Agenda قبل الحفظ.",
+      );
+    }
+  }
+
   const store = readLocal();
   const existing = input.id
     ? store.meetings.find((meeting) => meeting.id === input.id)
