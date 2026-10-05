@@ -88,6 +88,8 @@ function activityLabel(item: ProjectActivity) {
     strategic_benefit_created: "سجّل منفعة استراتيجية",
     strategic_benefit_updated: "حدّث منفعة استراتيجية",
     strategy_review_recorded: "سجّل مراجعة استراتيجية",
+    recovery_plan_created: "أنشأ خطة تعافٍ استراتيجية",
+    recovery_plan_updated: "حدّث خطة تعافٍ استراتيجية",
     document_uploaded: "رفع ملفًا",
     document_deleted: "حذف ملفًا",
     member_invited: "أرسل دعوة للمشروع",

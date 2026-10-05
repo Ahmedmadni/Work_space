@@ -75,6 +75,8 @@ const ACTION_LABELS: Record<string, string> = {
   strategic_benefit_created: "تسجيل منفعة استراتيجية",
   strategic_benefit_updated: "تحديث منفعة استراتيجية",
   strategy_review_recorded: "تسجيل مراجعة استراتيجية",
+  recovery_plan_created: "إنشاء خطة تعافٍ استراتيجية",
+  recovery_plan_updated: "تحديث خطة تعافٍ استراتيجية",
 };
 
 const CATEGORY_LABELS: Record<ProjectAuditCategory, string> = {

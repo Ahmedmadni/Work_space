@@ -31,6 +31,25 @@ export function useProjectCollaborators(projectId: string) {
   });
 }
 
+export function usePortfolioCollaborators(projectIds: string[]) {
+  const normalizedIds = [...new Set(projectIds)].sort();
+
+  return useQuery({
+    queryKey: ["portfolio-collaborators", normalizedIds],
+    queryFn: async () => {
+      const entries = await Promise.all(
+        normalizedIds.map(async (projectId) => [
+          projectId,
+          await listProjectCollaborators(projectId),
+        ] as const),
+      );
+      return Object.fromEntries(entries);
+    },
+    enabled: normalizedIds.length > 0,
+    staleTime: 30_000,
+  });
+}
+
 export function useProjectInvitations(projectId: string, enabled: boolean) {
   return useQuery({
     queryKey: ["project-invitations", projectId],

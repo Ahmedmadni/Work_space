@@ -17,6 +17,7 @@ import { StrategicAlignmentCenter } from "@/components/portfolio/StrategicAlignm
 import { ExecutiveStrategyReviewCenter } from "@/components/portfolio/ExecutiveStrategyReviewCenter";
 import { StrategicForecastCenter } from "@/components/portfolio/StrategicForecastCenter";
 import { StrategicScenarioLab } from "@/components/portfolio/StrategicScenarioLab";
+import { StrategyRecoveryCenter } from "@/components/portfolio/StrategyRecoveryCenter";
 import { useProjects } from "@/hooks/use-projects";
 import { useBoards } from "@/hooks/use-boards";
 import { useProjectExecutionSummary } from "@/hooks/use-canvas";
@@ -27,6 +28,8 @@ import {
   useStrategyReviewData,
 } from "@/hooks/use-strategy";
 import { useCurrentUser } from "@/hooks/use-auth";
+import { usePortfolioCollaborators } from "@/hooks/use-collaboration";
+import { useStrategyRecoveryPlans } from "@/hooks/use-strategy-recovery";
 import { arabicNumber, greeting, longDate } from "@/lib/format";
 
 export const Route = createFileRoute("/")({
@@ -61,6 +64,8 @@ function Dashboard() {
   const portfolioActions = usePortfolioActionCenter(projectIds);
   const portfolioStrategy = usePortfolioStrategy();
   const strategyReviews = useStrategyReviewData();
+  const strategyRecovery = useStrategyRecoveryPlans();
+  const portfolioCollaborators = usePortfolioCollaborators(projectIds);
 
   const stats = [
     { label: "المشاريع", value: projects.data?.length ?? 0 },
@@ -151,6 +156,19 @@ function Dashboard() {
         strategy={portfolioStrategy.data}
         reviewData={strategyReviews.data}
         isLoading={portfolioStrategy.isLoading || strategyReviews.isLoading}
+      />
+
+      <StrategyRecoveryCenter
+        strategy={portfolioStrategy.data}
+        reviewData={strategyReviews.data}
+        recoveryData={strategyRecovery.data}
+        collaboratorsByProject={portfolioCollaborators.data ?? {}}
+        isLoading={
+          portfolioStrategy.isLoading ||
+          strategyReviews.isLoading ||
+          strategyRecovery.isLoading ||
+          portfolioCollaborators.isLoading
+        }
       />
 
       {execution.data && (

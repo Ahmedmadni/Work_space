@@ -49,6 +49,7 @@ import {
   usePortfolioStrategy,
   useStrategyReviewData,
 } from "@/hooks/use-strategy";
+import { useStrategyRecoveryPlans } from "@/hooks/use-strategy-recovery";
 import type {
   BoardWithContext,
   CanvasNodeStatus,
@@ -464,6 +465,7 @@ function ProjectDetail() {
   const actionCenter = useProjectActionCenter(projectId);
   const portfolioStrategy = usePortfolioStrategy();
   const strategyReviewData = useStrategyReviewData();
+  const strategyRecovery = useStrategyRecoveryPlans();
 
   const visibleBoards = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("ar");
@@ -546,6 +548,7 @@ function ProjectDetail() {
         projectId={projectId}
         objectives={portfolioStrategy.data?.objectives ?? []}
         reviewData={strategyReviewData.data}
+        recoveryData={strategyRecovery.data}
       />
 
       {execution.data && (

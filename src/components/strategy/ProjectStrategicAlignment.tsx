@@ -1,9 +1,11 @@
 import { Target } from "lucide-react";
 
 import { buildObjectiveForecast } from "@/services/strategy-forecast.service";
+import { assessRecoveryPlanEffectiveness } from "@/services/strategy-recovery.service";
 import type {
   PortfolioObjective,
   StrategyReviewData,
+  RecoveryPlanData,
 } from "@/types/strategy";
 
 function progressOf(objective: PortfolioObjective) {
@@ -48,10 +50,12 @@ export function ProjectStrategicAlignment({
   projectId,
   objectives,
   reviewData,
+  recoveryData,
 }: {
   projectId: string;
   objectives: PortfolioObjective[];
   reviewData?: StrategyReviewData;
+  recoveryData?: RecoveryPlanData;
 }) {
   const linked = objectives.filter((objective) =>
     objective.project_ids.includes(projectId),
@@ -87,6 +91,35 @@ export function ProjectStrategicAlignment({
             objective,
             reviewData?.reviews ?? [],
           );
+          const activeRecoveryPlans = (recoveryData?.plans ?? []).filter(
+            (plan) =>
+              plan.objective_id === objective.id &&
+              (plan.status === "active" || plan.status === "draft"),
+          );
+          const latestRecovery = activeRecoveryPlans
+            .slice()
+            .sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0];
+          const recoveryEffect = latestRecovery
+            ? assessRecoveryPlanEffectiveness(
+                latestRecovery,
+                objective,
+                reviewData?.reviews ?? [],
+              )
+            : null;
+          const overdueCommitments = activeRecoveryPlans.flatMap((plan) =>
+            plan.commitments.filter(
+              (commitment) =>
+                (commitment.status === "open" ||
+                  commitment.status === "in_progress") &&
+                !!commitment.due_date &&
+                commitment.due_date <
+                  [
+                    new Date().getFullYear(),
+                    String(new Date().getMonth() + 1).padStart(2, "0"),
+                    String(new Date().getDate()).padStart(2, "0"),
+                  ].join("-"),
+            ),
+          ).length;
           const latestReview = (reviewData?.reviews ?? [])
             .filter((review) => review.objective_id === objective.id)
             .slice()
