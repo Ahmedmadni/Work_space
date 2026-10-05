@@ -166,6 +166,8 @@ function buildObjectiveRows(
         (decision) =>
           projectIds.has(decision.project_id) && pendingDecision(decision),
       );
+      const reviewDecisionCount =
+        latestReview?.decisions_needed?.trim() ? 1 : 0;
       const recoveryPlans = input.recovery.plans.filter(
         (plan) =>
           plan.objective_id === objective.id && plan.status === "active",
@@ -226,7 +228,7 @@ function buildObjectiveRows(
           (risk) =>
             risk.severity === "critical" || risk.severity === "high",
         ).length,
-        pending_decisions: decisions.length,
+        pending_decisions: decisions.length + reviewDecisionCount,
         active_recovery_plans: recoveryPlans.length,
         overdue_recovery_commitments: overdueRecoveryCommitments,
         next_event:
@@ -268,7 +270,10 @@ function buildDecisionAgenda(
   const rows: ExecutiveDecisionRequired[] = input.decisions
     .filter(pendingDecision)
     .map((decision) => {
-      const objective = objectiveByProject.get(decision.project_id)?.[0] ?? null;
+      const linkedObjectives =
+        objectiveByProject.get(decision.project_id) ?? [];
+      const objective =
+        linkedObjectives.length === 1 ? linkedObjectives[0]! : null;
       return {
         id: "decision:" + decision.id,
         source: "decision_log",
@@ -366,6 +371,8 @@ export function buildExecutiveStrategyBoardPack(
       event.due_date <= nextThirty,
   );
 
+  const decisionsRequired = buildDecisionAgenda(input);
+
   return {
     generated_at: new Date().toISOString(),
     objectives,
@@ -405,7 +412,7 @@ export function buildExecutiveStrategyBoardPack(
         (risk) =>
           risk.severity === "critical" || risk.severity === "high",
       ).length,
-      pending_decisions: input.decisions.filter(pendingDecision).length,
+      pending_decisions: decisionsRequired.length,
       active_recovery_plans: activeRecoveryPlans.length,
       overdue_recovery_commitments: overdueRecoveryCommitments,
       calendar_overdue: input.calendar.events.filter(
@@ -420,7 +427,7 @@ export function buildExecutiveStrategyBoardPack(
       execution_blocked: input.execution?.blocked ?? 0,
       execution_average_progress: input.execution?.average_progress ?? 0,
     },
-    decisions_required: buildDecisionAgenda(input),
+    decisions_required: decisionsRequired,
     top_risks: buildTopRisks(input),
     benefits: [...benefits],
     active_recovery_plans: activeRecoveryPlans,
@@ -535,6 +542,9 @@ export function executiveStrategyBoardPackCsv(
       "Mitigation",
     ]),
   );
+  const projectNames = new Map(
+    pack.projects.map((project) => [project.id, project.name] as const),
+  );
   for (const row of pack.top_risks) {
     lines.push(
       csvLine([
@@ -542,7 +552,7 @@ export function executiveStrategyBoardPackCsv(
         row.risk.title,
         row.risk.severity,
         row.risk.status,
-        row.risk.project_id,
+        projectNames.get(row.risk.project_id) ?? row.risk.project_id,
         row.objective_titles.join(" | "),
         row.risk.owner_name ?? "",
         row.risk.due_date ?? "",
