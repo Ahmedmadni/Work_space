@@ -1,5 +1,8 @@
 -- Phase 49: Governance Assurance Archive & Integrity Certificate.
 
+create schema if not exists extensions;
+create extension if not exists pgcrypto with schema extensions;
+
 insert into public.projectflow_schema_versions (version, label)
 values (34, 'assurance-archive-integrity-certificate')
 on conflict (version) do update
@@ -50,7 +53,7 @@ returns jsonb
 language sql
 stable
 security definer
-set search_path = public
+set search_path = public, extensions
 as $projectflow$
   select jsonb_build_object(
     'archive_schema_version', 1,
@@ -104,7 +107,7 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public
+set search_path = public, extensions
 as $projectflow$
   select exists (
     select 1
@@ -140,7 +143,7 @@ create or replace function public.projectflow_seal_governance_assurance_archive(
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $projectflow$
 declare
   v_distribution public.executive_governance_assurance_distributions%rowtype;
@@ -202,7 +205,7 @@ begin
     v_distribution
   );
   v_sha256 := encode(
-    sha256(convert_to(v_snapshot::text, 'UTF8')),
+    digest(convert_to(v_snapshot::text, 'UTF8'), 'sha256'),
     'hex'
   );
   v_archive_id := gen_random_uuid();
@@ -301,7 +304,7 @@ create or replace function public.projectflow_archive_on_distribution_close()
 returns trigger
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $projectflow$
 begin
   if new.status = 'closed'
@@ -359,7 +362,7 @@ returns jsonb
 language plpgsql
 stable
 security definer
-set search_path = public
+set search_path = public, extensions
 as $projectflow$
 begin
   if auth.uid() is null then
@@ -404,7 +407,7 @@ create or replace function public.verify_executive_governance_assurance_archive(
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $projectflow$
 declare
   v_archive public.executive_governance_assurance_archives%rowtype;
@@ -434,7 +437,7 @@ begin
   where id = p_archive_id;
 
   v_stored_sha256 := encode(
-    sha256(convert_to(v_archive.snapshot::text, 'UTF8')),
+    digest(convert_to(v_archive.snapshot::text, 'UTF8'), 'sha256'),
     'hex'
   );
 
@@ -465,7 +468,7 @@ begin
       v_distribution
     );
     v_live_sha256 := encode(
-      sha256(convert_to(v_live_snapshot::text, 'UTF8')),
+      digest(convert_to(v_live_snapshot::text, 'UTF8'), 'sha256'),
       'hex'
     );
     v_versions_match :=
