@@ -77,9 +77,10 @@ function normalizeProfile(
 ): ExecutiveGovernanceTargetProfile | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const row = value as Record<string, unknown>;
+  const version = intOrNull(row.version);
   if (
     typeof row.owner_user_id !== "string" ||
-    typeof row.version !== "number"
+    version == null
   ) {
     return null;
   }
@@ -109,7 +110,7 @@ function normalizeProfile(
     cadence_warning_days_before: intOrNull(
       row.cadence_warning_days_before,
     ),
-    version: row.version,
+    version,
     created_at:
       typeof row.created_at === "string"
         ? row.created_at
@@ -130,7 +131,7 @@ function normalizeHistory(
   if (
     typeof row.id !== "string" ||
     typeof row.owner_user_id !== "string" ||
-    typeof row.version !== "number" ||
+    intOrNull(row.version) == null ||
     typeof row.changed_by !== "string" ||
     typeof row.changed_at !== "string" ||
     !targets
@@ -140,7 +141,7 @@ function normalizeHistory(
   return {
     id: row.id,
     owner_user_id: row.owner_user_id,
-    version: row.version,
+    version: intOrNull(row.version)!,
     targets,
     changed_by: row.changed_by,
     changed_at: row.changed_at,
