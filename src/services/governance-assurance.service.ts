@@ -19,11 +19,22 @@ import type {
   GovernanceAssuranceCadenceProfile,
   GovernanceAssuranceCadenceState,
   GovernanceAssuranceCadenceStatus,
+  ActOnGovernanceAssuranceAttestationInput,
+  GovernanceAssuranceAttestation,
+  GovernanceAssuranceAttestationInboxItem,
+  GovernanceAssuranceAttestationRole,
+  GovernanceAssuranceAttestationStatus,
   GovernanceAssuranceHistoryPoint,
   GovernanceAssuranceMetricComparison,
+  GovernanceAssuranceOwnedSignoff,
   GovernanceAssuranceReviewComparison,
+  GovernanceAssuranceSignatoryCandidate,
+  GovernanceAssuranceSignoff,
+  GovernanceAssuranceSignoffData,
+  GovernanceAssuranceSignoffStatus,
   GovernanceReviewStatus,
   SaveGovernanceAssuranceCadenceInput,
+  SaveGovernanceAssuranceSignoffPlanInput,
   UpdateExecutiveGovernanceReviewInput,
 } from "@/types/governance-assurance";
 import type {
@@ -39,6 +50,7 @@ import type {
 
 const LOCAL_KEY = "projectflow.executive-governance-assurance.v1";
 const CADENCE_LOCAL_KEY = "projectflow.executive-governance-assurance-cadence.v1";
+const SIGNOFF_LOCAL_KEY = "projectflow.executive-governance-assurance-signoff.v1";
 
 interface LocalStore {
   version: 1;
@@ -1619,4 +1631,535 @@ export function downloadGovernanceAssuranceComparisonCsv(
   anchor.click();
   anchor.remove();
   URL.revokeObjectURL(href);
+}
+
+
+interface LocalSignoffStore {
+  version: 1;
+  signoffs: GovernanceAssuranceSignoff[];
+}
+
+function signoffStatus(value: unknown): GovernanceAssuranceSignoffStatus | null {
+  return value === "open" || value === "completed" || value === "declined"
+    ? value
+    : null;
+}
+
+function attestationRole(
+  value: unknown,
+): GovernanceAssuranceAttestationRole | null {
+  return value === "prepared_by" ||
+    value === "reviewed_by" ||
+    value === "approved_by"
+    ? value
+    : null;
+}
+
+function attestationStatus(
+  value: unknown,
+): GovernanceAssuranceAttestationStatus | null {
+  return value === "pending" ||
+    value === "attested" ||
+    value === "attested_with_reservation" ||
+    value === "declined"
+    ? value
+    : null;
+}
+
+function normalizeAttestation(
+  value: unknown,
+): GovernanceAssuranceAttestation | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const role = attestationRole(row.role);
+  const status = attestationStatus(row.status);
+  const sequence = intOrNull(row.sequence_no);
+  const version = intOrNull(row.version);
+  if (
+    typeof row.id !== "string" ||
+    typeof row.signoff_id !== "string" ||
+    typeof row.review_id !== "string" ||
+    typeof row.owner_user_id !== "string" ||
+    typeof row.assignee_user_id !== "string" ||
+    typeof row.assignee_name_snapshot !== "string" ||
+    typeof row.created_at !== "string" ||
+    typeof row.updated_at !== "string" ||
+    !role ||
+    !status ||
+    sequence == null ||
+    version == null
+  ) {
+    return null;
+  }
+
+  return {
+    id: row.id,
+    signoff_id: row.signoff_id,
+    review_id: row.review_id,
+    owner_user_id: row.owner_user_id,
+    role,
+    sequence_no: sequence,
+    assignee_user_id: row.assignee_user_id,
+    assignee_name_snapshot: row.assignee_name_snapshot,
+    assignee_email_snapshot:
+      typeof row.assignee_email_snapshot === "string"
+        ? row.assignee_email_snapshot
+        : null,
+    status,
+    statement: typeof row.statement === "string" ? row.statement : null,
+    reservation:
+      typeof row.reservation === "string" ? row.reservation : null,
+    acted_at: typeof row.acted_at === "string" ? row.acted_at : null,
+    version,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+function normalizeSignoff(value: unknown): GovernanceAssuranceSignoff | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const status = signoffStatus(row.status);
+  const version = intOrNull(row.version);
+  if (
+    typeof row.id !== "string" ||
+    typeof row.review_id !== "string" ||
+    typeof row.owner_user_id !== "string" ||
+    typeof row.created_by !== "string" ||
+    typeof row.created_at !== "string" ||
+    typeof row.updated_at !== "string" ||
+    !status ||
+    version == null
+  ) {
+    return null;
+  }
+
+  return {
+    id: row.id,
+    review_id: row.review_id,
+    owner_user_id: row.owner_user_id,
+    status,
+    version,
+    completed_at:
+      typeof row.completed_at === "string" ? row.completed_at : null,
+    declined_at:
+      typeof row.declined_at === "string" ? row.declined_at : null,
+    created_by: row.created_by,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    attestations: Array.isArray(row.attestations)
+      ? row.attestations
+          .map(normalizeAttestation)
+          .filter(
+            (item): item is GovernanceAssuranceAttestation => !!item,
+          )
+          .sort((a, b) => a.sequence_no - b.sequence_no)
+      : [],
+  };
+}
+
+function readLocalSignoffs(): LocalSignoffStore {
+  if (typeof window === "undefined") {
+    return { version: 1, signoffs: [] };
+  }
+  try {
+    const parsed = JSON.parse(
+      window.localStorage.getItem(SIGNOFF_LOCAL_KEY) ?? "{}",
+    ) as Partial<LocalSignoffStore>;
+    return {
+      version: 1,
+      signoffs: Array.isArray(parsed.signoffs)
+        ? parsed.signoffs
+            .map(normalizeSignoff)
+            .filter((item): item is GovernanceAssuranceSignoff => !!item)
+        : [],
+    };
+  } catch {
+    return { version: 1, signoffs: [] };
+  }
+}
+
+function writeLocalSignoffs(store: LocalSignoffStore) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(SIGNOFF_LOCAL_KEY, JSON.stringify(store));
+}
+
+function validateSignoffAssignments(
+  input: SaveGovernanceAssuranceSignoffPlanInput,
+) {
+  if (input.assignments.length !== 3) {
+    throw new Error("Sign-off يحتاج Prepared / Reviewed / Approved.");
+  }
+  const roles = new Set(input.assignments.map((row) => row.role));
+  const users = new Set(input.assignments.map((row) => row.assignee_user_id));
+  if (
+    roles.size !== 3 ||
+    !roles.has("prepared_by") ||
+    !roles.has("reviewed_by") ||
+    !roles.has("approved_by")
+  ) {
+    throw new Error("يجب تعيين الأدوار الثلاثة مرة واحدة لكل دور.");
+  }
+  if (users.size !== 3) {
+    throw new Error("Prepared / Reviewed / Approved يجب أن يكونوا 3 مستخدمين مختلفين.");
+  }
+  for (const row of input.assignments) {
+    if (!row.assignee_user_id || !row.assignee_name.trim()) {
+      throw new Error("هوية كل Signer مطلوبة.");
+    }
+  }
+}
+
+export function buildGovernanceAssuranceSignatoryCandidates(
+  review: ExecutiveGovernanceReview,
+  meetingData: Awaited<ReturnType<typeof listExecutiveStrategyMeetings>>,
+): GovernanceAssuranceSignatoryCandidate[] {
+  const sourceIds = new Set(review.source_window_meeting_ids);
+  const candidates = new Map<string, GovernanceAssuranceSignatoryCandidate>();
+
+  const add = (candidate: GovernanceAssuranceSignatoryCandidate) => {
+    const prior = candidates.get(candidate.user_id);
+    if (!prior) {
+      candidates.set(candidate.user_id, candidate);
+      return;
+    }
+    if (
+      prior.source !== "attendee" &&
+      candidate.source === "attendee"
+    ) {
+      candidates.set(candidate.user_id, candidate);
+      return;
+    }
+    if (!prior.email && candidate.email) {
+      candidates.set(candidate.user_id, {
+        ...prior,
+        email: candidate.email,
+      });
+    }
+  };
+
+  for (const meeting of meetingData.meetings) {
+    if (!sourceIds.has(meeting.id)) continue;
+
+    for (const attendee of meeting.attendees) {
+      if (!attendee.user_id) continue;
+      add({
+        user_id: attendee.user_id,
+        display_name: attendee.display_name.trim() || "مستخدم",
+        email: attendee.email_snapshot,
+        source: "attendee",
+      });
+    }
+
+    if (meeting.chair_user_id) {
+      add({
+        user_id: meeting.chair_user_id,
+        display_name: meeting.chair_name?.trim() || "رئيس الاجتماع",
+        email: null,
+        source: "chair",
+      });
+    }
+
+    if (meeting.created_by) {
+      add({
+        user_id: meeting.created_by,
+        display_name: "منشئ الاجتماع",
+        email: null,
+        source: "creator",
+      });
+    }
+  }
+
+  return [...candidates.values()].sort((a, b) =>
+    a.display_name.localeCompare(b.display_name, "ar"),
+  );
+}
+
+export async function listGovernanceAssuranceSignoffs(): Promise<GovernanceAssuranceSignoffData> {
+  if (isSupabaseBackend()) {
+    const raw = await supabaseRest<Record<string, unknown>>(
+      "rpc/list_executive_governance_review_signoffs",
+      { method: "POST", body: {} },
+    );
+
+    const owned: GovernanceAssuranceOwnedSignoff[] = Array.isArray(raw.owned)
+      ? raw.owned.flatMap((item) => {
+          if (!item || typeof item !== "object" || Array.isArray(item)) {
+            return [];
+          }
+          const row = item as Record<string, unknown>;
+          const signoff = normalizeSignoff(row.signoff);
+          const review = normalizeReview(row.review);
+          return signoff && review ? [{ signoff, review }] : [];
+        })
+      : [];
+
+    const inbox: GovernanceAssuranceAttestationInboxItem[] = Array.isArray(
+      raw.inbox,
+    )
+      ? raw.inbox.flatMap((item) => {
+          if (!item || typeof item !== "object" || Array.isArray(item)) {
+            return [];
+          }
+          const row = item as Record<string, unknown>;
+          const attestation = normalizeAttestation(row.attestation);
+          const signoff = normalizeSignoff(row.signoff);
+          const review = normalizeReview(row.review);
+          return attestation && signoff && review
+            ? [
+                {
+                  attestation,
+                  signoff,
+                  review,
+                  can_act: row.can_act === true,
+                },
+              ]
+            : [];
+        })
+      : [];
+
+    return { owned, inbox };
+  }
+
+  const reviews = new Map(
+    readLocal().reviews.map((review) => [review.id, review] as const),
+  );
+  const signoffs = readLocalSignoffs().signoffs;
+  return {
+    owned: signoffs.flatMap((signoff) => {
+      const review = reviews.get(signoff.review_id);
+      return review ? [{ signoff, review }] : [];
+    }),
+    inbox: signoffs.flatMap((signoff) => {
+      const review = reviews.get(signoff.review_id);
+      if (!review) return [];
+      return signoff.attestations
+        .filter((attestation) => attestation.assignee_user_id === "local-user")
+        .map((attestation) => {
+          const priorIncomplete = signoff.attestations.some(
+            (row) =>
+              row.sequence_no < attestation.sequence_no &&
+              row.status !== "attested" &&
+              row.status !== "attested_with_reservation",
+          );
+          return {
+            attestation,
+            signoff,
+            review,
+            can_act:
+              signoff.status === "open" &&
+              attestation.status === "pending" &&
+              !priorIncomplete,
+          };
+        });
+    }),
+  };
+}
+
+export async function saveGovernanceAssuranceSignoffPlan(
+  input: SaveGovernanceAssuranceSignoffPlanInput,
+): Promise<GovernanceAssuranceSignoff> {
+  validateSignoffAssignments(input);
+
+  if (isSupabaseBackend()) {
+    const raw = await supabaseRest<unknown>(
+      "rpc/save_executive_governance_review_signoff_plan",
+      {
+        method: "POST",
+        body: {
+          p_review_id: input.review_id,
+          p_expected_signoff_version:
+            input.expected_signoff_version ?? null,
+          p_assignments: input.assignments,
+        },
+      },
+    );
+    const signoff = normalizeSignoff(raw);
+    if (!signoff) {
+      throw new Error("عاد الخادم بخطة Sign-off غير صالحة.");
+    }
+    return signoff;
+  }
+
+  const review = readLocal().reviews.find(
+    (row) => row.id === input.review_id,
+  );
+  if (!review || review.status !== "finalized") {
+    throw new Error("Sign-off يتطلب Finalized Review.");
+  }
+
+  const store = readLocalSignoffs();
+  const existing = store.signoffs.find(
+    (row) => row.review_id === input.review_id,
+  );
+  if (
+    existing &&
+    (input.expected_signoff_version == null ||
+      input.expected_signoff_version !== existing.version)
+  ) {
+    throw new Error("تم تعديل Sign-off. حدّث البيانات وأعد المحاولة.");
+  }
+  if (!existing && input.expected_signoff_version != null) {
+    throw new Error("تم تعديل Sign-off. حدّث البيانات وأعد المحاولة.");
+  }
+  if (
+    existing &&
+    (existing.status !== "open" ||
+      existing.attestations.some((row) => row.status !== "pending"))
+  ) {
+    throw new Error("تم قفل تعيينات Sign-off بعد بدء الاعتماد.");
+  }
+
+  const now = new Date().toISOString();
+  const signoffId = existing?.id ?? crypto.randomUUID();
+  const sequence: Record<GovernanceAssuranceAttestationRole, number> = {
+    prepared_by: 1,
+    reviewed_by: 2,
+    approved_by: 3,
+  };
+  const signoff: GovernanceAssuranceSignoff = {
+    id: signoffId,
+    review_id: review.id,
+    owner_user_id: review.owner_user_id,
+    status: "open",
+    version: existing ? existing.version + 1 : 1,
+    completed_at: null,
+    declined_at: null,
+    created_by: review.owner_user_id,
+    created_at: existing?.created_at ?? now,
+    updated_at: now,
+    attestations: input.assignments
+      .map((row) => ({
+        id: crypto.randomUUID(),
+        signoff_id: signoffId,
+        review_id: review.id,
+        owner_user_id: review.owner_user_id,
+        role: row.role,
+        sequence_no: sequence[row.role],
+        assignee_user_id: row.assignee_user_id,
+        assignee_name_snapshot: row.assignee_name.trim(),
+        assignee_email_snapshot: row.assignee_email?.trim() || null,
+        status: "pending" as const,
+        statement: null,
+        reservation: null,
+        acted_at: null,
+        version: 1,
+        created_at: now,
+        updated_at: now,
+      }))
+      .sort((a, b) => a.sequence_no - b.sequence_no),
+  };
+
+  store.signoffs = [
+    signoff,
+    ...store.signoffs.filter((row) => row.review_id !== review.id),
+  ];
+  writeLocalSignoffs(store);
+  return signoff;
+}
+
+export async function actOnGovernanceAssuranceAttestation(
+  input: ActOnGovernanceAssuranceAttestationInput,
+): Promise<GovernanceAssuranceSignoff> {
+  if (!input.statement.trim() || input.statement.trim().length > 8000) {
+    throw new Error("Attestation Statement مطلوبة وبحد أقصى 8000 حرف.");
+  }
+  if (
+    input.decision === "attested_with_reservation" &&
+    !input.reservation?.trim()
+  ) {
+    throw new Error("Reservation مطلوبة لهذا القرار.");
+  }
+  if ((input.reservation?.length ?? 0) > 8000) {
+    throw new Error("Reservation طويلة جدًا.");
+  }
+
+  if (isSupabaseBackend()) {
+    const raw = await supabaseRest<unknown>(
+      "rpc/act_on_executive_governance_attestation",
+      {
+        method: "POST",
+        body: {
+          p_attestation_id: input.attestation_id,
+          p_expected_version: input.expected_version,
+          p_decision: input.decision,
+          p_statement: input.statement,
+          p_reservation: input.reservation ?? null,
+        },
+      },
+    );
+    const signoff = normalizeSignoff(raw);
+    if (!signoff) {
+      throw new Error("عاد الخادم بنتيجة Sign-off غير صالحة.");
+    }
+    return signoff;
+  }
+
+  const store = readLocalSignoffs();
+  const signoff = store.signoffs.find((row) =>
+    row.attestations.some((item) => item.id === input.attestation_id),
+  );
+  if (!signoff) throw new Error("Attestation غير موجودة.");
+  if (signoff.status !== "open") throw new Error("Sign-off ليس مفتوحًا.");
+
+  const attestation = signoff.attestations.find(
+    (row) => row.id === input.attestation_id,
+  )!;
+  if (attestation.assignee_user_id !== "local-user") {
+    throw new Error("Local mode لا يمكنه التوقيع نيابةً عن مستخدم آخر.");
+  }
+  if (
+    attestation.status !== "pending" ||
+    attestation.version !== input.expected_version
+  ) {
+    throw new Error("Attestation تغيرت. حدّث البيانات وأعد المحاولة.");
+  }
+  const priorIncomplete = signoff.attestations.some(
+    (row) =>
+      row.sequence_no < attestation.sequence_no &&
+      row.status !== "attested" &&
+      row.status !== "attested_with_reservation",
+  );
+  if (priorIncomplete) {
+    throw new Error("يجب إكمال خطوة Sign-off السابقة أولًا.");
+  }
+
+  const now = new Date().toISOString();
+  const updatedAttestations = signoff.attestations.map((row) =>
+    row.id === attestation.id
+      ? {
+          ...row,
+          status: input.decision,
+          statement: input.statement.trim(),
+          reservation: input.reservation?.trim() || null,
+          acted_at: now,
+          version: row.version + 1,
+          updated_at: now,
+        }
+      : row,
+  );
+  const updated: GovernanceAssuranceSignoff = {
+    ...signoff,
+    attestations: updatedAttestations,
+    status:
+      input.decision === "declined"
+        ? "declined"
+        : attestation.sequence_no === 3
+          ? "completed"
+          : "open",
+    completed_at:
+      input.decision !== "declined" && attestation.sequence_no === 3
+        ? now
+        : signoff.completed_at,
+    declined_at:
+      input.decision === "declined" ? now : signoff.declined_at,
+    version: signoff.version + 1,
+    updated_at: now,
+  };
+
+  store.signoffs = store.signoffs.map((row) =>
+    row.id === updated.id ? updated : row,
+  );
+  writeLocalSignoffs(store);
+  return updated;
 }
