@@ -488,6 +488,15 @@ function validateReviewNarrative(
   if (!/^\d{4}-\d{2}-\d{2}$/.test(reviewDate)) {
     throw new Error("Review Date غير صالح.");
   }
+  const now = new Date();
+  const today = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0"),
+  ].join("-");
+  if (reviewDate > today) {
+    throw new Error("Review Date لا يمكن أن تكون في المستقبل.");
+  }
   if (!summary.trim() || summary.trim().length > 12000) {
     throw new Error("Summary مطلوب وبحد أقصى 12000 حرف.");
   }
@@ -776,6 +785,15 @@ export async function finalizeExecutiveGovernanceReview(
   }
   if (existing.version !== expectedVersion) {
     throw new Error("تم تعديل المراجعة. حدّث البيانات وأعد المحاولة.");
+  }
+  if (
+    (existing.assurance_conclusion === "needs_improvement" ||
+      existing.assurance_conclusion === "unsatisfactory") &&
+    !existing.management_response?.trim()
+  ) {
+    throw new Error(
+      "Management Response مطلوبة قبل Finalize لهذه النتيجة.",
+    );
   }
 
   const now = new Date().toISOString();
