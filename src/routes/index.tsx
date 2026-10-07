@@ -141,6 +141,7 @@ function Dashboard() {
         boards={allBoards.data ?? []}
         execution={execution.data}
         meetingData={executiveMeetings.data}
+        targetData={governanceTargets.data}
         isLoading={
           portfolioStrategy.isLoading ||
           strategyReviews.isLoading ||
@@ -150,7 +151,8 @@ function Dashboard() {
           projects.isLoading ||
           allBoards.isLoading ||
           execution.isLoading ||
-          executiveMeetings.isLoading
+          executiveMeetings.isLoading ||
+          governanceTargets.isLoading
         }
       />
 
