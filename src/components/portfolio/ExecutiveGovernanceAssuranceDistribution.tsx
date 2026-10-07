@@ -2,7 +2,6 @@ import {
   Archive,
   BadgeCheck,
   CheckCircle2,
-  ClipboardList,
   MailCheck,
   PackageCheck,
   Save,
@@ -32,6 +31,13 @@ import type {
 interface DistributionDraft {
   note: string;
   recipientIds: string[];
+}
+
+interface DistributionCandidate {
+  user_id: string;
+  display_name: string;
+  email: string | null;
+  source: "attendee" | "chair" | "creator" | "saved_distribution";
 }
 
 interface AckDraft {
@@ -119,7 +125,7 @@ export function ExecutiveGovernanceAssuranceDistribution({
       (row) => row.review.id === selectedReview?.id,
     )?.distribution ?? null;
 
-  const candidates = useMemo(
+  const sourceCandidates = useMemo<DistributionCandidate[]>(
     () =>
       selectedReview
         ? buildGovernanceAssuranceSignatoryCandidates(
@@ -129,6 +135,28 @@ export function ExecutiveGovernanceAssuranceDistribution({
         : [],
     [selectedReview, meetingData],
   );
+
+  const availableCandidates = useMemo<DistributionCandidate[]>(() => {
+    const merged = new Map<string, DistributionCandidate>();
+
+    for (const candidate of sourceCandidates) {
+      merged.set(candidate.user_id, candidate);
+    }
+
+    for (const recipient of ownedDistribution?.recipients ?? []) {
+      if (merged.has(recipient.recipient_user_id)) continue;
+      merged.set(recipient.recipient_user_id, {
+        user_id: recipient.recipient_user_id,
+        display_name: recipient.recipient_name_snapshot,
+        email: recipient.recipient_email_snapshot,
+        source: "saved_distribution",
+      });
+    }
+
+    return [...merged.values()].sort((a, b) =>
+      a.display_name.localeCompare(b.display_name, "ar"),
+    );
+  }, [sourceCandidates, ownedDistribution?.recipients]);
 
   const [draft, setDraft] = useState<DistributionDraft>({
     note: "",
@@ -167,12 +195,22 @@ export function ExecutiveGovernanceAssuranceDistribution({
   const distributionData = distributions.data ?? { owned: [], inbox: [] };
   const editable = !ownedDistribution || ownedDistribution.status === "draft";
   const selectedSet = new Set(draft.recipientIds);
+  const availableCandidateMap = new Map(
+    availableCandidates.map((candidate) => [
+      candidate.user_id,
+      candidate,
+    ] as const),
+  );
+  const hasUnknownSelectedRecipients = draft.recipientIds.some(
+    (userId) => !availableCandidateMap.has(userId),
+  );
   const canSave =
     !!selectedReview &&
     editable &&
     draft.recipientIds.length >= 1 &&
     draft.recipientIds.length <= 100 &&
-    new Set(draft.recipientIds).size === draft.recipientIds.length;
+    new Set(draft.recipientIds).size === draft.recipientIds.length &&
+    !hasUnknownSelectedRecipients;
 
   const pendingCount =
     ownedDistribution?.recipients.filter((row) => row.status === "pending")
@@ -308,14 +346,14 @@ export function ExecutiveGovernanceAssuranceDistribution({
                 </span>
               </div>
 
-              {!candidates.length ? (
+              {!availableCandidates.length ? (
                 <div className="mt-2 rounded-xl border border-warning/20 bg-warning/5 p-3 text-[9px] text-muted-foreground">
                   لا توجد حسابات مستخدمين موثقة في اجتماعات المصدر لإضافتها إلى
                   Distribution Register.
                 </div>
               ) : (
                 <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {candidates.map((candidate) => {
+                  {availableCandidates.map((candidate) => {
                     const checked = selectedSet.has(candidate.user_id);
                     const existingRecipient =
                       ownedDistribution?.recipients.find(
@@ -343,7 +381,10 @@ export function ExecutiveGovernanceAssuranceDistribution({
                             {candidate.display_name}
                           </span>
                           <span className="mt-1 block truncate text-[8px] text-muted-foreground">
-                            {candidate.email ?? candidate.source}
+                            {candidate.email ??
+                              (candidate.source === "saved_distribution"
+                                ? "Saved recipient snapshot"
+                                : candidate.source)}
                           </span>
                           {existingRecipient && (
                             <span
@@ -363,6 +404,14 @@ export function ExecutiveGovernanceAssuranceDistribution({
               )}
             </div>
 
+            {hasUnknownSelectedRecipients && (
+              <div className="mt-3 rounded-xl border border-danger/20 bg-danger/5 p-3 text-[9px] leading-5 text-muted-foreground">
+                يوجد Recipient ID محدد لا يمكن ربطه بقائمة المصدر الحالية أو
+                بالـDistribution snapshot المحفوظ. أزل هذا الاختيار قبل الحفظ؛
+                النظام لن يخمّن هوية المستلم.
+              </div>
+            )}
+
             {editable && (
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
@@ -370,19 +419,19 @@ export function ExecutiveGovernanceAssuranceDistribution({
                   disabled={!canSave || savePlan.isPending}
                   onClick={() => {
                     if (!selectedReview) return;
-                    const candidateMap = new Map(
-                      candidates.map((candidate) => [
-                        candidate.user_id,
-                        candidate,
-                      ]),
-                    );
+                    if (hasUnknownSelectedRecipients) return;
                     savePlan.mutate({
                       review_id: selectedReview.id,
                       expected_distribution_version:
                         ownedDistribution?.version ?? null,
                       distribution_note: draft.note || null,
                       recipients: draft.recipientIds.map((userId) => {
-                        const candidate = candidateMap.get(userId)!;
+                        const candidate = availableCandidateMap.get(userId);
+                        if (!candidate) {
+                          throw new Error(
+                            "تعذر ربط Recipient بالهوية المحفوظة.",
+                          );
+                        }
                         return {
                           recipient_user_id: candidate.user_id,
                           recipient_name: candidate.display_name,
