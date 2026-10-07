@@ -30,6 +30,17 @@ import type {
   GovernanceTargetAssessment,
 } from "@/types/governance-targets";
 
+const METRIC_LABELS: Record<GovernanceExceptionMetricKey, string> = {
+  decision_resolution: "Decision Resolution",
+  deferred_rate: "Deferred Rate",
+  action_completion: "Action Completion",
+  overdue_open: "Overdue Open Rate",
+  unowned_open: "Unowned Open Rate",
+  on_time_completion: "On-time Completion",
+  median_completion_days: "Median Completion Days",
+  repeated_deferrals: "Repeated Deferrals",
+};
+
 const STATUS_LABELS: Record<GovernanceExceptionStatus, string> = {
   open: "Open",
   mitigating: "Mitigating",
@@ -190,9 +201,6 @@ export function ExecutiveGovernanceExceptionsCenter({
   );
   const breached = evaluation.assessments.filter(
     (row) => row.status === "not_met",
-  );
-  const actionableBreaches = breached.filter(
-    (row) => !activeByMetric.has(row.key),
   );
   const overdue = active.filter(
     (row) => !!row.due_date && row.due_date < today,
@@ -643,7 +651,7 @@ export function ExecutiveGovernanceExceptionsCenter({
                         )}
                       </div>
                       <p className="mt-1 text-[8px] text-muted-foreground">
-                        {row.metric_key} · Actual{" "}
+                        {METRIC_LABELS[row.metric_key]} · Actual{" "}
                         {formatValue(row.actual_value, row.target_unit)} · Target{" "}
                         {row.target_operator === "gte" ? "≥ " : "≤ "}
                         {formatValue(row.target_value, row.target_unit)} · Target v
@@ -714,7 +722,7 @@ export function ExecutiveGovernanceExceptionsCenter({
                   </span>
                 </div>
                 <p className="mt-1 text-[8px] text-muted-foreground">
-                  {row.metric_key} · Created {formatDate(row.created_at)}
+                  {METRIC_LABELS[row.metric_key]} · Created {formatDate(row.created_at)}
                   {row.resolved_at
                     ? " · Resolved " + formatDate(row.resolved_at)
                     : ""}
@@ -740,11 +748,6 @@ export function ExecutiveGovernanceExceptionsCenter({
         </div>
       )}
 
-      {!!actionableBreaches.length && !profile && (
-        <div className="rounded-xl border border-warning/20 bg-warning/5 p-3 text-[9px] text-warning">
-          احفظ Governance Targets أولًا قبل تسجيل Exceptions.
-        </div>
-      )}
     </section>
   );
 }
