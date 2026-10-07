@@ -449,6 +449,7 @@ declare
 begin
   if char_length(trim(coalesce(p_period_label, ''))) not between 1 and 180
      or p_review_date is null
+     or p_review_date > current_date
      or p_assurance_conclusion not in (
        'satisfactory',
        'needs_improvement',
@@ -591,6 +592,7 @@ begin
 
   if char_length(trim(coalesce(p_period_label, ''))) not between 1 and 180
      or p_review_date is null
+     or p_review_date > current_date
      or p_assurance_conclusion not in (
        'satisfactory',
        'needs_improvement',
@@ -709,6 +711,10 @@ begin
 
   if char_length(trim(v_old.summary)) < 1
      or v_old.assurance_conclusion is null
+     or (
+       v_old.assurance_conclusion in ('needs_improvement','unsatisfactory')
+       and nullif(trim(coalesce(v_old.management_response, '')), '') is null
+     )
   then
     raise exception 'GOVERNANCE_REVIEW_NOT_READY'
       using errcode = '22023';
