@@ -136,6 +136,13 @@ declare
   v_meeting_id uuid;
   v_row jsonb;
   v_exception public.executive_governance_exceptions%rowtype;
+  v_key text;
+  v_status text;
+  v_expected_target numeric;
+  v_expected_operator text;
+  v_expected_unit text;
+  v_actual numeric;
+  v_snapshot_target numeric;
 begin
   if auth.uid() is null then
     raise exception 'AUTH_REQUIRED' using errcode = '42501';
@@ -160,7 +167,7 @@ begin
   if jsonb_typeof(coalesce(p_source_window_meeting_ids, 'null'::jsonb)) <> 'array'
      or jsonb_array_length(p_source_window_meeting_ids) not between 1 and 3
      or jsonb_typeof(coalesce(p_target_assessments_snapshot, 'null'::jsonb)) <> 'array'
-     or jsonb_array_length(p_target_assessments_snapshot) > 8
+     or jsonb_array_length(p_target_assessments_snapshot) <> 8
      or jsonb_typeof(coalesce(p_operating_rhythm_snapshot, 'null'::jsonb)) <> 'object'
      or jsonb_typeof(coalesce(p_exceptions_snapshot, 'null'::jsonb)) <> 'array'
      or jsonb_array_length(p_exceptions_snapshot) > 100
@@ -205,11 +212,23 @@ begin
     end if;
   end loop;
 
+  if (
+    select count(distinct value->>'key')
+    from jsonb_array_elements(p_target_assessments_snapshot)
+  ) <> 8
+  then
+    raise exception 'GOVERNANCE_REVIEW_DUPLICATE_ASSESSMENTS'
+      using errcode = '22023';
+  end if;
+
   for v_row in
     select value
     from jsonb_array_elements(p_target_assessments_snapshot)
   loop
-    if coalesce(v_row->>'key', '') not in (
+    v_key := coalesce(v_row->>'key', '');
+    v_status := coalesce(v_row->>'status', '');
+
+    if v_key not in (
       'decision_resolution',
       'deferred_rate',
       'action_completion',
@@ -219,17 +238,102 @@ begin
       'median_completion_days',
       'repeated_deferrals'
     )
-    or coalesce(v_row->>'status', '') not in (
+    or v_status not in (
       'met',
       'not_met',
       'no_target',
       'insufficient_data'
     )
-    or coalesce(v_row->>'operator', '') not in ('gte','lte')
-    or coalesce(v_row->>'unit', '') not in ('%','days','count')
     then
       raise exception 'GOVERNANCE_REVIEW_INVALID_ASSESSMENT'
         using errcode = '22023';
+    end if;
+
+    case v_key
+      when 'decision_resolution' then
+        v_expected_target := v_targets.decision_resolution_target_pct;
+        v_expected_operator := 'gte';
+        v_expected_unit := '%';
+      when 'deferred_rate' then
+        v_expected_target := v_targets.max_deferred_rate_pct;
+        v_expected_operator := 'lte';
+        v_expected_unit := '%';
+      when 'action_completion' then
+        v_expected_target := v_targets.action_completion_target_pct;
+        v_expected_operator := 'gte';
+        v_expected_unit := '%';
+      when 'overdue_open' then
+        v_expected_target := v_targets.max_overdue_open_rate_pct;
+        v_expected_operator := 'lte';
+        v_expected_unit := '%';
+      when 'unowned_open' then
+        v_expected_target := v_targets.max_unowned_open_rate_pct;
+        v_expected_operator := 'lte';
+        v_expected_unit := '%';
+      when 'on_time_completion' then
+        v_expected_target := v_targets.on_time_completion_target_pct;
+        v_expected_operator := 'gte';
+        v_expected_unit := '%';
+      when 'median_completion_days' then
+        v_expected_target := v_targets.max_median_completion_days;
+        v_expected_operator := 'lte';
+        v_expected_unit := 'days';
+      when 'repeated_deferrals' then
+        v_expected_target := v_targets.max_repeated_deferrals;
+        v_expected_operator := 'lte';
+        v_expected_unit := 'count';
+    end case;
+
+    if coalesce(v_row->>'operator', '') <> v_expected_operator
+       or coalesce(v_row->>'unit', '') <> v_expected_unit
+    then
+      raise exception 'GOVERNANCE_REVIEW_ASSESSMENT_METADATA_MISMATCH'
+        using errcode = '22023';
+    end if;
+
+    begin
+      v_actual := case
+        when v_row->'actual' = 'null'::jsonb then null
+        else (v_row->>'actual')::numeric
+      end;
+      v_snapshot_target := case
+        when v_row->'target' = 'null'::jsonb then null
+        else (v_row->>'target')::numeric
+      end;
+    exception when invalid_text_representation then
+      raise exception 'GOVERNANCE_REVIEW_INVALID_ASSESSMENT_VALUE'
+        using errcode = '22023';
+    end;
+
+    if v_expected_target is null then
+      if v_snapshot_target is not null or v_status <> 'no_target' then
+        raise exception 'GOVERNANCE_REVIEW_TARGET_MISMATCH'
+          using errcode = '40001';
+      end if;
+    else
+      if v_snapshot_target is distinct from v_expected_target then
+        raise exception 'GOVERNANCE_REVIEW_TARGET_MISMATCH'
+          using errcode = '40001';
+      end if;
+
+      if v_actual is null then
+        if v_status <> 'insufficient_data' then
+          raise exception 'GOVERNANCE_REVIEW_STATUS_MISMATCH'
+            using errcode = '22023';
+        end if;
+      elsif (
+        (v_expected_operator = 'gte' and v_actual >= v_expected_target)
+        or
+        (v_expected_operator = 'lte' and v_actual <= v_expected_target)
+      ) then
+        if v_status <> 'met' then
+          raise exception 'GOVERNANCE_REVIEW_STATUS_MISMATCH'
+            using errcode = '22023';
+        end if;
+      elsif v_status <> 'not_met' then
+        raise exception 'GOVERNANCE_REVIEW_STATUS_MISMATCH'
+          using errcode = '22023';
+      end if;
     end if;
   end loop;
 
@@ -273,6 +377,53 @@ revoke all on function public.projectflow_validate_governance_review_source(
   bigint, jsonb, jsonb, jsonb, jsonb
 ) from public;
 
+create or replace function public.projectflow_validate_governance_review_evidence(
+  p_evidence_snapshot jsonb
+)
+returns void
+language plpgsql
+immutable
+as $projectflow$
+declare
+  v_row jsonb;
+  v_type text;
+  v_reference text;
+begin
+  if jsonb_typeof(coalesce(p_evidence_snapshot, 'null'::jsonb)) <> 'array'
+     or jsonb_array_length(p_evidence_snapshot) > 50
+  then
+    raise exception 'GOVERNANCE_REVIEW_INVALID_EVIDENCE'
+      using errcode = '22023';
+  end if;
+
+  for v_row in
+    select value
+    from jsonb_array_elements(p_evidence_snapshot)
+  loop
+    v_type := coalesce(v_row->>'type', '');
+    v_reference := trim(coalesce(v_row->>'reference', ''));
+
+    if char_length(trim(coalesce(v_row->>'id', ''))) not between 1 and 120
+       or v_type not in ('note','reference','url')
+       or char_length(trim(coalesce(v_row->>'title', ''))) not between 1 and 180
+       or char_length(v_reference) not between 1 and 2000
+       or char_length(coalesce(v_row->>'note', '')) > 4000
+       or (
+         v_type = 'url'
+         and v_reference !~* '^https?://'
+       )
+    then
+      raise exception 'GOVERNANCE_REVIEW_INVALID_EVIDENCE_ITEM'
+        using errcode = '22023';
+    end if;
+  end loop;
+end;
+$projectflow$;
+
+revoke all on function public.projectflow_validate_governance_review_evidence(
+  jsonb
+) from public;
+
 create or replace function public.create_executive_governance_review(
   p_period_label text,
   p_review_date date,
@@ -306,12 +457,14 @@ begin
      or char_length(trim(coalesce(p_summary, ''))) not between 1 and 12000
      or char_length(coalesce(p_management_response, '')) > 12000
      or p_source_generated_at is null
-     or jsonb_typeof(coalesce(p_evidence_snapshot, 'null'::jsonb)) <> 'array'
-     or jsonb_array_length(p_evidence_snapshot) > 50
   then
     raise exception 'GOVERNANCE_REVIEW_INVALID_INPUT'
       using errcode = '22023';
   end if;
+
+  perform public.projectflow_validate_governance_review_evidence(
+    p_evidence_snapshot
+  );
 
   perform public.projectflow_validate_governance_review_source(
     p_expected_target_version,
@@ -418,12 +571,14 @@ begin
      )
      or char_length(trim(coalesce(p_summary, ''))) not between 1 and 12000
      or char_length(coalesce(p_management_response, '')) > 12000
-     or jsonb_typeof(coalesce(p_evidence_snapshot, 'null'::jsonb)) <> 'array'
-     or jsonb_array_length(p_evidence_snapshot) > 50
   then
     raise exception 'GOVERNANCE_REVIEW_INVALID_INPUT'
       using errcode = '22023';
   end if;
+
+  perform public.projectflow_validate_governance_review_evidence(
+    p_evidence_snapshot
+  );
 
   select * into v_old
   from public.executive_governance_reviews
