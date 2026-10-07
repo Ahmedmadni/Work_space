@@ -23,6 +23,7 @@ import {
   useCreateExecutiveGovernanceReview,
   useFinalizeExecutiveGovernanceReview,
   useGovernanceAssuranceCadence,
+  useGovernanceAssuranceSignoffs,
   useSaveGovernanceAssuranceCadence,
   useUpdateExecutiveGovernanceReview,
 } from "@/hooks/use-governance-assurance";
@@ -41,6 +42,7 @@ import type {
   GovernanceAssuranceConclusion,
   GovernanceAssuranceEvidenceItem,
   GovernanceAssuranceEvidenceType,
+  GovernanceAssuranceSignoff,
 } from "@/types/governance-assurance";
 import type { ExecutiveGovernanceTargetsData } from "@/types/governance-targets";
 
@@ -369,8 +371,10 @@ function EvidenceEditor({
 
 function AssurancePack({
   review,
+  signoff,
 }: {
   review: ExecutiveGovernanceReview;
+  signoff: GovernanceAssuranceSignoff | null;
 }) {
   const meta = CONCLUSION_META[review.assurance_conclusion];
   const met = review.target_assessments_snapshot.filter(
@@ -624,6 +628,61 @@ function AssurancePack({
         )}
       </section>
 
+      {signoff && (
+        <section className="assurance-page-break border-b border-border p-4 md:p-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-semibold">Attestation & Sign-off</p>
+            <span
+              className={
+                signoff.status === "completed"
+                  ? "rounded-full bg-success/10 px-2 py-0.5 text-[8px] text-success"
+                  : signoff.status === "declined"
+                    ? "rounded-full bg-danger/10 px-2 py-0.5 text-[8px] text-danger"
+                    : "rounded-full bg-info/10 px-2 py-0.5 text-[8px] text-info"
+              }
+            >
+              {signoff.status}
+            </span>
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-3">
+            {signoff.attestations.map((item) => (
+              <div
+                key={item.id}
+                className="assurance-avoid-break rounded-xl border border-border bg-background p-3"
+              >
+                <p className="text-[8px] text-muted-foreground">
+                  {item.role === "prepared_by"
+                    ? "Prepared By"
+                    : item.role === "reviewed_by"
+                      ? "Reviewed By"
+                      : "Approved By"}
+                </p>
+                <p className="mt-1 text-[10px] font-semibold">
+                  {item.assignee_name_snapshot}
+                </p>
+                <p className="mt-1 text-[8px] text-muted-foreground">
+                  {item.assignee_email_snapshot ?? "—"}
+                </p>
+                <p className="mt-2 text-[8px]">
+                  Status: <strong>{item.status}</strong>
+                  {item.acted_at ? " · " + formatTimestamp(item.acted_at) : ""}
+                </p>
+                {item.statement && (
+                  <p className="mt-2 whitespace-pre-wrap text-[8px] leading-4 text-muted-foreground">
+                    {item.statement}
+                  </p>
+                )}
+                {item.reservation && (
+                  <p className="mt-2 whitespace-pre-wrap rounded-lg border border-warning/20 bg-warning/5 p-2 text-[8px] leading-4 text-warning">
+                    Reservation: {item.reservation}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       <footer className="border-t border-border p-4 text-[8px] leading-4 text-muted-foreground">
         <strong className="text-foreground">Audit basis:</strong> This pack is
         a stored snapshot. Finalized reviews cannot be edited. A later target,
@@ -651,6 +710,7 @@ export function ExecutiveGovernanceAssuranceCenter({
   const update = useUpdateExecutiveGovernanceReview();
   const finalize = useFinalizeExecutiveGovernanceReview();
   const cadence = useGovernanceAssuranceCadence();
+  const signoffs = useGovernanceAssuranceSignoffs();
   const saveCadence = useSaveGovernanceAssuranceCadence();
   const [draft, setDraft] = useState<ReviewDraft | null>(null);
   const [cadenceDraft, setCadenceDraft] = useState<CadenceDraft>({
@@ -1308,7 +1368,14 @@ export function ExecutiveGovernanceAssuranceCenter({
       )}
 
       {selectedReview ? (
-        <AssurancePack review={selectedReview} />
+        <AssurancePack
+          review={selectedReview}
+          signoff={
+            signoffs.data?.owned.find(
+              (row) => row.review.id === selectedReview.id,
+            )?.signoff ?? null
+          }
+        />
       ) : (
         <div className="rounded-2xl border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
           لا توجد Governance Assurance Reviews بعد.
