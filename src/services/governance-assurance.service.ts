@@ -14,6 +14,10 @@ import type {
   ExecutiveGovernanceReviewHistory,
   ExecutiveGovernanceReviewsData,
   AcknowledgeGovernanceAssuranceDistributionInput,
+  GovernanceAssuranceArchive,
+  GovernanceAssuranceArchiveData,
+  GovernanceAssuranceArchiveSnapshot,
+  GovernanceAssuranceArchiveVerification,
   GovernanceAssuranceConclusion,
   GovernanceAssuranceDistribution,
   GovernanceAssuranceDistributionData,
@@ -61,6 +65,7 @@ const LOCAL_KEY = "projectflow.executive-governance-assurance.v1";
 const CADENCE_LOCAL_KEY = "projectflow.executive-governance-assurance-cadence.v1";
 const SIGNOFF_LOCAL_KEY = "projectflow.executive-governance-assurance-signoff.v1";
 const DISTRIBUTION_LOCAL_KEY = "projectflow.executive-governance-assurance-distribution.v1";
+const ARCHIVE_LOCAL_KEY = "projectflow.executive-governance-assurance-archive.v1";
 
 interface LocalStore {
   version: 1;
@@ -2695,5 +2700,339 @@ export async function closeGovernanceAssuranceDistribution(
     row.id === distribution.id ? distribution : row,
   );
   writeLocalDistributions(store);
+  await ensureLocalArchiveForDistribution(distribution);
   return distribution;
+}
+
+
+interface LocalArchiveStore {
+  version: 1;
+  archives: GovernanceAssuranceArchive[];
+}
+
+function normalizeArchiveSnapshot(
+  value: unknown,
+): GovernanceAssuranceArchiveSnapshot | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const review = normalizeReview(row.review);
+  const signoff = normalizeSignoff(row.signoff);
+  const distribution = normalizeDistribution(row.distribution);
+  if (
+    row.archive_schema_version !== 1 ||
+    !review ||
+    !signoff ||
+    !distribution
+  ) {
+    return null;
+  }
+
+  return {
+    archive_schema_version: 1,
+    review,
+    signoff,
+    distribution,
+  };
+}
+
+function normalizeArchive(
+  value: unknown,
+): GovernanceAssuranceArchive | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const snapshot = normalizeArchiveSnapshot(row.snapshot);
+  const reviewVersion = intOrNull(row.review_version);
+  const signoffVersion = intOrNull(row.signoff_version);
+  const distributionVersion = intOrNull(row.distribution_version);
+
+  if (
+    typeof row.id !== "string" ||
+    typeof row.certificate_code !== "string" ||
+    typeof row.review_id !== "string" ||
+    typeof row.signoff_id !== "string" ||
+    typeof row.distribution_id !== "string" ||
+    typeof row.owner_user_id !== "string" ||
+    typeof row.snapshot_sha256 !== "string" ||
+    typeof row.archived_at !== "string" ||
+    typeof row.archived_by !== "string" ||
+    row.snapshot_schema_version !== 1 ||
+    !/^[0-9a-f]{64}$/.test(row.snapshot_sha256) ||
+    reviewVersion == null ||
+    signoffVersion == null ||
+    distributionVersion == null ||
+    !snapshot
+  ) {
+    return null;
+  }
+
+  return {
+    id: row.id,
+    certificate_code: row.certificate_code,
+    review_id: row.review_id,
+    signoff_id: row.signoff_id,
+    distribution_id: row.distribution_id,
+    owner_user_id: row.owner_user_id,
+    review_version: reviewVersion,
+    signoff_version: signoffVersion,
+    distribution_version: distributionVersion,
+    snapshot_schema_version: 1,
+    snapshot,
+    snapshot_sha256: row.snapshot_sha256,
+    archived_at: row.archived_at,
+    archived_by: row.archived_by,
+  };
+}
+
+function readLocalArchives(): LocalArchiveStore {
+  if (typeof window === "undefined") {
+    return { version: 1, archives: [] };
+  }
+  try {
+    const parsed = JSON.parse(
+      window.localStorage.getItem(ARCHIVE_LOCAL_KEY) ?? "{}",
+    ) as Partial<LocalArchiveStore>;
+    return {
+      version: 1,
+      archives: Array.isArray(parsed.archives)
+        ? parsed.archives
+            .map(normalizeArchive)
+            .filter((item): item is GovernanceAssuranceArchive => !!item)
+        : [],
+    };
+  } catch {
+    return { version: 1, archives: [] };
+  }
+}
+
+function writeLocalArchives(store: LocalArchiveStore) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(ARCHIVE_LOCAL_KEY, JSON.stringify(store));
+}
+
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value) ?? "null";
+  }
+  if (Array.isArray(value)) {
+    return "[" + value.map(canonicalJson).join(",") + "]";
+  }
+  const row = value as Record<string, unknown>;
+  return (
+    "{" +
+    Object.keys(row)
+      .sort()
+      .map(
+        (key) =>
+          JSON.stringify(key) + ":" + canonicalJson(row[key]),
+      )
+      .join(",") +
+    "}"
+  );
+}
+
+async function sha256Hex(value: unknown) {
+  if (
+    typeof globalThis.crypto === "undefined" ||
+    !globalThis.crypto.subtle
+  ) {
+    throw new Error("SHA-256 غير متاح في هذا المتصفح.");
+  }
+
+  const bytes = new TextEncoder().encode(canonicalJson(value));
+  const hash = await globalThis.crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(hash))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function buildLocalArchiveSnapshot(
+  review: ExecutiveGovernanceReview,
+  signoff: GovernanceAssuranceSignoff,
+  distribution: GovernanceAssuranceDistribution,
+): GovernanceAssuranceArchiveSnapshot {
+  return {
+    archive_schema_version: 1,
+    review: structuredClone(review),
+    signoff: structuredClone(signoff),
+    distribution: structuredClone(distribution),
+  };
+}
+
+async function ensureLocalArchiveForDistribution(
+  distribution: GovernanceAssuranceDistribution,
+) {
+  if (distribution.status !== "closed") return null;
+
+  const store = readLocalArchives();
+  const existing = store.archives.find(
+    (archive) => archive.distribution_id === distribution.id,
+  );
+  if (existing) return existing;
+
+  const review = readLocal().reviews.find(
+    (row) => row.id === distribution.review_id,
+  );
+  const signoff = readLocalSignoffs().signoffs.find(
+    (row) => row.id === distribution.signoff_id,
+  );
+  if (
+    !review ||
+    review.status !== "finalized" ||
+    !signoff ||
+    signoff.status !== "completed"
+  ) {
+    throw new Error(
+      "لا يمكن ختم Archive بدون Finalized Review وCompleted Sign-off.",
+    );
+  }
+
+  const snapshot = buildLocalArchiveSnapshot(
+    review,
+    signoff,
+    distribution,
+  );
+  const digest = await sha256Hex(snapshot);
+  const now = new Date().toISOString();
+  const archiveId = crypto.randomUUID();
+  const archive: GovernanceAssuranceArchive = {
+    id: archiveId,
+    certificate_code:
+      "PF-GOV-" +
+      String(new Date().getFullYear()) +
+      "-" +
+      archiveId.replaceAll("-", "").slice(0, 12).toUpperCase(),
+    review_id: review.id,
+    signoff_id: signoff.id,
+    distribution_id: distribution.id,
+    owner_user_id: distribution.owner_user_id,
+    review_version: review.version,
+    signoff_version: signoff.version,
+    distribution_version: distribution.version,
+    snapshot_schema_version: 1,
+    snapshot,
+    snapshot_sha256: digest,
+    archived_at: now,
+    archived_by: distribution.owner_user_id,
+  };
+
+  store.archives = [archive, ...store.archives];
+  writeLocalArchives(store);
+  return archive;
+}
+
+export async function listGovernanceAssuranceArchives(): Promise<GovernanceAssuranceArchiveData> {
+  if (isSupabaseBackend()) {
+    const raw = await supabaseRest<Record<string, unknown>>(
+      "rpc/list_executive_governance_assurance_archives",
+      { method: "POST", body: {} },
+    );
+    return {
+      archives: Array.isArray(raw.archives)
+        ? raw.archives
+            .map(normalizeArchive)
+            .filter(
+              (item): item is GovernanceAssuranceArchive => !!item,
+            )
+        : [],
+    };
+  }
+
+  for (const distribution of readLocalDistributions().distributions) {
+    if (distribution.status === "closed") {
+      await ensureLocalArchiveForDistribution(distribution);
+    }
+  }
+
+  return {
+    archives: readLocalArchives().archives.sort((a, b) =>
+      b.archived_at.localeCompare(a.archived_at),
+    ),
+  };
+}
+
+export async function verifyGovernanceAssuranceArchive(
+  archiveId: string,
+): Promise<GovernanceAssuranceArchiveVerification> {
+  if (isSupabaseBackend()) {
+    const raw = await supabaseRest<Record<string, unknown>>(
+      "rpc/verify_executive_governance_assurance_archive",
+      {
+        method: "POST",
+        body: { p_archive_id: archiveId },
+      },
+    );
+    const archive = normalizeArchive(raw.archive);
+    if (
+      !archive ||
+      typeof raw.stored_integrity !== "boolean" ||
+      typeof raw.source_integrity !== "boolean" ||
+      typeof raw.version_match !== "boolean" ||
+      typeof raw.lifecycle_match !== "boolean" ||
+      typeof raw.verified_at !== "string" ||
+      typeof raw.expected_sha256 !== "string" ||
+      typeof raw.stored_computed_sha256 !== "string"
+    ) {
+      throw new Error("عاد الخادم بنتيجة Archive Verification غير صالحة.");
+    }
+
+    return {
+      archive,
+      stored_integrity: raw.stored_integrity,
+      source_integrity: raw.source_integrity,
+      version_match: raw.version_match,
+      lifecycle_match: raw.lifecycle_match,
+      verified_at: raw.verified_at,
+      expected_sha256: raw.expected_sha256,
+      stored_computed_sha256: raw.stored_computed_sha256,
+      live_sha256:
+        typeof raw.live_sha256 === "string" ? raw.live_sha256 : null,
+    };
+  }
+
+  const archive = readLocalArchives().archives.find(
+    (row) => row.id === archiveId,
+  );
+  if (!archive) throw new Error("Archive Certificate غير موجودة.");
+
+  const storedComputedSha256 = await sha256Hex(archive.snapshot);
+  const review = readLocal().reviews.find(
+    (row) => row.id === archive.review_id,
+  );
+  const signoff = readLocalSignoffs().signoffs.find(
+    (row) => row.id === archive.signoff_id,
+  );
+  const distribution = readLocalDistributions().distributions.find(
+    (row) => row.id === archive.distribution_id,
+  );
+
+  const liveSnapshot =
+    review && signoff && distribution
+      ? buildLocalArchiveSnapshot(review, signoff, distribution)
+      : null;
+  const liveSha256 = liveSnapshot
+    ? await sha256Hex(liveSnapshot)
+    : null;
+
+  return {
+    archive,
+    stored_integrity:
+      storedComputedSha256 === archive.snapshot_sha256,
+    source_integrity:
+      liveSha256 != null && liveSha256 === archive.snapshot_sha256,
+    version_match:
+      !!review &&
+      !!signoff &&
+      !!distribution &&
+      review.version === archive.review_version &&
+      signoff.version === archive.signoff_version &&
+      distribution.version === archive.distribution_version,
+    lifecycle_match:
+      review?.status === "finalized" &&
+      signoff?.status === "completed" &&
+      distribution?.status === "closed",
+    verified_at: new Date().toISOString(),
+    expected_sha256: archive.snapshot_sha256,
+    stored_computed_sha256: storedComputedSha256,
+    live_sha256: liveSha256,
+  };
 }

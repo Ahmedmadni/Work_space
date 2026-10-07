@@ -9,12 +9,14 @@ import {
   closeGovernanceAssuranceDistribution,
   distributeGovernanceAssurancePack,
   listExecutiveGovernanceReviews,
+  listGovernanceAssuranceArchives,
   listGovernanceAssuranceCadence,
   listGovernanceAssuranceDistributions,
   listGovernanceAssuranceSignoffs,
   saveGovernanceAssuranceCadence,
   saveGovernanceAssuranceDistributionPlan,
   saveGovernanceAssuranceSignoffPlan,
+  verifyGovernanceAssuranceArchive,
   updateExecutiveGovernanceReview,
 } from "@/services/governance-assurance.service";
 import type {
@@ -47,6 +49,9 @@ function invalidate(queryClient: ReturnType<typeof useQueryClient>) {
   });
   void queryClient.invalidateQueries({
     queryKey: ["governance-assurance-distributions"],
+  });
+  void queryClient.invalidateQueries({
+    queryKey: ["governance-assurance-archives"],
   });
 }
 
@@ -276,6 +281,28 @@ export function useCloseGovernanceAssuranceDistribution() {
         error instanceof Error
           ? error.message
           : "تعذر إغلاق Distribution Register.",
+      ),
+  });
+}
+
+
+export function useGovernanceAssuranceArchives() {
+  return useQuery({
+    queryKey: ["governance-assurance-archives"],
+    queryFn: listGovernanceAssuranceArchives,
+    refetchInterval: 30_000,
+  });
+}
+
+export function useVerifyGovernanceAssuranceArchive() {
+  return useMutation({
+    mutationFn: (archiveId: string) =>
+      verifyGovernanceAssuranceArchive(archiveId),
+    onError: (error) =>
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "تعذر التحقق من Archive Certificate.",
       ),
   });
 }
