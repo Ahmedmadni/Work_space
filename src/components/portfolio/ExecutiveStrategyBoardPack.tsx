@@ -98,6 +98,17 @@ const BENEFIT_STATUS: Record<string, string> = {
   not_realized: "لم يتحقق",
 };
 
+const GOVERNANCE_METRIC_LABELS: Record<string, string> = {
+  decision_resolution: "Decision Resolution",
+  deferred_rate: "Deferred Rate",
+  action_completion: "Action Completion",
+  overdue_open: "Overdue Open Rate",
+  unowned_open: "Unowned Open Rate",
+  on_time_completion: "On-time Completion",
+  median_completion_days: "Median Completion Days",
+  repeated_deferrals: "Repeated Deferrals",
+};
+
 const EVENT_LABELS: Record<string, string> = {
   strategy_review: "Strategy Review",
   kr_update: "KR Update",
@@ -705,7 +716,7 @@ function BoardPackContents({
                     </span>
                   </div>
                   <p className="mt-1 text-[8px] text-muted-foreground">
-                    {row.metric_key} · Actual {arabicNumber(row.actual_value)}
+                    {GOVERNANCE_METRIC_LABELS[row.metric_key] ?? row.metric_key} · Actual {arabicNumber(row.actual_value)}
                     {row.target_unit === "%" ? "%" : row.target_unit === "days" ? " يوم" : ""}
                     {" · Target "}
                     {row.target_operator === "gte" ? "≥ " : "≤ "}
