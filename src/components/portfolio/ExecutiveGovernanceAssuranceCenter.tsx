@@ -790,6 +790,7 @@ export function ExecutiveGovernanceAssuranceCenter({
               Review Date
               <input
                 type="date"
+                max={todayKey()}
                 value={draft.review_date}
                 onChange={(event) =>
                   setDraft({ ...draft, review_date: event.target.value })
@@ -941,6 +942,10 @@ export function ExecutiveGovernanceAssuranceCenter({
               const historyCount = reviewData.history.filter(
                 (row) => row.review_id === review.id,
               ).length;
+              const finalizeBlocked =
+                (review.assurance_conclusion === "needs_improvement" ||
+                  review.assurance_conclusion === "unsatisfactory") &&
+                !review.management_response?.trim();
               return (
                 <div
                   key={review.id}
@@ -1000,9 +1005,19 @@ export function ExecutiveGovernanceAssuranceCenter({
                             <Pencil className="h-3.5 w-3.5" />
                             تحرير
                           </button>
+                          {finalizeBlocked && (
+                            <span className="self-center text-[8px] text-warning">
+                              Management Response مطلوبة
+                            </span>
+                          )}
                           <button
                             type="button"
-                            disabled={finalize.isPending}
+                            disabled={finalize.isPending || finalizeBlocked}
+                            title={
+                              finalizeBlocked
+                                ? "Management Response مطلوبة قبل Finalize."
+                                : "Finalize & Lock"
+                            }
                             onClick={() => {
                               if (
                                 !window.confirm(
