@@ -175,6 +175,12 @@ function notificationTitle(notification: UserNotification) {
     if (event === "exception_due_soon") {
       return `اقترب استحقاق Governance Exception «${title}»`;
     }
+    if (event === "assurance_review_overdue") {
+      return "تأخرت Governance Assurance Review";
+    }
+    if (event === "assurance_review_due_soon") {
+      return "اقترب موعد Governance Assurance Review";
+    }
     if (event === "cadence_overdue") {
       return "تجاوز موعد الاجتماع التنفيذي المستهدف";
     }
@@ -225,6 +231,22 @@ function notificationContext(notification: UserNotification) {
       typeof notification.metadata.event === "string"
         ? notification.metadata.event
         : "";
+    if (
+      event === "assurance_review_due_soon" ||
+      event === "assurance_review_overdue"
+    ) {
+      const nextDue =
+        typeof notification.metadata.next_due_date === "string"
+          ? notification.metadata.next_due_date
+          : "";
+      const lastReview =
+        typeof notification.metadata.latest_finalized_review_date === "string"
+          ? notification.metadata.latest_finalized_review_date
+          : "";
+      return nextDue
+        ? `Assurance due ${nextDue}${lastReview ? " · Last " + lastReview : ""}`
+        : "Assurance Review Cadence";
+    }
     if (event === "cadence_due_soon" || event === "cadence_overdue") {
       const nextDue =
         typeof notification.metadata.next_due_date === "string"
