@@ -835,6 +835,8 @@ export function ExecutiveGovernanceAssuranceCenter({
               <p className="mt-1 text-[9px] text-muted-foreground">
                 لا توجد قيم افتراضية. First Due Date تستخدم فقط حتى أول Review
                 Finalized؛ بعدها يصبح Next Due = آخر Finalized Review + Interval.
+                إنشاء Draft وحده لا يعيد ضبط الدورة؛ Finalize فقط هو الذي يبدأ
+                الدورة التالية.
               </p>
 
               <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
