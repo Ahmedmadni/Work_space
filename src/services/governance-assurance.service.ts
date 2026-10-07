@@ -13,7 +13,14 @@ import type {
   ExecutiveGovernanceReview,
   ExecutiveGovernanceReviewHistory,
   ExecutiveGovernanceReviewsData,
+  AcknowledgeGovernanceAssuranceDistributionInput,
   GovernanceAssuranceConclusion,
+  GovernanceAssuranceDistribution,
+  GovernanceAssuranceDistributionData,
+  GovernanceAssuranceDistributionInboxItem,
+  GovernanceAssuranceDistributionRecipient,
+  GovernanceAssuranceDistributionRecipientStatus,
+  GovernanceAssuranceDistributionStatus,
   GovernanceAssuranceEvidenceItem,
   GovernanceAssuranceEvidenceType,
   GovernanceAssuranceCadenceProfile,
@@ -26,6 +33,7 @@ import type {
   GovernanceAssuranceAttestationStatus,
   GovernanceAssuranceHistoryPoint,
   GovernanceAssuranceMetricComparison,
+  GovernanceAssuranceOwnedDistribution,
   GovernanceAssuranceOwnedSignoff,
   GovernanceAssuranceReviewComparison,
   GovernanceAssuranceSignatoryCandidate,
@@ -34,6 +42,7 @@ import type {
   GovernanceAssuranceSignoffStatus,
   GovernanceReviewStatus,
   SaveGovernanceAssuranceCadenceInput,
+  SaveGovernanceAssuranceDistributionPlanInput,
   SaveGovernanceAssuranceSignoffPlanInput,
   UpdateExecutiveGovernanceReviewInput,
 } from "@/types/governance-assurance";
@@ -51,6 +60,7 @@ import type {
 const LOCAL_KEY = "projectflow.executive-governance-assurance.v1";
 const CADENCE_LOCAL_KEY = "projectflow.executive-governance-assurance-cadence.v1";
 const SIGNOFF_LOCAL_KEY = "projectflow.executive-governance-assurance-signoff.v1";
+const DISTRIBUTION_LOCAL_KEY = "projectflow.executive-governance-assurance-distribution.v1";
 
 interface LocalStore {
   version: 1;
@@ -2162,4 +2172,528 @@ export async function actOnGovernanceAssuranceAttestation(
   );
   writeLocalSignoffs(store);
   return updated;
+}
+
+
+interface LocalDistributionStore {
+  version: 1;
+  distributions: GovernanceAssuranceDistribution[];
+}
+
+function distributionStatus(
+  value: unknown,
+): GovernanceAssuranceDistributionStatus | null {
+  return value === "draft" || value === "distributed" || value === "closed"
+    ? value
+    : null;
+}
+
+function distributionRecipientStatus(
+  value: unknown,
+): GovernanceAssuranceDistributionRecipientStatus | null {
+  return value === "pending" ||
+    value === "acknowledged" ||
+    value === "acknowledged_with_note"
+    ? value
+    : null;
+}
+
+function normalizeDistributionRecipient(
+  value: unknown,
+): GovernanceAssuranceDistributionRecipient | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const status = distributionRecipientStatus(row.status);
+  const version = intOrNull(row.version);
+  if (
+    typeof row.id !== "string" ||
+    typeof row.distribution_id !== "string" ||
+    typeof row.review_id !== "string" ||
+    typeof row.owner_user_id !== "string" ||
+    typeof row.recipient_user_id !== "string" ||
+    typeof row.recipient_name_snapshot !== "string" ||
+    typeof row.created_at !== "string" ||
+    typeof row.updated_at !== "string" ||
+    !status ||
+    version == null
+  ) {
+    return null;
+  }
+
+  return {
+    id: row.id,
+    distribution_id: row.distribution_id,
+    review_id: row.review_id,
+    owner_user_id: row.owner_user_id,
+    recipient_user_id: row.recipient_user_id,
+    recipient_name_snapshot: row.recipient_name_snapshot,
+    recipient_email_snapshot:
+      typeof row.recipient_email_snapshot === "string"
+        ? row.recipient_email_snapshot
+        : null,
+    status,
+    acknowledgement_note:
+      typeof row.acknowledgement_note === "string"
+        ? row.acknowledgement_note
+        : null,
+    acknowledged_at:
+      typeof row.acknowledged_at === "string"
+        ? row.acknowledged_at
+        : null,
+    version,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+function normalizeDistribution(
+  value: unknown,
+): GovernanceAssuranceDistribution | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const status = distributionStatus(row.status);
+  const version = intOrNull(row.version);
+  if (
+    typeof row.id !== "string" ||
+    typeof row.review_id !== "string" ||
+    typeof row.signoff_id !== "string" ||
+    typeof row.owner_user_id !== "string" ||
+    typeof row.created_by !== "string" ||
+    typeof row.created_at !== "string" ||
+    typeof row.updated_at !== "string" ||
+    !status ||
+    version == null
+  ) {
+    return null;
+  }
+
+  return {
+    id: row.id,
+    review_id: row.review_id,
+    signoff_id: row.signoff_id,
+    owner_user_id: row.owner_user_id,
+    status,
+    distribution_note:
+      typeof row.distribution_note === "string"
+        ? row.distribution_note
+        : null,
+    version,
+    distributed_at:
+      typeof row.distributed_at === "string" ? row.distributed_at : null,
+    closed_at: typeof row.closed_at === "string" ? row.closed_at : null,
+    created_by: row.created_by,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    recipients: Array.isArray(row.recipients)
+      ? row.recipients
+          .map(normalizeDistributionRecipient)
+          .filter(
+            (item): item is GovernanceAssuranceDistributionRecipient =>
+              !!item,
+          )
+      : [],
+  };
+}
+
+function readLocalDistributions(): LocalDistributionStore {
+  if (typeof window === "undefined") {
+    return { version: 1, distributions: [] };
+  }
+  try {
+    const parsed = JSON.parse(
+      window.localStorage.getItem(DISTRIBUTION_LOCAL_KEY) ?? "{}",
+    ) as Partial<LocalDistributionStore>;
+    return {
+      version: 1,
+      distributions: Array.isArray(parsed.distributions)
+        ? parsed.distributions
+            .map(normalizeDistribution)
+            .filter(
+              (item): item is GovernanceAssuranceDistribution => !!item,
+            )
+        : [],
+    };
+  } catch {
+    return { version: 1, distributions: [] };
+  }
+}
+
+function writeLocalDistributions(store: LocalDistributionStore) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(DISTRIBUTION_LOCAL_KEY, JSON.stringify(store));
+}
+
+function validateDistributionPlan(
+  input: SaveGovernanceAssuranceDistributionPlanInput,
+) {
+  if ((input.distribution_note?.length ?? 0) > 8000) {
+    throw new Error("Distribution Note طويلة جدًا.");
+  }
+  if (input.recipients.length < 1 || input.recipients.length > 100) {
+    throw new Error("Distribution Register يحتاج من 1 إلى 100 مستلم.");
+  }
+  const ids = new Set(input.recipients.map((row) => row.recipient_user_id));
+  if (ids.size !== input.recipients.length) {
+    throw new Error("يوجد Recipient مكرر.");
+  }
+  for (const recipient of input.recipients) {
+    if (!recipient.recipient_user_id || !recipient.recipient_name.trim()) {
+      throw new Error("هوية كل Recipient مطلوبة.");
+    }
+  }
+}
+
+export async function listGovernanceAssuranceDistributions(): Promise<GovernanceAssuranceDistributionData> {
+  if (isSupabaseBackend()) {
+    const raw = await supabaseRest<Record<string, unknown>>(
+      "rpc/list_executive_governance_assurance_distributions",
+      { method: "POST", body: {} },
+    );
+
+    const owned: GovernanceAssuranceOwnedDistribution[] = Array.isArray(
+      raw.owned,
+    )
+      ? raw.owned.flatMap((item) => {
+          if (!item || typeof item !== "object" || Array.isArray(item)) {
+            return [];
+          }
+          const row = item as Record<string, unknown>;
+          const distribution = normalizeDistribution(row.distribution);
+          const review = normalizeReview(row.review);
+          const signoff = normalizeSignoff(row.signoff);
+          return distribution && review && signoff
+            ? [{ distribution, review, signoff }]
+            : [];
+        })
+      : [];
+
+    const inbox: GovernanceAssuranceDistributionInboxItem[] = Array.isArray(
+      raw.inbox,
+    )
+      ? raw.inbox.flatMap((item) => {
+          if (!item || typeof item !== "object" || Array.isArray(item)) {
+            return [];
+          }
+          const row = item as Record<string, unknown>;
+          const recipient = normalizeDistributionRecipient(row.recipient);
+          const distribution = normalizeDistribution(row.distribution);
+          const review = normalizeReview(row.review);
+          const signoff = normalizeSignoff(row.signoff);
+          return recipient && distribution && review && signoff
+            ? [{
+                recipient,
+                distribution,
+                review,
+                signoff,
+                can_acknowledge: row.can_acknowledge === true,
+              }]
+            : [];
+        })
+      : [];
+
+    return { owned, inbox };
+  }
+
+  const reviews = new Map(
+    readLocal().reviews.map((review) => [review.id, review] as const),
+  );
+  const signoffs = new Map(
+    readLocalSignoffs().signoffs.map((signoff) => [
+      signoff.id,
+      signoff,
+    ] as const),
+  );
+  const distributions = readLocalDistributions().distributions;
+
+  return {
+    owned: distributions.flatMap((distribution) => {
+      const review = reviews.get(distribution.review_id);
+      const signoff = signoffs.get(distribution.signoff_id);
+      return review && signoff
+        ? [{ distribution, review, signoff }]
+        : [];
+    }),
+    inbox: distributions.flatMap((distribution) => {
+      const review = reviews.get(distribution.review_id);
+      const signoff = signoffs.get(distribution.signoff_id);
+      if (!review || !signoff) return [];
+      return distribution.recipients
+        .filter((recipient) => recipient.recipient_user_id === "local-user")
+        .map((recipient) => ({
+          recipient,
+          distribution,
+          review,
+          signoff,
+          can_acknowledge:
+            distribution.status === "distributed" &&
+            recipient.status === "pending",
+        }));
+    }),
+  };
+}
+
+export async function saveGovernanceAssuranceDistributionPlan(
+  input: SaveGovernanceAssuranceDistributionPlanInput,
+): Promise<GovernanceAssuranceDistribution> {
+  validateDistributionPlan(input);
+
+  if (isSupabaseBackend()) {
+    const raw = await supabaseRest<unknown>(
+      "rpc/save_executive_governance_assurance_distribution_plan",
+      {
+        method: "POST",
+        body: {
+          p_review_id: input.review_id,
+          p_expected_distribution_version:
+            input.expected_distribution_version ?? null,
+          p_distribution_note: input.distribution_note ?? null,
+          p_recipients: input.recipients,
+        },
+      },
+    );
+    const distribution = normalizeDistribution(raw);
+    if (!distribution) {
+      throw new Error("عاد الخادم بـDistribution Register غير صالح.");
+    }
+    return distribution;
+  }
+
+  const review = readLocal().reviews.find(
+    (row) => row.id === input.review_id,
+  );
+  const signoff = readLocalSignoffs().signoffs.find(
+    (row) => row.review_id === input.review_id && row.status === "completed",
+  );
+  if (!review || review.status !== "finalized" || !signoff) {
+    throw new Error("Distribution يتطلب Finalized Review وCompleted Sign-off.");
+  }
+
+  const store = readLocalDistributions();
+  const existing = store.distributions.find(
+    (row) => row.review_id === input.review_id,
+  );
+  if (
+    existing &&
+    (input.expected_distribution_version == null ||
+      existing.version !== input.expected_distribution_version)
+  ) {
+    throw new Error("تم تعديل Distribution Register. حدّث البيانات.");
+  }
+  if (!existing && input.expected_distribution_version != null) {
+    throw new Error("تم تعديل Distribution Register. حدّث البيانات.");
+  }
+  if (existing && existing.status !== "draft") {
+    throw new Error("Recipients مقفلة بعد Distribution.");
+  }
+
+  const now = new Date().toISOString();
+  const distributionId = existing?.id ?? crypto.randomUUID();
+  const distribution: GovernanceAssuranceDistribution = {
+    id: distributionId,
+    review_id: review.id,
+    signoff_id: signoff.id,
+    owner_user_id: review.owner_user_id,
+    status: "draft",
+    distribution_note: input.distribution_note?.trim() || null,
+    version: existing ? existing.version + 1 : 1,
+    distributed_at: null,
+    closed_at: null,
+    created_by: review.owner_user_id,
+    created_at: existing?.created_at ?? now,
+    updated_at: now,
+    recipients: input.recipients.map((row) => ({
+      id: crypto.randomUUID(),
+      distribution_id: distributionId,
+      review_id: review.id,
+      owner_user_id: review.owner_user_id,
+      recipient_user_id: row.recipient_user_id,
+      recipient_name_snapshot: row.recipient_name.trim(),
+      recipient_email_snapshot: row.recipient_email?.trim() || null,
+      status: "pending",
+      acknowledgement_note: null,
+      acknowledged_at: null,
+      version: 1,
+      created_at: now,
+      updated_at: now,
+    })),
+  };
+
+  store.distributions = [
+    distribution,
+    ...store.distributions.filter((row) => row.review_id !== review.id),
+  ];
+  writeLocalDistributions(store);
+  return distribution;
+}
+
+export async function distributeGovernanceAssurancePack(
+  distributionId: string,
+  expectedVersion: number,
+): Promise<GovernanceAssuranceDistribution> {
+  if (isSupabaseBackend()) {
+    const raw = await supabaseRest<unknown>(
+      "rpc/distribute_executive_governance_assurance_pack",
+      {
+        method: "POST",
+        body: {
+          p_distribution_id: distributionId,
+          p_expected_version: expectedVersion,
+        },
+      },
+    );
+    const distribution = normalizeDistribution(raw);
+    if (!distribution) throw new Error("تعذر قراءة نتيجة Distribution.");
+    return distribution;
+  }
+
+  const store = readLocalDistributions();
+  const existing = store.distributions.find((row) => row.id === distributionId);
+  if (!existing) throw new Error("Distribution غير موجودة.");
+  if (existing.status !== "draft" || existing.version !== expectedVersion) {
+    throw new Error("Distribution تغيرت أو لم تعد Draft.");
+  }
+  const signoff = readLocalSignoffs().signoffs.find(
+    (row) => row.id === existing.signoff_id,
+  );
+  if (!signoff || signoff.status !== "completed") {
+    throw new Error("Completed Sign-off مطلوب قبل Distribution.");
+  }
+  const now = new Date().toISOString();
+  const distribution: GovernanceAssuranceDistribution = {
+    ...existing,
+    status: "distributed",
+    distributed_at: now,
+    version: existing.version + 1,
+    updated_at: now,
+  };
+  store.distributions = store.distributions.map((row) =>
+    row.id === distribution.id ? distribution : row,
+  );
+  writeLocalDistributions(store);
+  return distribution;
+}
+
+export async function acknowledgeGovernanceAssuranceDistribution(
+  input: AcknowledgeGovernanceAssuranceDistributionInput,
+): Promise<GovernanceAssuranceDistribution> {
+  if (
+    input.decision === "acknowledged_with_note" &&
+    !input.note?.trim()
+  ) {
+    throw new Error("Acknowledgement Note مطلوبة.");
+  }
+  if ((input.note?.length ?? 0) > 8000) {
+    throw new Error("Acknowledgement Note طويلة جدًا.");
+  }
+
+  if (isSupabaseBackend()) {
+    const raw = await supabaseRest<unknown>(
+      "rpc/acknowledge_executive_governance_assurance_distribution",
+      {
+        method: "POST",
+        body: {
+          p_recipient_id: input.recipient_id,
+          p_expected_version: input.expected_version,
+          p_decision: input.decision,
+          p_note: input.note ?? null,
+        },
+      },
+    );
+    const distribution = normalizeDistribution(raw);
+    if (!distribution) throw new Error("تعذر قراءة Acknowledgement.");
+    return distribution;
+  }
+
+  const store = readLocalDistributions();
+  const distribution = store.distributions.find((row) =>
+    row.recipients.some((recipient) => recipient.id === input.recipient_id),
+  );
+  if (!distribution || distribution.status !== "distributed") {
+    throw new Error("Distribution ليست مفتوحة للـAcknowledgement.");
+  }
+  const recipient = distribution.recipients.find(
+    (row) => row.id === input.recipient_id,
+  )!;
+  if (recipient.recipient_user_id !== "local-user") {
+    throw new Error("Local mode لا يمكنه الإقرار نيابةً عن مستخدم آخر.");
+  }
+  if (
+    recipient.status !== "pending" ||
+    recipient.version !== input.expected_version
+  ) {
+    throw new Error("Recipient record تغير. حدّث البيانات.");
+  }
+
+  const now = new Date().toISOString();
+  const recipients = distribution.recipients.map((row) =>
+    row.id === recipient.id
+      ? {
+          ...row,
+          status: input.decision,
+          acknowledgement_note: input.note?.trim() || null,
+          acknowledged_at: now,
+          version: row.version + 1,
+          updated_at: now,
+        }
+      : row,
+  );
+  const updated: GovernanceAssuranceDistribution = {
+    ...distribution,
+    recipients,
+    version: distribution.version + 1,
+    updated_at: now,
+  };
+  store.distributions = store.distributions.map((row) =>
+    row.id === updated.id ? updated : row,
+  );
+  writeLocalDistributions(store);
+  return updated;
+}
+
+export async function closeGovernanceAssuranceDistribution(
+  distributionId: string,
+  expectedVersion: number,
+): Promise<GovernanceAssuranceDistribution> {
+  if (isSupabaseBackend()) {
+    const raw = await supabaseRest<unknown>(
+      "rpc/close_executive_governance_assurance_distribution",
+      {
+        method: "POST",
+        body: {
+          p_distribution_id: distributionId,
+          p_expected_version: expectedVersion,
+        },
+      },
+    );
+    const distribution = normalizeDistribution(raw);
+    if (!distribution) throw new Error("تعذر قراءة Closure.");
+    return distribution;
+  }
+
+  const store = readLocalDistributions();
+  const existing = store.distributions.find((row) => row.id === distributionId);
+  if (!existing) throw new Error("Distribution غير موجودة.");
+  if (
+    existing.status !== "distributed" ||
+    existing.version !== expectedVersion
+  ) {
+    throw new Error("Distribution تغيرت أو ليست جاهزة للإغلاق.");
+  }
+  if (existing.recipients.some((row) => row.status === "pending")) {
+    throw new Error("لا يمكن الإغلاق مع Pending Acknowledgements.");
+  }
+
+  const now = new Date().toISOString();
+  const distribution: GovernanceAssuranceDistribution = {
+    ...existing,
+    status: "closed",
+    closed_at: now,
+    version: existing.version + 1,
+    updated_at: now,
+  };
+  store.distributions = store.distributions.map((row) =>
+    row.id === distribution.id ? distribution : row,
+  );
+  writeLocalDistributions(store);
+  return distribution;
 }
