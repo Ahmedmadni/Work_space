@@ -424,7 +424,9 @@ declare
   v_signoff public.executive_governance_review_signoffs%rowtype;
   v_prior_pending integer;
   v_project_id text;
+  v_next_project_id text;
   v_review public.executive_governance_reviews%rowtype;
+  v_next_attestation public.executive_governance_review_attestations%rowtype;
 begin
   if auth.uid() is null then
     raise exception 'AUTH_REQUIRED' using errcode = '42501';
@@ -565,6 +567,52 @@ begin
       'governance-assurance-signoff-result:' || v_attestation.id::text ||
         ':v' || v_attestation.version::text
     );
+  end if;
+
+  if p_decision <> 'declined'
+     and v_attestation.sequence_no < 3
+  then
+    select * into v_next_attestation
+    from public.executive_governance_review_attestations a
+    where a.signoff_id = v_signoff.id
+      and a.sequence_no = v_attestation.sequence_no + 1
+      and a.status = 'pending'
+    limit 1;
+
+    if found then
+      v_next_project_id :=
+        public.projectflow_governance_notification_project(
+          v_next_attestation.assignee_user_id,
+          v_review.source_window_meeting_ids
+        );
+
+      if v_next_project_id is not null
+         and v_next_attestation.assignee_user_id <> auth.uid()
+      then
+        perform public.enqueue_user_notification(
+          v_next_attestation.assignee_user_id,
+          v_next_project_id,
+          'governance_alert',
+          auth.uid(),
+          null,
+          null,
+          null,
+          null,
+          jsonb_build_object(
+            'event', 'assurance_signoff_ready',
+            'review_id', v_review.id,
+            'review_period', v_review.period_label,
+            'review_date', v_review.review_date,
+            'signoff_id', v_signoff.id,
+            'role', v_next_attestation.role,
+            'sequence_no', v_next_attestation.sequence_no
+          ),
+          'governance-assurance-signoff-ready:' ||
+            v_next_attestation.id::text || ':v' ||
+            v_next_attestation.version::text
+        );
+      end if;
+    end if;
   end if;
 
   return public.projectflow_governance_signoff_json(v_signoff);
