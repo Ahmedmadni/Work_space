@@ -78,6 +78,7 @@ export interface GovernanceDecisionPattern {
   rejected_count: number;
   first_meeting_date: string;
   latest_meeting_date: string;
+  latest_meeting_id: string;
   latest_outcome: "decided" | "deferred" | "rejected";
 }
 
