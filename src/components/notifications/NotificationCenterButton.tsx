@@ -49,6 +49,17 @@ const FILTERS: Array<{ value: NotificationFilter; label: string }> = [
   { value: "governance", label: "الحوكمة" },
 ];
 
+const GOVERNANCE_METRIC_LABELS: Record<string, string> = {
+  decision_resolution: "Decision Resolution",
+  deferred_rate: "Deferred Rate",
+  action_completion: "Action Completion",
+  overdue_open: "Overdue Open Rate",
+  unowned_open: "Unowned Open Rate",
+  on_time_completion: "On-time Completion",
+  median_completion_days: "Median Completion Days",
+  repeated_deferrals: "Repeated Deferrals",
+};
+
 const ROLE_LABELS: Record<string, string> = {
   owner: "المالك",
   admin: "مسؤول",
@@ -227,10 +238,14 @@ function notificationContext(notification: UserNotification) {
         ? `Next due ${nextDue}${lastMeeting ? " · Last " + lastMeeting : ""}`
         : "Operating Rhythm";
     }
-    const metric =
+    const metricKey =
       typeof notification.metadata.metric_key === "string"
         ? notification.metadata.metric_key
-        : "Governance Target";
+        : "";
+    const metric =
+      GOVERNANCE_METRIC_LABELS[metricKey] ??
+      metricKey ??
+      "Governance Target";
     const dueDate =
       typeof notification.metadata.due_date === "string"
         ? notification.metadata.due_date
@@ -411,7 +426,7 @@ export function NotificationCenterButton() {
                   لا توجد إشعارات هنا
                 </p>
                 <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  ستظهر الإشارات والردود وتغييرات الوصول إلى المشاريع في هذا المكان.
+                  ستظهر هنا الإشارات والمهام والمخاطر والتنبيهات الاستراتيجية والتنفيذية والحوكمة.
                 </p>
               </div>
             </div>
