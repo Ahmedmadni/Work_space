@@ -8,6 +8,10 @@ import type {
   ProjectRisk,
 } from "@/types/action-center";
 import type {
+  ExecutiveMeetingActionItem,
+  ExecutiveStrategyMeeting,
+} from "@/types/executive-meetings";
+import type {
   ObjectiveBenefit,
   ObjectiveForecast,
   ObjectiveRecoveryPlan,
@@ -83,6 +87,8 @@ export interface ExecutiveStrategyBoardPack {
     execution_overdue: number;
     execution_blocked: number;
     execution_average_progress: number;
+    open_meeting_actions: number;
+    overdue_meeting_actions: number;
   };
   decisions_required: ExecutiveDecisionRequired[];
   top_risks: ExecutiveRiskItem[];
@@ -93,4 +99,6 @@ export interface ExecutiveStrategyBoardPack {
   boards: BoardWithContext[];
   execution: ProjectExecutionSummary | null;
   project_decisions: ProjectDecision[];
+  open_meeting_actions: ExecutiveMeetingActionItem[];
+  latest_completed_meeting: ExecutiveStrategyMeeting | null;
 }

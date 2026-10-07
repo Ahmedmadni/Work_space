@@ -7,6 +7,7 @@ import type {
   ProjectDecision,
   ProjectRisk,
 } from "@/types/action-center";
+import type { ExecutiveMeetingGovernanceData } from "@/types/executive-meetings";
 import type {
   PortfolioStrategyData,
   RecoveryPlanData,
@@ -32,6 +33,7 @@ export interface BuildExecutiveStrategyBoardPackInput {
   projects: Project[];
   boards: BoardWithContext[];
   execution: ProjectExecutionSummary | null;
+  meetings: ExecutiveMeetingGovernanceData;
 }
 
 function todayKey() {
@@ -372,6 +374,29 @@ export function buildExecutiveStrategyBoardPack(
   );
 
   const decisionsRequired = buildDecisionAgenda(input);
+  const completedMeetings = input.meetings.meetings
+    .filter((meeting) => meeting.status === "completed")
+    .slice()
+    .sort((a, b) =>
+      b.meeting_date.localeCompare(a.meeting_date) ||
+      b.updated_at.localeCompare(a.updated_at),
+    );
+  const latestCompletedMeeting = completedMeetings[0] ?? null;
+  const openMeetingActions = completedMeetings
+    .flatMap((meeting) =>
+      meeting.action_items.filter(
+        (action) =>
+          action.status === "open" || action.status === "in_progress",
+      ),
+    )
+    .sort((a, b) => {
+      const aDue = a.due_date ?? "9999-12-31";
+      const bDue = b.due_date ?? "9999-12-31";
+      return aDue.localeCompare(bDue);
+    });
+  const overdueMeetingActions = openMeetingActions.filter(
+    (action) => !!action.due_date && action.due_date < today,
+  ).length;
 
   return {
     generated_at: new Date().toISOString(),
@@ -426,6 +451,8 @@ export function buildExecutiveStrategyBoardPack(
       execution_overdue: input.execution?.overdue ?? 0,
       execution_blocked: input.execution?.blocked ?? 0,
       execution_average_progress: input.execution?.average_progress ?? 0,
+      open_meeting_actions: openMeetingActions.length,
+      overdue_meeting_actions: overdueMeetingActions,
     },
     decisions_required: decisionsRequired,
     top_risks: buildTopRisks(input),
@@ -436,6 +463,8 @@ export function buildExecutiveStrategyBoardPack(
     boards: input.boards,
     execution: input.execution,
     project_decisions: input.decisions,
+    open_meeting_actions: openMeetingActions,
+    latest_completed_meeting: latestCompletedMeeting,
   };
 }
 
@@ -557,6 +586,32 @@ export function executiveStrategyBoardPackCsv(
         row.risk.owner_name ?? "",
         row.risk.due_date ?? "",
         row.risk.mitigation ?? row.risk.description ?? "",
+      ]),
+    );
+  }
+
+  lines.push("");
+  lines.push(
+    csvLine([
+      "Section",
+      "Meeting Action",
+      "Owner",
+      "Objective",
+      "Project",
+      "Due Date",
+      "Status",
+    ]),
+  );
+  for (const action of pack.open_meeting_actions) {
+    lines.push(
+      csvLine([
+        "Meeting Carryover",
+        action.title,
+        action.owner_name ?? "",
+        action.objective_title ?? "",
+        action.project_name ?? "",
+        action.due_date ?? "",
+        action.status,
       ]),
     );
   }
