@@ -165,6 +165,8 @@ declare
   v_user_id uuid;
   v_name text;
   v_email text;
+  v_auth_name text;
+  v_auth_email text;
   v_count integer := 0;
   v_distinct_users integer;
   v_any_acted boolean;
@@ -290,9 +292,18 @@ begin
         using errcode = '22023';
     end;
 
-    if not exists (
-      select 1 from auth.users u where u.id = v_user_id
-    ) then
+    select
+      coalesce(
+        nullif(trim(u.raw_user_meta_data->>'full_name'), ''),
+        nullif(trim(u.raw_user_meta_data->>'name'), ''),
+        nullif(trim(u.email), '')
+      ),
+      nullif(trim(u.email), '')
+    into v_auth_name, v_auth_email
+    from auth.users u
+    where u.id = v_user_id;
+
+    if not found then
       raise exception 'SIGNOFF_ASSIGNEE_NOT_FOUND'
         using errcode = '22023';
     end if;
@@ -308,8 +319,14 @@ begin
         using errcode = '22023';
     end if;
 
-    v_name := trim(v_assignment->>'assignee_name');
-    v_email := nullif(trim(coalesce(v_assignment->>'assignee_email', '')), '');
+    v_name := coalesce(
+      v_auth_name,
+      trim(v_assignment->>'assignee_name')
+    );
+    v_email := coalesce(
+      v_auth_email,
+      nullif(trim(coalesce(v_assignment->>'assignee_email', '')), '')
+    );
 
     insert into public.executive_governance_review_attestations (
       signoff_id,
