@@ -236,6 +236,7 @@ function buildDecisionPatterns(
       ).length,
       first_meeting_date: first.meeting.meeting_date,
       latest_meeting_date: latest.meeting.meeting_date,
+      latest_meeting_id: latest.meeting.id,
       latest_outcome: latest.decision.outcome,
     });
   }
@@ -254,16 +255,10 @@ function repeatedOpenSources(
   meetings: ExecutiveStrategyMeeting[],
   allPatterns: GovernanceDecisionPattern[],
 ) {
-  const ids = new Set(
-    meetings.flatMap((meeting) =>
-      meeting.decisions
-        .map((decision) => decision.source_decision_id)
-        .filter((id): id is string => !!id),
-    ),
-  );
+  const meetingIds = new Set(meetings.map((meeting) => meeting.id));
   return allPatterns.filter(
     (pattern) =>
-      ids.has(pattern.source_decision_id) &&
+      meetingIds.has(pattern.latest_meeting_id) &&
       pattern.deferred_count >= 2 &&
       pattern.latest_outcome === "deferred",
   ).length;
