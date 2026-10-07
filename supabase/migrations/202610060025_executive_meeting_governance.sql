@@ -1,4 +1,5 @@
 -- Phase 37: Executive Decision Governance & Meeting Outcomes.
+-- Governance rules are enforced server-side; UI validation is advisory only.
 
 insert into public.projectflow_schema_versions (version, label)
 values (25, 'executive-decision-governance-meeting-outcomes')
