@@ -301,3 +301,88 @@ export interface ActOnGovernanceAssuranceAttestationInput {
   statement: string;
   reservation?: string | null;
 }
+
+
+export type GovernanceAssuranceDistributionStatus =
+  | "draft"
+  | "distributed"
+  | "closed";
+
+export type GovernanceAssuranceDistributionRecipientStatus =
+  | "pending"
+  | "acknowledged"
+  | "acknowledged_with_note";
+
+export interface GovernanceAssuranceDistributionRecipient {
+  id: string;
+  distribution_id: string;
+  review_id: string;
+  owner_user_id: string;
+  recipient_user_id: string;
+  recipient_name_snapshot: string;
+  recipient_email_snapshot: string | null;
+  status: GovernanceAssuranceDistributionRecipientStatus;
+  acknowledgement_note: string | null;
+  acknowledged_at: string | null;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GovernanceAssuranceDistribution {
+  id: string;
+  review_id: string;
+  signoff_id: string;
+  owner_user_id: string;
+  status: GovernanceAssuranceDistributionStatus;
+  distribution_note: string | null;
+  version: number;
+  distributed_at: string | null;
+  closed_at: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  recipients: GovernanceAssuranceDistributionRecipient[];
+}
+
+export interface GovernanceAssuranceOwnedDistribution {
+  distribution: GovernanceAssuranceDistribution;
+  review: ExecutiveGovernanceReview;
+  signoff: GovernanceAssuranceSignoff;
+}
+
+export interface GovernanceAssuranceDistributionInboxItem {
+  recipient: GovernanceAssuranceDistributionRecipient;
+  distribution: GovernanceAssuranceDistribution;
+  review: ExecutiveGovernanceReview;
+  signoff: GovernanceAssuranceSignoff;
+  can_acknowledge: boolean;
+}
+
+export interface GovernanceAssuranceDistributionData {
+  owned: GovernanceAssuranceOwnedDistribution[];
+  inbox: GovernanceAssuranceDistributionInboxItem[];
+}
+
+export interface GovernanceAssuranceDistributionRecipientInput {
+  recipient_user_id: string;
+  recipient_name: string;
+  recipient_email?: string | null;
+}
+
+export interface SaveGovernanceAssuranceDistributionPlanInput {
+  review_id: string;
+  expected_distribution_version?: number | null;
+  distribution_note?: string | null;
+  recipients: GovernanceAssuranceDistributionRecipientInput[];
+}
+
+export interface AcknowledgeGovernanceAssuranceDistributionInput {
+  recipient_id: string;
+  expected_version: number;
+  decision: Extract<
+    GovernanceAssuranceDistributionRecipientStatus,
+    "acknowledged" | "acknowledged_with_note"
+  >;
+  note?: string | null;
+}
