@@ -14,6 +14,7 @@ import {
   UserCheck,
   UserMinus,
   UserPlus,
+  Target,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -45,7 +46,19 @@ const FILTERS: Array<{ value: NotificationFilter; label: string }> = [
   { value: "risks", label: "المخاطر" },
   { value: "strategy", label: "الاستراتيجية" },
   { value: "executive", label: "تنفيذي" },
+  { value: "governance", label: "الحوكمة" },
 ];
+
+const GOVERNANCE_METRIC_LABELS: Record<string, string> = {
+  decision_resolution: "Decision Resolution",
+  deferred_rate: "Deferred Rate",
+  action_completion: "Action Completion",
+  overdue_open: "Overdue Open Rate",
+  unowned_open: "Unowned Open Rate",
+  on_time_completion: "On-time Completion",
+  median_completion_days: "Median Completion Days",
+  repeated_deferrals: "Repeated Deferrals",
+};
 
 const ROLE_LABELS: Record<string, string> = {
   owner: "المالك",
@@ -65,6 +78,7 @@ function notificationIcon(notification: UserNotification) {
   if (notification.kind === "risk_escalation") return ShieldAlert;
   if (notification.kind === "strategy_schedule") return CalendarClock;
   if (notification.kind === "executive_action") return Gavel;
+  if (notification.kind === "governance_alert") return Target;
   return UserMinus;
 }
 
@@ -120,17 +134,6 @@ function notificationTitle(notification: UserNotification) {
         ? `تأخرت معالجة الخطر «${riskTitle}»`
         : `تنبيه مخاطر: «${riskTitle}»`;
   }
-  if (notification.kind === "executive_action") {
-    const meeting =
-      typeof notification.metadata.meeting_title === "string"
-        ? notification.metadata.meeting_title
-        : "اجتماع تنفيذي";
-    const dueDate =
-      typeof notification.metadata.due_date === "string"
-        ? notification.metadata.due_date
-        : "";
-    return dueDate ? `${meeting} · ${dueDate}` : meeting;
-  }
   if (notification.kind === "strategy_schedule") {
     const event =
       typeof notification.metadata.event === "string"
@@ -157,6 +160,29 @@ function notificationTitle(notification: UserNotification) {
       ? `تصعيد إجراء تنفيذي متأخر: «${title}»`
       : `اقترب استحقاق الإجراء التنفيذي «${title}»`;
   }
+  if (notification.kind === "governance_alert") {
+    const event =
+      typeof notification.metadata.event === "string"
+        ? notification.metadata.event
+        : "";
+    const title =
+      typeof notification.metadata.title === "string"
+        ? notification.metadata.title
+        : "Governance Exception";
+    if (event === "exception_overdue") {
+      return `تأخر Corrective Action: «${title}»`;
+    }
+    if (event === "exception_due_soon") {
+      return `اقترب استحقاق Governance Exception «${title}»`;
+    }
+    if (event === "cadence_overdue") {
+      return "تجاوز موعد الاجتماع التنفيذي المستهدف";
+    }
+    if (event === "cadence_due_soon") {
+      return "اقترب موعد الاجتماع التنفيذي المستهدف";
+    }
+    return "تنبيه حوكمة";
+  }
   if (notification.kind === "task_due") {
     const event =
       typeof notification.metadata.event === "string"
@@ -182,6 +208,48 @@ function notificationContext(notification: UserNotification) {
         ? notification.metadata.due_date
         : "";
     return dueDate ? `${objective} · ${dueDate}` : objective;
+  }
+  if (notification.kind === "executive_action") {
+    const meeting =
+      typeof notification.metadata.meeting_title === "string"
+        ? notification.metadata.meeting_title
+        : "اجتماع تنفيذي";
+    const dueDate =
+      typeof notification.metadata.due_date === "string"
+        ? notification.metadata.due_date
+        : "";
+    return dueDate ? `${meeting} · ${dueDate}` : meeting;
+  }
+  if (notification.kind === "governance_alert") {
+    const event =
+      typeof notification.metadata.event === "string"
+        ? notification.metadata.event
+        : "";
+    if (event === "cadence_due_soon" || event === "cadence_overdue") {
+      const nextDue =
+        typeof notification.metadata.next_due_date === "string"
+          ? notification.metadata.next_due_date
+          : "";
+      const lastMeeting =
+        typeof notification.metadata.last_meeting_date === "string"
+          ? notification.metadata.last_meeting_date
+          : "";
+      return nextDue
+        ? `Next due ${nextDue}${lastMeeting ? " · Last " + lastMeeting : ""}`
+        : "Operating Rhythm";
+    }
+    const metricKey =
+      typeof notification.metadata.metric_key === "string"
+        ? notification.metadata.metric_key
+        : "";
+    const metric =
+      GOVERNANCE_METRIC_LABELS[metricKey] ??
+      (metricKey || "Governance Target");
+    const dueDate =
+      typeof notification.metadata.due_date === "string"
+        ? notification.metadata.due_date
+        : "";
+    return dueDate ? `${metric} · ${dueDate}` : metric;
   }
   if (notification.document_name) {
     return notification.page_number
@@ -238,7 +306,8 @@ export function NotificationCenterButton() {
 
     if (
       notification.kind === "strategy_schedule" ||
-      notification.kind === "executive_action"
+      notification.kind === "executive_action" ||
+      notification.kind === "governance_alert"
     ) {
       void navigate({ to: "/" });
       return;
@@ -306,7 +375,7 @@ export function NotificationCenterButton() {
                 الإشعارات
               </SheetTitle>
               <SheetDescription className="mt-1">
-                الإشارات، المهام، المخاطر، المواعيد الاستراتيجية والإجراءات التنفيذية.
+                الإشارات، المهام، المخاطر، المواعيد الاستراتيجية والتنبيهات التنفيذية والحوكمة.
               </SheetDescription>
             </div>
 
@@ -324,7 +393,7 @@ export function NotificationCenterButton() {
           </div>
         </SheetHeader>
 
-        <div className="grid grid-cols-2 gap-1 border-b border-border bg-muted/20 p-1.5 sm:grid-cols-7">
+        <div className="grid grid-cols-2 gap-1 border-b border-border bg-muted/20 p-1.5 sm:grid-cols-8">
           {FILTERS.map((item) => (
             <button
               key={item.value}
@@ -356,7 +425,7 @@ export function NotificationCenterButton() {
                   لا توجد إشعارات هنا
                 </p>
                 <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  ستظهر الإشارات والردود وتغييرات الوصول إلى المشاريع في هذا المكان.
+                  ستظهر هنا الإشارات والمهام والمخاطر والتنبيهات الاستراتيجية والتنفيذية والحوكمة.
                 </p>
               </div>
             </div>
