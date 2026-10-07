@@ -203,3 +203,101 @@ export interface GovernanceAssuranceHistoryPoint {
   overdue_exceptions: number;
   evidence_count: number;
 }
+
+
+export type GovernanceAssuranceSignoffStatus =
+  | "open"
+  | "completed"
+  | "declined";
+
+export type GovernanceAssuranceAttestationRole =
+  | "prepared_by"
+  | "reviewed_by"
+  | "approved_by";
+
+export type GovernanceAssuranceAttestationStatus =
+  | "pending"
+  | "attested"
+  | "attested_with_reservation"
+  | "declined";
+
+export interface GovernanceAssuranceSignatoryCandidate {
+  user_id: string;
+  display_name: string;
+  email: string | null;
+  source: "attendee" | "chair" | "creator";
+}
+
+export interface GovernanceAssuranceAttestation {
+  id: string;
+  signoff_id: string;
+  review_id: string;
+  owner_user_id: string;
+  role: GovernanceAssuranceAttestationRole;
+  sequence_no: number;
+  assignee_user_id: string;
+  assignee_name_snapshot: string;
+  assignee_email_snapshot: string | null;
+  status: GovernanceAssuranceAttestationStatus;
+  statement: string | null;
+  reservation: string | null;
+  acted_at: string | null;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GovernanceAssuranceSignoff {
+  id: string;
+  review_id: string;
+  owner_user_id: string;
+  status: GovernanceAssuranceSignoffStatus;
+  version: number;
+  completed_at: string | null;
+  declined_at: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  attestations: GovernanceAssuranceAttestation[];
+}
+
+export interface GovernanceAssuranceOwnedSignoff {
+  signoff: GovernanceAssuranceSignoff;
+  review: ExecutiveGovernanceReview;
+}
+
+export interface GovernanceAssuranceAttestationInboxItem {
+  attestation: GovernanceAssuranceAttestation;
+  signoff: GovernanceAssuranceSignoff;
+  review: ExecutiveGovernanceReview;
+  can_act: boolean;
+}
+
+export interface GovernanceAssuranceSignoffData {
+  owned: GovernanceAssuranceOwnedSignoff[];
+  inbox: GovernanceAssuranceAttestationInboxItem[];
+}
+
+export interface GovernanceAssuranceSignoffAssignmentInput {
+  role: GovernanceAssuranceAttestationRole;
+  assignee_user_id: string;
+  assignee_name: string;
+  assignee_email?: string | null;
+}
+
+export interface SaveGovernanceAssuranceSignoffPlanInput {
+  review_id: string;
+  expected_signoff_version?: number | null;
+  assignments: GovernanceAssuranceSignoffAssignmentInput[];
+}
+
+export interface ActOnGovernanceAssuranceAttestationInput {
+  attestation_id: string;
+  expected_version: number;
+  decision: Extract<
+    GovernanceAssuranceAttestationStatus,
+    "attested" | "attested_with_reservation" | "declined"
+  >;
+  statement: string;
+  reservation?: string | null;
+}
