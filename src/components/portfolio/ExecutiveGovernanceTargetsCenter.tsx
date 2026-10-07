@@ -283,7 +283,7 @@ export function ExecutiveGovernanceTargetsCenter({
 
   useEffect(() => {
     setDraft(profileDraft(profile));
-  }, [profile?.version]);
+  }, [profile]);
 
   const trends = useMemo(
     () =>
