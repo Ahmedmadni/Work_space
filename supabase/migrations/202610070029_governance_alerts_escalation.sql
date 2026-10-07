@@ -366,8 +366,7 @@ begin
             'target_version', v_targets.version
           ),
           'governance-cadence:' || auth.uid()::text || ':' ||
-            v_targets.version::text || ':' || v_next_due::text || ':' ||
-            v_event
+            v_next_due::text || ':' || v_event
         );
 
         if v_id is not null then
@@ -512,8 +511,7 @@ begin
         'source', 'server_scheduler'
       ),
       'governance-cadence:' || v_targets.owner_user_id::text || ':' ||
-        v_targets.version::text || ':' || v_next_due::text || ':' ||
-        v_event
+        v_next_due::text || ':' || v_event
     );
 
     if v_id is not null then
