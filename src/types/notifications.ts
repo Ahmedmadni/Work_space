@@ -8,7 +8,8 @@ export type NotificationKind =
   | "task_status"
   | "task_due"
   | "risk_escalation"
-  | "strategy_schedule";
+  | "strategy_schedule"
+  | "executive_action";
 
 export type NotificationFilter =
   | "all"
@@ -16,7 +17,8 @@ export type NotificationFilter =
   | "mentions"
   | "tasks"
   | "risks"
-  | "strategy";
+  | "strategy"
+  | "executive";
 
 export interface UserNotification {
   id: string;
