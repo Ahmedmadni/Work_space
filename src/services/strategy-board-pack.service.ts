@@ -708,8 +708,9 @@ export function downloadExecutiveStrategyBoardPackCsv(
   const blob = new Blob(
     [executiveStrategyBoardPackCsv(pack, governanceTargets)],
     {
-    type: "text/csv;charset=utf-8",
-  });
+      type: "text/csv;charset=utf-8",
+    },
+  );
   const href = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   const date = pack.generated_at.slice(0, 10);
