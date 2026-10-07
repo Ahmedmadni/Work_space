@@ -8,6 +8,7 @@ import type {
   ProjectRisk,
 } from "@/types/action-center";
 import type { ExecutiveMeetingGovernanceData } from "@/types/executive-meetings";
+import type { ExecutiveGovernanceTargetEvaluation } from "@/types/governance-targets";
 import type {
   PortfolioStrategyData,
   RecoveryPlanData,
@@ -482,6 +483,7 @@ function csvLine(values: unknown[]) {
 
 export function executiveStrategyBoardPackCsv(
   pack: ExecutiveStrategyBoardPack,
+  governanceTargets?: ExecutiveGovernanceTargetEvaluation | null,
 ) {
   const lines: string[] = [
     csvLine([
@@ -640,13 +642,72 @@ export function executiveStrategyBoardPackCsv(
     );
   }
 
+  if (governanceTargets) {
+    lines.push("");
+    lines.push(
+      csvLine([
+        "Section",
+        "Metric",
+        "Actual",
+        "Operator",
+        "Target",
+        "Unit",
+        "Status",
+        "Gap",
+      ]),
+    );
+    for (const row of governanceTargets.assessments) {
+      lines.push(
+        csvLine([
+          "Governance Target",
+          row.label,
+          row.actual ?? "",
+          row.operator === "gte" ? ">=" : "<=",
+          row.target ?? "",
+          row.unit,
+          row.status,
+          row.gap ?? "",
+        ]),
+      );
+    }
+
+    lines.push("");
+    lines.push(
+      csvLine([
+        "Section",
+        "Cadence Days",
+        "Warning Days",
+        "Last Finalized Meeting",
+        "Next Due",
+        "Warning Date",
+        "Days To Due",
+        "Status",
+      ]),
+    );
+    lines.push(
+      csvLine([
+        "Operating Rhythm",
+        governanceTargets.rhythm.cadence_days ?? "",
+        governanceTargets.rhythm.warning_days_before ?? "",
+        governanceTargets.rhythm.last_finalized_meeting_date ?? "",
+        governanceTargets.rhythm.next_due_date ?? "",
+        governanceTargets.rhythm.warning_date ?? "",
+        governanceTargets.rhythm.days_to_due ?? "",
+        governanceTargets.rhythm.status,
+      ]),
+    );
+  }
+
   return "\uFEFF" + lines.join("\r\n");
 }
 
 export function downloadExecutiveStrategyBoardPackCsv(
   pack: ExecutiveStrategyBoardPack,
+  governanceTargets?: ExecutiveGovernanceTargetEvaluation | null,
 ) {
-  const blob = new Blob([executiveStrategyBoardPackCsv(pack)], {
+  const blob = new Blob(
+    [executiveStrategyBoardPackCsv(pack, governanceTargets)],
+    {
     type: "text/csv;charset=utf-8",
   });
   const href = URL.createObjectURL(blob);
