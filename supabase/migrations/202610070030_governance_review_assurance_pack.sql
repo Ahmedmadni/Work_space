@@ -446,6 +446,13 @@ as $projectflow$
 declare
   v_review public.executive_governance_reviews%rowtype;
   v_verified_exceptions jsonb := '[]'::jsonb;
+  v_targets public.executive_governance_targets%rowtype;
+  v_latest_meeting_date date;
+  v_next_due date;
+  v_warning_date date;
+  v_days_to_due integer;
+  v_rhythm_status text;
+  v_verified_rhythm jsonb;
 begin
   if char_length(trim(coalesce(p_period_label, ''))) not between 1 and 180
      or p_review_date is null
@@ -503,6 +510,49 @@ begin
       from jsonb_array_elements(p_exceptions_snapshot)
     );
 
+  select * into v_targets
+  from public.executive_governance_targets
+  where owner_user_id = auth.uid();
+
+  select max(m.meeting_date)
+  into v_latest_meeting_date
+  from public.executive_strategy_meetings m
+  where m.id in (
+    select value::uuid
+    from jsonb_array_elements_text(p_source_window_meeting_ids)
+  )
+    and m.status = 'completed';
+
+  if v_targets.meeting_cadence_days is null then
+    v_next_due := null;
+    v_warning_date := null;
+    v_days_to_due := null;
+    v_rhythm_status := 'no_target';
+  else
+    v_next_due := v_latest_meeting_date + v_targets.meeting_cadence_days;
+    v_warning_date := case
+      when v_targets.cadence_warning_days_before is null then null
+      else v_next_due - v_targets.cadence_warning_days_before
+    end;
+    v_days_to_due := v_next_due - current_date;
+    v_rhythm_status := case
+      when current_date > v_next_due then 'overdue'
+      when v_warning_date is not null and current_date >= v_warning_date
+        then 'due_soon'
+      else 'on_schedule'
+    end;
+  end if;
+
+  v_verified_rhythm := jsonb_build_object(
+    'cadence_days', v_targets.meeting_cadence_days,
+    'warning_days_before', v_targets.cadence_warning_days_before,
+    'last_finalized_meeting_date', v_latest_meeting_date,
+    'next_due_date', v_next_due,
+    'warning_date', v_warning_date,
+    'days_to_due', v_days_to_due,
+    'status', v_rhythm_status
+  );
+
   insert into public.executive_governance_reviews (
     owner_user_id,
     period_label,
@@ -531,10 +581,10 @@ begin
     p_expected_target_version,
     p_source_window_meeting_ids,
     p_target_assessments_snapshot,
-    p_operating_rhythm_snapshot,
+    v_verified_rhythm,
     v_verified_exceptions,
     p_evidence_snapshot,
-    p_source_generated_at,
+    now(),
     auth.uid()
   )
   returning * into v_review;
