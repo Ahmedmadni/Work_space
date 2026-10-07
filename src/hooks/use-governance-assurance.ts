@@ -4,14 +4,19 @@ import { toast } from "sonner";
 import {
   createExecutiveGovernanceReview,
   finalizeExecutiveGovernanceReview,
+  actOnGovernanceAssuranceAttestation,
   listExecutiveGovernanceReviews,
   listGovernanceAssuranceCadence,
+  listGovernanceAssuranceSignoffs,
   saveGovernanceAssuranceCadence,
+  saveGovernanceAssuranceSignoffPlan,
   updateExecutiveGovernanceReview,
 } from "@/services/governance-assurance.service";
 import type {
+  ActOnGovernanceAssuranceAttestationInput,
   CreateExecutiveGovernanceReviewInput,
   SaveGovernanceAssuranceCadenceInput,
+  SaveGovernanceAssuranceSignoffPlanInput,
   UpdateExecutiveGovernanceReviewInput,
 } from "@/types/governance-assurance";
 
@@ -29,6 +34,9 @@ function invalidate(queryClient: ReturnType<typeof useQueryClient>) {
   });
   void queryClient.invalidateQueries({
     queryKey: ["governance-assurance-cadence"],
+  });
+  void queryClient.invalidateQueries({
+    queryKey: ["governance-assurance-signoffs"],
   });
 }
 
@@ -114,6 +122,51 @@ export function useSaveGovernanceAssuranceCadence() {
         error instanceof Error
           ? error.message
           : "تعذر حفظ Assurance Review Cadence.",
+      ),
+  });
+}
+
+
+export function useGovernanceAssuranceSignoffs() {
+  return useQuery({
+    queryKey: ["governance-assurance-signoffs"],
+    queryFn: listGovernanceAssuranceSignoffs,
+    refetchInterval: 20_000,
+  });
+}
+
+export function useSaveGovernanceAssuranceSignoffPlan() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: SaveGovernanceAssuranceSignoffPlanInput) =>
+      saveGovernanceAssuranceSignoffPlan(input),
+    onSuccess: () => {
+      invalidate(queryClient);
+      toast.success("تم حفظ Assurance Sign-off Plan.");
+    },
+    onError: (error) =>
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "تعذر حفظ Assurance Sign-off Plan.",
+      ),
+  });
+}
+
+export function useActOnGovernanceAssuranceAttestation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ActOnGovernanceAssuranceAttestationInput) =>
+      actOnGovernanceAssuranceAttestation(input),
+    onSuccess: () => {
+      invalidate(queryClient);
+      toast.success("تم تسجيل Attestation.");
+    },
+    onError: (error) =>
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "تعذر تسجيل Attestation.",
       ),
   });
 }
