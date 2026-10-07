@@ -88,3 +88,40 @@ export interface UpdateExecutiveGovernanceReviewInput {
   management_response?: string | null;
   evidence_snapshot: GovernanceAssuranceEvidenceItem[];
 }
+
+
+export type GovernanceAssuranceCadenceStatus =
+  | "no_cadence"
+  | "disabled"
+  | "on_schedule"
+  | "due_soon"
+  | "overdue";
+
+export interface GovernanceAssuranceCadenceProfile {
+  owner_user_id: string;
+  review_interval_days: number;
+  warning_days_before: number | null;
+  first_due_date: string;
+  is_enabled: boolean;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GovernanceAssuranceCadenceState {
+  profile: GovernanceAssuranceCadenceProfile | null;
+  latest_finalized_review_id: string | null;
+  latest_finalized_review_date: string | null;
+  next_due_date: string | null;
+  warning_date: string | null;
+  days_to_due: number | null;
+  status: GovernanceAssuranceCadenceStatus;
+}
+
+export interface SaveGovernanceAssuranceCadenceInput {
+  expected_version?: number | null;
+  review_interval_days: number;
+  warning_days_before?: number | null;
+  first_due_date: string;
+  is_enabled: boolean;
+}

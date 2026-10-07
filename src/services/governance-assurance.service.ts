@@ -16,7 +16,11 @@ import type {
   GovernanceAssuranceConclusion,
   GovernanceAssuranceEvidenceItem,
   GovernanceAssuranceEvidenceType,
+  GovernanceAssuranceCadenceProfile,
+  GovernanceAssuranceCadenceState,
+  GovernanceAssuranceCadenceStatus,
   GovernanceReviewStatus,
+  SaveGovernanceAssuranceCadenceInput,
   UpdateExecutiveGovernanceReviewInput,
 } from "@/types/governance-assurance";
 import type {
@@ -31,6 +35,7 @@ import type {
 } from "@/types/governance-trends";
 
 const LOCAL_KEY = "projectflow.executive-governance-assurance.v1";
+const CADENCE_LOCAL_KEY = "projectflow.executive-governance-assurance-cadence.v1";
 
 interface LocalStore {
   version: 1;
@@ -974,4 +979,291 @@ export function downloadGovernanceAssuranceReviewCsv(
   anchor.click();
   anchor.remove();
   URL.revokeObjectURL(href);
+}
+
+
+interface LocalCadenceStore {
+  version: 1;
+  profile: GovernanceAssuranceCadenceProfile | null;
+}
+
+function normalizeCadenceStatus(
+  value: unknown,
+): GovernanceAssuranceCadenceStatus | null {
+  return value === "no_cadence" ||
+    value === "disabled" ||
+    value === "on_schedule" ||
+    value === "due_soon" ||
+    value === "overdue"
+    ? value
+    : null;
+}
+
+function normalizeCadenceProfile(
+  value: unknown,
+): GovernanceAssuranceCadenceProfile | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const interval = intOrNull(row.review_interval_days);
+  const warning = intOrNull(row.warning_days_before);
+  const version = intOrNull(row.version);
+  if (
+    typeof row.owner_user_id !== "string" ||
+    typeof row.first_due_date !== "string" ||
+    typeof row.is_enabled !== "boolean" ||
+    typeof row.created_at !== "string" ||
+    typeof row.updated_at !== "string" ||
+    interval == null ||
+    version == null
+  ) {
+    return null;
+  }
+  return {
+    owner_user_id: row.owner_user_id,
+    review_interval_days: interval,
+    warning_days_before: warning,
+    first_due_date: row.first_due_date,
+    is_enabled: row.is_enabled,
+    version,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+function normalizeCadenceState(
+  value: unknown,
+): GovernanceAssuranceCadenceState | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const status = normalizeCadenceStatus(row.status);
+  if (!status) return null;
+  return {
+    profile: normalizeCadenceProfile(row.profile),
+    latest_finalized_review_id:
+      typeof row.latest_finalized_review_id === "string"
+        ? row.latest_finalized_review_id
+        : null,
+    latest_finalized_review_date:
+      typeof row.latest_finalized_review_date === "string"
+        ? row.latest_finalized_review_date
+        : null,
+    next_due_date:
+      typeof row.next_due_date === "string" ? row.next_due_date : null,
+    warning_date:
+      typeof row.warning_date === "string" ? row.warning_date : null,
+    days_to_due: intOrNull(row.days_to_due),
+    status,
+  };
+}
+
+function readLocalCadence(): LocalCadenceStore {
+  if (typeof window === "undefined") {
+    return { version: 1, profile: null };
+  }
+  try {
+    const parsed = JSON.parse(
+      window.localStorage.getItem(CADENCE_LOCAL_KEY) ?? "{}",
+    ) as Partial<LocalCadenceStore>;
+    return {
+      version: 1,
+      profile: normalizeCadenceProfile(parsed.profile),
+    };
+  } catch {
+    return { version: 1, profile: null };
+  }
+}
+
+function writeLocalCadence(store: LocalCadenceStore) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(CADENCE_LOCAL_KEY, JSON.stringify(store));
+}
+
+function dateKey(date: Date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+function addDateDays(value: string, days: number) {
+  const date = new Date(value + "T12:00:00");
+  date.setDate(date.getDate() + days);
+  return dateKey(date);
+}
+
+function dayDifference(from: string, to: string) {
+  const start = new Date(from + "T12:00:00").getTime();
+  const end = new Date(to + "T12:00:00").getTime();
+  return Math.round((end - start) / 86_400_000);
+}
+
+function buildLocalCadenceState(
+  profile: GovernanceAssuranceCadenceProfile | null,
+  reviews: ExecutiveGovernanceReview[],
+): GovernanceAssuranceCadenceState {
+  if (!profile) {
+    return {
+      profile: null,
+      latest_finalized_review_id: null,
+      latest_finalized_review_date: null,
+      next_due_date: null,
+      warning_date: null,
+      days_to_due: null,
+      status: "no_cadence",
+    };
+  }
+
+  const latest =
+    reviews
+      .filter((row) => row.status === "finalized")
+      .slice()
+      .sort(
+        (a, b) =>
+          b.review_date.localeCompare(a.review_date) ||
+          (b.finalized_at ?? "").localeCompare(a.finalized_at ?? ""),
+      )[0] ?? null;
+
+  if (!profile.is_enabled) {
+    return {
+      profile,
+      latest_finalized_review_id: latest?.id ?? null,
+      latest_finalized_review_date: latest?.review_date ?? null,
+      next_due_date: null,
+      warning_date: null,
+      days_to_due: null,
+      status: "disabled",
+    };
+  }
+
+  const nextDue = latest
+    ? addDateDays(latest.review_date, profile.review_interval_days)
+    : profile.first_due_date;
+  const warningDate =
+    profile.warning_days_before == null
+      ? null
+      : addDateDays(nextDue, -profile.warning_days_before);
+  const today = dateKey(new Date());
+  const daysToDue = dayDifference(today, nextDue);
+  const status: GovernanceAssuranceCadenceStatus =
+    today > nextDue
+      ? "overdue"
+      : warningDate && today >= warningDate
+        ? "due_soon"
+        : "on_schedule";
+
+  return {
+    profile,
+    latest_finalized_review_id: latest?.id ?? null,
+    latest_finalized_review_date: latest?.review_date ?? null,
+    next_due_date: nextDue,
+    warning_date: warningDate,
+    days_to_due: daysToDue,
+    status,
+  };
+}
+
+function validateCadenceInput(input: SaveGovernanceAssuranceCadenceInput) {
+  if (
+    !Number.isInteger(input.review_interval_days) ||
+    input.review_interval_days < 1 ||
+    input.review_interval_days > 366
+  ) {
+    throw new Error("Review Interval يجب أن يكون بين 1 و366 يومًا.");
+  }
+  if (
+    input.warning_days_before != null &&
+    (!Number.isInteger(input.warning_days_before) ||
+      input.warning_days_before < 0 ||
+      input.warning_days_before > 90 ||
+      input.warning_days_before > input.review_interval_days)
+  ) {
+    throw new Error("Warning Days غير صالحة.");
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.first_due_date)) {
+    throw new Error("First Due Date غير صالح.");
+  }
+}
+
+export async function listGovernanceAssuranceCadence(): Promise<GovernanceAssuranceCadenceState> {
+  if (isSupabaseBackend()) {
+    const raw = await supabaseRest<unknown>(
+      "rpc/list_executive_governance_assurance_cadence",
+      { method: "POST", body: {} },
+    );
+    const state = normalizeCadenceState(raw);
+    if (!state) {
+      throw new Error("عاد الخادم بحالة Assurance Cadence غير صالحة.");
+    }
+    return state;
+  }
+
+  return buildLocalCadenceState(
+    readLocalCadence().profile,
+    readLocal().reviews,
+  );
+}
+
+export async function saveGovernanceAssuranceCadence(
+  input: SaveGovernanceAssuranceCadenceInput,
+): Promise<GovernanceAssuranceCadenceState> {
+  validateCadenceInput(input);
+
+  if (isSupabaseBackend()) {
+    const raw = await supabaseRest<unknown>(
+      "rpc/save_executive_governance_assurance_cadence",
+      {
+        method: "POST",
+        body: {
+          p_expected_version: input.expected_version ?? null,
+          p_review_interval_days: input.review_interval_days,
+          p_warning_days_before: input.warning_days_before ?? null,
+          p_first_due_date: input.first_due_date,
+          p_is_enabled: input.is_enabled,
+        },
+      },
+    );
+    const state = normalizeCadenceState(raw);
+    if (!state) {
+      throw new Error("عاد الخادم بحالة Assurance Cadence غير صالحة.");
+    }
+    return state;
+  }
+
+  const store = readLocalCadence();
+  const existing = store.profile;
+  if (
+    existing &&
+    (input.expected_version == null ||
+      input.expected_version !== existing.version)
+  ) {
+    throw new Error("تم تعديل Assurance Cadence. حدّث البيانات وأعد المحاولة.");
+  }
+  if (!existing && input.expected_version != null) {
+    throw new Error("تم تعديل Assurance Cadence. حدّث البيانات وأعد المحاولة.");
+  }
+
+  const now = new Date().toISOString();
+  const profile: GovernanceAssuranceCadenceProfile = {
+    owner_user_id: existing?.owner_user_id ?? "local-user",
+    review_interval_days: input.review_interval_days,
+    warning_days_before: input.warning_days_before ?? null,
+    first_due_date: input.first_due_date,
+    is_enabled: input.is_enabled,
+    version: existing ? existing.version + 1 : 1,
+    created_at: existing?.created_at ?? now,
+    updated_at: now,
+  };
+  store.profile = profile;
+  writeLocalCadence(store);
+  return buildLocalCadenceState(profile, readLocal().reviews);
+}
+
+export async function refreshGovernanceAssuranceNotifications(): Promise<number> {
+  if (!isSupabaseBackend()) return 0;
+  const value = await supabaseRest<unknown>(
+    "rpc/refresh_governance_assurance_notifications",
+    { method: "POST", body: {} },
+  );
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }

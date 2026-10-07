@@ -1,5 +1,6 @@
 import {
   Archive,
+  CalendarClock,
   CheckCircle2,
   ClipboardCheck,
   Download,
@@ -16,11 +17,13 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   useCreateExecutiveGovernanceReview,
   useFinalizeExecutiveGovernanceReview,
+  useGovernanceAssuranceCadence,
+  useSaveGovernanceAssuranceCadence,
   useUpdateExecutiveGovernanceReview,
 } from "@/hooks/use-governance-assurance";
 import { arabicNumber } from "@/lib/format";
@@ -32,6 +35,7 @@ import type { ExecutiveGovernanceExceptionsData } from "@/types/governance-excep
 import type {
   ExecutiveGovernanceReview,
   ExecutiveGovernanceReviewsData,
+  GovernanceAssuranceCadenceStatus,
   GovernanceAssuranceConclusion,
   GovernanceAssuranceEvidenceItem,
   GovernanceAssuranceEvidenceType,
@@ -57,6 +61,32 @@ const CONCLUSION_META: Record<
   insufficient_evidence: {
     label: "Insufficient Evidence",
     className: "bg-info/10 text-info",
+  },
+};
+
+const CADENCE_META: Record<
+  GovernanceAssuranceCadenceStatus,
+  { label: string; className: string }
+> = {
+  no_cadence: {
+    label: "No Cadence",
+    className: "bg-muted text-muted-foreground",
+  },
+  disabled: {
+    label: "Disabled",
+    className: "bg-muted text-muted-foreground",
+  },
+  on_schedule: {
+    label: "On Schedule",
+    className: "bg-success/10 text-success",
+  },
+  due_soon: {
+    label: "Due Soon",
+    className: "bg-warning/10 text-warning",
+  },
+  overdue: {
+    label: "Overdue",
+    className: "bg-danger/10 text-danger",
   },
 };
 
@@ -113,6 +143,13 @@ interface ReviewDraft {
   evidence_snapshot: GovernanceAssuranceEvidenceItem[];
 }
 
+interface CadenceDraft {
+  review_interval_days: string;
+  warning_days_before: string;
+  first_due_date: string;
+  is_enabled: boolean;
+}
+
 interface EvidenceDraft {
   type: GovernanceAssuranceEvidenceType;
   title: string;
@@ -127,6 +164,13 @@ function todayKey() {
     String(now.getMonth() + 1).padStart(2, "0"),
     String(now.getDate()).padStart(2, "0"),
   ].join("-");
+}
+
+function optionalInteger(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parsed = Number(trimmed);
+  return Number.isInteger(parsed) ? parsed : Number.NaN;
 }
 
 function formatDate(value: string | null) {
@@ -604,8 +648,38 @@ export function ExecutiveGovernanceAssuranceCenter({
   const create = useCreateExecutiveGovernanceReview();
   const update = useUpdateExecutiveGovernanceReview();
   const finalize = useFinalizeExecutiveGovernanceReview();
+  const cadence = useGovernanceAssuranceCadence();
+  const saveCadence = useSaveGovernanceAssuranceCadence();
   const [draft, setDraft] = useState<ReviewDraft | null>(null);
+  const [cadenceDraft, setCadenceDraft] = useState<CadenceDraft>({
+    review_interval_days: "",
+    warning_days_before: "",
+    first_due_date: "",
+    is_enabled: true,
+  });
+  const [cadenceDraftSourceVersion, setCadenceDraftSourceVersion] = useState<
+    number | "none" | null
+  >(null);
   const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const profile = cadence.data?.profile;
+    const sourceVersion = profile?.version ?? "none";
+    if (cadenceDraftSourceVersion === sourceVersion) return;
+
+    setCadenceDraft({
+      review_interval_days: profile
+        ? String(profile.review_interval_days)
+        : "",
+      warning_days_before:
+        profile?.warning_days_before == null
+          ? ""
+          : String(profile.warning_days_before),
+      first_due_date: profile?.first_due_date ?? "",
+      is_enabled: profile?.is_enabled ?? true,
+    });
+    setCadenceDraftSourceVersion(sourceVersion);
+  }, [cadence.data?.profile, cadenceDraftSourceVersion]);
 
   const trends = useMemo(
     () =>
@@ -624,7 +698,7 @@ export function ExecutiveGovernanceAssuranceCenter({
     [targetData, meetingData, trends],
   );
 
-  if (isLoading) {
+  if (isLoading || cadence.isLoading) {
     return (
       <section className="rounded-2xl border border-border bg-card p-6 shadow-[var(--shadow-frost)]">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -739,6 +813,165 @@ export function ExecutiveGovernanceAssuranceCenter({
           <p className="text-xs text-muted-foreground">Version Snapshots</p>
         </div>
       </div>
+
+      {cadence.data && (
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-[var(--shadow-frost)]">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <CalendarClock className="h-4 w-4 text-brand" />
+                <h3 className="text-sm font-semibold">
+                  Assurance Review Cadence
+                </h3>
+                <span
+                  className={
+                    "rounded-full px-2.5 py-1 text-[8px] font-semibold " +
+                    CADENCE_META[cadence.data.status].className
+                  }
+                >
+                  {CADENCE_META[cadence.data.status].label}
+                </span>
+              </div>
+              <p className="mt-1 text-[9px] text-muted-foreground">
+                لا توجد قيم افتراضية. First Due Date تستخدم فقط حتى أول Review
+                Finalized؛ بعدها يصبح Next Due = آخر Finalized Review + Interval.
+                إنشاء Draft وحده لا يعيد ضبط الدورة؛ Finalize فقط هو الذي يبدأ
+                الدورة التالية.
+              </p>
+
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-lg border border-border bg-background p-3">
+                  <p className="text-[8px] text-muted-foreground">Last Finalized</p>
+                  <p className="mt-1 text-xs font-semibold">
+                    {formatDate(cadence.data.latest_finalized_review_date)}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border bg-background p-3">
+                  <p className="text-[8px] text-muted-foreground">Next Due</p>
+                  <p className="mt-1 text-xs font-semibold">
+                    {formatDate(cadence.data.next_due_date)}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border bg-background p-3">
+                  <p className="text-[8px] text-muted-foreground">Warning Date</p>
+                  <p className="mt-1 text-xs font-semibold">
+                    {formatDate(cadence.data.warning_date)}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border bg-background p-3">
+                  <p className="text-[8px] text-muted-foreground">Days To Due</p>
+                  <p
+                    className={
+                      cadence.data.status === "overdue"
+                        ? "mt-1 text-xs font-semibold text-danger"
+                        : cadence.data.status === "due_soon"
+                          ? "mt-1 text-xs font-semibold text-warning"
+                          : "mt-1 text-xs font-semibold"
+                    }
+                  >
+                    {cadence.data.days_to_due == null
+                      ? "—"
+                      : arabicNumber(cadence.data.days_to_due) + " يوم"}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="w-full rounded-xl border border-border bg-background p-3 xl:max-w-xl">
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="text-[9px] text-muted-foreground">
+                  Review Interval Days
+                  <input
+                    type="number"
+                    min={1}
+                    max={366}
+                    step={1}
+                    value={cadenceDraft.review_interval_days}
+                    placeholder="مثال: 30"
+                    onChange={(event) =>
+                      setCadenceDraft({
+                        ...cadenceDraft,
+                        review_interval_days: event.target.value,
+                      })
+                    }
+                    className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs"
+                  />
+                </label>
+                <label className="text-[9px] text-muted-foreground">
+                  Warning Days Before
+                  <input
+                    type="number"
+                    min={0}
+                    max={90}
+                    step={1}
+                    value={cadenceDraft.warning_days_before}
+                    placeholder="اختياري"
+                    onChange={(event) =>
+                      setCadenceDraft({
+                        ...cadenceDraft,
+                        warning_days_before: event.target.value,
+                      })
+                    }
+                    className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs"
+                  />
+                </label>
+                <label className="text-[9px] text-muted-foreground">
+                  First Due Date
+                  <input
+                    type="date"
+                    value={cadenceDraft.first_due_date}
+                    onChange={(event) =>
+                      setCadenceDraft({
+                        ...cadenceDraft,
+                        first_due_date: event.target.value,
+                      })
+                    }
+                    className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs"
+                  />
+                </label>
+                <label className="flex items-center gap-2 self-end rounded-lg border border-border px-3 py-2 text-[10px]">
+                  <input
+                    type="checkbox"
+                    checked={cadenceDraft.is_enabled}
+                    onChange={(event) =>
+                      setCadenceDraft({
+                        ...cadenceDraft,
+                        is_enabled: event.target.checked,
+                      })
+                    }
+                  />
+                  Cadence Enabled
+                </label>
+              </div>
+              <button
+                type="button"
+                disabled={
+                  saveCadence.isPending ||
+                  !cadenceDraft.review_interval_days ||
+                  !cadenceDraft.first_due_date
+                }
+                onClick={() =>
+                  saveCadence.mutate({
+                    expected_version: cadence.data?.profile?.version ?? null,
+                    review_interval_days:
+                      optionalInteger(cadenceDraft.review_interval_days) ??
+                      Number.NaN,
+                    warning_days_before: optionalInteger(
+                      cadenceDraft.warning_days_before,
+                    ),
+                    first_due_date: cadenceDraft.first_due_date,
+                    is_enabled: cadenceDraft.is_enabled,
+                  })
+                }
+                className="mt-3 inline-flex items-center gap-2 rounded-lg bg-brand px-3 py-2 text-[10px] font-semibold text-primary-foreground disabled:opacity-50"
+              >
+                <Save className="h-3.5 w-3.5" />
+                حفظ Assurance Cadence
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {!canCreate && (
         <div className="rounded-xl border border-info/20 bg-info/5 p-3 text-[9px] leading-5 text-muted-foreground">
