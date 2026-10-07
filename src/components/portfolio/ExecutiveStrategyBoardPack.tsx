@@ -1167,7 +1167,12 @@ export function ExecutiveStrategyBoardPack({
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => downloadExecutiveStrategyBoardPackCsv(pack)}
+              onClick={() =>
+                downloadExecutiveStrategyBoardPackCsv(
+                  pack,
+                  governanceTargets,
+                )
+              }
               className="inline-flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-xs font-medium hover:bg-muted"
             >
               <Download className="h-4 w-4" />
