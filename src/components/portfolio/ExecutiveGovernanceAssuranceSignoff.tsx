@@ -294,7 +294,7 @@ export function ExecutiveGovernanceAssuranceSignoff({
                       </p>
                     </div>
 
-                    {assignmentsLocked || ownedSignoff?.status !== "open" ? (
+                    {assignmentsLocked ? (
                       <div className="mt-3">
                         <p className="text-[10px] font-semibold">
                           {currentAttestation?.assignee_name_snapshot ?? "—"}
@@ -484,34 +484,58 @@ export function ExecutiveGovernanceAssuranceSignoff({
                 {actionDraft?.attestation_id === item.attestation.id && (
                   <div className="mt-3 rounded-xl border border-brand/20 bg-card p-3">
                     <div className="grid gap-2 md:grid-cols-3">
-                      {[
-                        ["attested", "Attest", BadgeCheck],
-                        [
-                          "attested_with_reservation",
-                          "Attest with Reservation",
-                          ShieldCheck,
-                        ],
-                        ["declined", "Decline", CircleSlash2],
-                      ].map(([value, label, Icon]) => (
-                        <button
-                          key={String(value)}
-                          type="button"
-                          onClick={() =>
-                            setActionDraft({
-                              ...actionDraft,
-                              decision: value as ActionDraft["decision"],
-                            })
-                          }
-                          className={
-                            actionDraft.decision === value
-                              ? "inline-flex items-center justify-center gap-1 rounded-lg border border-brand bg-brand/10 px-3 py-2 text-[9px] font-semibold text-brand"
-                              : "inline-flex items-center justify-center gap-1 rounded-lg border border-border px-3 py-2 text-[9px] text-muted-foreground hover:bg-muted"
-                          }
-                        >
-                          <Icon className="h-3.5 w-3.5" />
-                          {label}
-                        </button>
-                      ))}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setActionDraft({
+                            ...actionDraft,
+                            decision: "attested",
+                          })
+                        }
+                        className={
+                          actionDraft.decision === "attested"
+                            ? "inline-flex items-center justify-center gap-1 rounded-lg border border-brand bg-brand/10 px-3 py-2 text-[9px] font-semibold text-brand"
+                            : "inline-flex items-center justify-center gap-1 rounded-lg border border-border px-3 py-2 text-[9px] text-muted-foreground hover:bg-muted"
+                        }
+                      >
+                        <BadgeCheck className="h-3.5 w-3.5" />
+                        Attest
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setActionDraft({
+                            ...actionDraft,
+                            decision: "attested_with_reservation",
+                          })
+                        }
+                        className={
+                          actionDraft.decision ===
+                          "attested_with_reservation"
+                            ? "inline-flex items-center justify-center gap-1 rounded-lg border border-brand bg-brand/10 px-3 py-2 text-[9px] font-semibold text-brand"
+                            : "inline-flex items-center justify-center gap-1 rounded-lg border border-border px-3 py-2 text-[9px] text-muted-foreground hover:bg-muted"
+                        }
+                      >
+                        <ShieldCheck className="h-3.5 w-3.5" />
+                        Attest with Reservation
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setActionDraft({
+                            ...actionDraft,
+                            decision: "declined",
+                          })
+                        }
+                        className={
+                          actionDraft.decision === "declined"
+                            ? "inline-flex items-center justify-center gap-1 rounded-lg border border-brand bg-brand/10 px-3 py-2 text-[9px] font-semibold text-brand"
+                            : "inline-flex items-center justify-center gap-1 rounded-lg border border-border px-3 py-2 text-[9px] text-muted-foreground hover:bg-muted"
+                        }
+                      >
+                        <CircleSlash2 className="h-3.5 w-3.5" />
+                        Decline
+                      </button>
                     </div>
 
                     <textarea
