@@ -145,6 +145,7 @@ function Dashboard() {
         execution={execution.data}
         meetingData={executiveMeetings.data}
         targetData={governanceTargets.data}
+        exceptionData={governanceExceptions.data}
         isLoading={
           portfolioStrategy.isLoading ||
           strategyReviews.isLoading ||
@@ -155,7 +156,8 @@ function Dashboard() {
           allBoards.isLoading ||
           execution.isLoading ||
           executiveMeetings.isLoading ||
-          governanceTargets.isLoading
+          governanceTargets.isLoading ||
+          governanceExceptions.isLoading
         }
       />
 
