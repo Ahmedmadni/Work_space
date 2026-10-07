@@ -46,10 +46,10 @@ import type {
 
 const PRINT_STYLE = [
   "@media print {",
-  "  body * { visibility: hidden !important; }",
-  "  [data-strategy-board-pack-print],",
-  "  [data-strategy-board-pack-print] * { visibility: visible !important; }",
-  "  [data-strategy-board-pack-print] {",
+  "  body[data-print-mode='strategy-board-pack'] * { visibility: hidden !important; }",
+  "  body[data-print-mode='strategy-board-pack'] [data-strategy-board-pack-print],",
+  "  body[data-print-mode='strategy-board-pack'] [data-strategy-board-pack-print] * { visibility: visible !important; }",
+  "  body[data-print-mode='strategy-board-pack'] [data-strategy-board-pack-print] {",
   "    position: absolute !important;",
   "    inset: 0 auto auto 0 !important;",
   "    width: 100% !important;",
@@ -62,9 +62,9 @@ const PRINT_STYLE = [
   "    print-color-adjust: exact;",
   "    -webkit-print-color-adjust: exact;",
   "  }",
-  "  [data-board-pack-screen-only] { display: none !important; }",
-  "  .board-pack-page-break { break-before: page; }",
-  "  .board-pack-avoid-break { break-inside: avoid; }",
+  "  body[data-print-mode='strategy-board-pack'] [data-board-pack-screen-only] { display: none !important; }",
+  "  body[data-print-mode='strategy-board-pack'] .board-pack-page-break { break-before: page; }",
+  "  body[data-print-mode='strategy-board-pack'] .board-pack-avoid-break { break-inside: avoid; }",
   "  @page { size: A4 landscape; margin: 10mm; }",
   "}",
 ].join("\n");
@@ -1235,6 +1235,16 @@ export function ExecutiveStrategyBoardPack({
     [targetData, meetingData, governanceTrends],
   );
 
+  const printBoardPack = () => {
+    document.body.dataset.printMode = "strategy-board-pack";
+    const cleanup = () => {
+      delete document.body.dataset.printMode;
+      window.removeEventListener("afterprint", cleanup);
+    };
+    window.addEventListener("afterprint", cleanup);
+    window.print();
+  };
+
   if (isLoading) {
     return (
       <section className="rounded-2xl border border-border bg-card p-6 shadow-[var(--shadow-frost)]">
@@ -1284,7 +1294,7 @@ export function ExecutiveStrategyBoardPack({
             </button>
             <button
               type="button"
-              onClick={() => window.print()}
+              onClick={printBoardPack}
               className="inline-flex items-center gap-2 rounded-xl bg-brand px-3 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90"
             >
               <Printer className="h-4 w-4" />
