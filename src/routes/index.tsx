@@ -24,6 +24,7 @@ import { ExecutiveMeetingGovernanceCenter } from "@/components/portfolio/Executi
 import { ExecutiveMeetingEffectivenessCenter } from "@/components/portfolio/ExecutiveMeetingEffectivenessCenter";
 import { ExecutiveGovernanceTrendsCenter } from "@/components/portfolio/ExecutiveGovernanceTrendsCenter";
 import { ExecutiveGovernanceTargetsCenter } from "@/components/portfolio/ExecutiveGovernanceTargetsCenter";
+import { ExecutiveGovernanceExceptionsCenter } from "@/components/portfolio/ExecutiveGovernanceExceptionsCenter";
 import { useProjects } from "@/hooks/use-projects";
 import { useBoards } from "@/hooks/use-boards";
 import { useProjectExecutionSummary } from "@/hooks/use-canvas";
@@ -39,6 +40,7 @@ import { useStrategyRecoveryPlans } from "@/hooks/use-strategy-recovery";
 import { useStrategyCalendar } from "@/hooks/use-strategy-calendar";
 import { useExecutiveStrategyMeetings } from "@/hooks/use-executive-meetings";
 import { useExecutiveGovernanceTargets } from "@/hooks/use-governance-targets";
+import { useExecutiveGovernanceExceptions } from "@/hooks/use-governance-exceptions";
 import { arabicNumber, greeting, longDate } from "@/lib/format";
 
 export const Route = createFileRoute("/")({
@@ -78,6 +80,7 @@ function Dashboard() {
   const strategyCalendar = useStrategyCalendar();
   const executiveMeetings = useExecutiveStrategyMeetings();
   const governanceTargets = useExecutiveGovernanceTargets();
+  const governanceExceptions = useExecutiveGovernanceExceptions();
 
   const stats = [
     { label: "المشاريع", value: projects.data?.length ?? 0 },
@@ -195,6 +198,17 @@ function Dashboard() {
         targetData={governanceTargets.data}
         meetingData={executiveMeetings.data}
         isLoading={
+          governanceTargets.isLoading ||
+          executiveMeetings.isLoading
+        }
+      />
+
+      <ExecutiveGovernanceExceptionsCenter
+        exceptionData={governanceExceptions.data}
+        targetData={governanceTargets.data}
+        meetingData={executiveMeetings.data}
+        isLoading={
+          governanceExceptions.isLoading ||
           governanceTargets.isLoading ||
           executiveMeetings.isLoading
         }
