@@ -212,6 +212,20 @@ export function ExecutiveGovernanceAssuranceDistribution({
     new Set(draft.recipientIds).size === draft.recipientIds.length &&
     !hasUnknownSelectedRecipients;
 
+  const persistedRecipientIds =
+    ownedDistribution?.recipients
+      .map((row) => row.recipient_user_id)
+      .slice()
+      .sort() ?? [];
+  const draftRecipientIds = [...draft.recipientIds].sort();
+  const hasUnsavedDistributionChanges =
+    ownedDistribution?.status === "draft" &&
+    (
+      draft.note.trim() !==
+        (ownedDistribution.distribution_note ?? "").trim() ||
+      draftRecipientIds.join("|") !== persistedRecipientIds.join("|")
+    );
+
   const pendingCount =
     ownedDistribution?.recipients.filter((row) => row.status === "pending")
       .length ?? 0;
@@ -451,7 +465,8 @@ export function ExecutiveGovernanceAssuranceDistribution({
                     type="button"
                     disabled={
                       distribute.isPending ||
-                      ownedDistribution.recipients.length < 1
+                      ownedDistribution.recipients.length < 1 ||
+                      hasUnsavedDistributionChanges
                     }
                     onClick={() => {
                       if (
@@ -471,6 +486,11 @@ export function ExecutiveGovernanceAssuranceDistribution({
                     <Send className="h-3.5 w-3.5" />
                     Distribute & Lock
                   </button>
+                )}
+                {hasUnsavedDistributionChanges && (
+                  <span className="self-center text-[8px] text-warning">
+                    احفظ تغييرات Recipients / Note قبل Distribution.
+                  </span>
                 )}
               </div>
             )}
