@@ -19,6 +19,9 @@ import type {
   GovernanceAssuranceCadenceProfile,
   GovernanceAssuranceCadenceState,
   GovernanceAssuranceCadenceStatus,
+  GovernanceAssuranceHistoryPoint,
+  GovernanceAssuranceMetricComparison,
+  GovernanceAssuranceReviewComparison,
   GovernanceReviewStatus,
   SaveGovernanceAssuranceCadenceInput,
   UpdateExecutiveGovernanceReviewInput,
@@ -1266,4 +1269,354 @@ export async function refreshGovernanceAssuranceNotifications(): Promise<number>
     { method: "POST", body: {} },
   );
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+
+function isActiveAssuranceException(row: ExecutiveGovernanceException) {
+  return (
+    row.status === "open" ||
+    row.status === "mitigating" ||
+    row.status === "accepted"
+  );
+}
+
+function metricActualDirection(
+  previous: number | null,
+  current: number | null,
+  operator: GovernanceTargetOperator,
+): GovernanceAssuranceMetricComparison["actual_direction"] {
+  if (previous == null || current == null) return "insufficient_data";
+  if (current === previous) return "unchanged";
+  if (operator === "gte") {
+    return current > previous ? "improved" : "worsened";
+  }
+  return current < previous ? "improved" : "worsened";
+}
+
+function complianceTransition(
+  previous: GovernanceTargetStatus,
+  current: GovernanceTargetStatus,
+): GovernanceAssuranceMetricComparison["compliance_transition"] {
+  if (
+    previous === "insufficient_data" ||
+    current === "insufficient_data"
+  ) {
+    return "insufficient_data";
+  }
+  if (previous === "no_target" || current === "no_target") {
+    return previous === "no_target" && current === "no_target"
+      ? "no_target"
+      : "status_changed";
+  }
+  if (previous === "not_met" && current === "met") return "recovered";
+  if (previous === "met" && current === "not_met") return "new_breach";
+  if (previous === "not_met" && current === "not_met") {
+    return "persistent_breach";
+  }
+  if (previous === "met" && current === "met") return "persistent_met";
+  return "status_changed";
+}
+
+export function compareGovernanceAssuranceReviews(
+  previous: ExecutiveGovernanceReview,
+  current: ExecutiveGovernanceReview,
+): GovernanceAssuranceReviewComparison {
+  if (previous.status !== "finalized" || current.status !== "finalized") {
+    throw new Error("المقارنة التاريخية تستخدم Finalized Reviews فقط.");
+  }
+  if (
+    current.review_date < previous.review_date ||
+    (current.review_date === previous.review_date &&
+      (current.finalized_at ?? current.updated_at) <
+        (previous.finalized_at ?? previous.updated_at))
+  ) {
+    throw new Error("رتب المراجعات من الأقدم إلى الأحدث قبل المقارنة.");
+  }
+
+  const previousByKey = new Map(
+    previous.target_assessments_snapshot.map((row) => [row.key, row] as const),
+  );
+  const currentByKey = new Map(
+    current.target_assessments_snapshot.map((row) => [row.key, row] as const),
+  );
+
+  const metrics: GovernanceAssuranceMetricComparison[] = [
+    "decision_resolution",
+    "deferred_rate",
+    "action_completion",
+    "overdue_open",
+    "unowned_open",
+    "on_time_completion",
+    "median_completion_days",
+    "repeated_deferrals",
+  ].map((key) => {
+    const previousMetric = previousByKey.get(
+      key as GovernanceTargetAssessment["key"],
+    );
+    const currentMetric = currentByKey.get(
+      key as GovernanceTargetAssessment["key"],
+    );
+    if (!previousMetric || !currentMetric) {
+      throw new Error("Finalized Review تحتوي Snapshot Metrics ناقصة.");
+    }
+
+    const delta =
+      previousMetric.actual == null || currentMetric.actual == null
+        ? null
+        : Math.round(
+            (currentMetric.actual - previousMetric.actual) * 100,
+          ) / 100;
+
+    return {
+      key: currentMetric.key,
+      label: currentMetric.label,
+      unit: currentMetric.unit,
+      operator: currentMetric.operator,
+      previous_actual: previousMetric.actual,
+      current_actual: currentMetric.actual,
+      actual_delta: delta,
+      actual_direction: metricActualDirection(
+        previousMetric.actual,
+        currentMetric.actual,
+        currentMetric.operator,
+      ),
+      previous_target: previousMetric.target,
+      current_target: currentMetric.target,
+      target_changed:
+        previousMetric.target !== currentMetric.target ||
+        previousMetric.operator !== currentMetric.operator ||
+        previousMetric.unit !== currentMetric.unit,
+      previous_status: previousMetric.status,
+      current_status: currentMetric.status,
+      compliance_transition: complianceTransition(
+        previousMetric.status,
+        currentMetric.status,
+      ),
+    };
+  });
+
+  const previousActive = previous.exceptions_snapshot.filter(
+    isActiveAssuranceException,
+  );
+  const currentActive = current.exceptions_snapshot.filter(
+    isActiveAssuranceException,
+  );
+  const previousActiveIds = new Set(previousActive.map((row) => row.id));
+  const currentActiveIds = new Set(currentActive.map((row) => row.id));
+  const currentExceptionById = new Map(
+    current.exceptions_snapshot.map((row) => [row.id, row] as const),
+  );
+
+  const persistentActive = previousActive.filter((row) =>
+    currentActiveIds.has(row.id),
+  ).length;
+  const newlyActive = currentActive.filter(
+    (row) => !previousActiveIds.has(row.id),
+  ).length;
+  const resolvedSincePrevious = previousActive.filter(
+    (row) => currentExceptionById.get(row.id)?.status === "resolved",
+  ).length;
+  const noLongerPresent = previousActive.filter(
+    (row) => !currentExceptionById.has(row.id),
+  ).length;
+  const currentOverdue = currentActive.filter(
+    (row) => !!row.due_date && row.due_date < current.review_date,
+  ).length;
+
+  return {
+    previous_review: previous,
+    current_review: current,
+    target_version_changed:
+      previous.target_version !== current.target_version,
+    metrics,
+    summary: {
+      previous_met: metrics.filter((row) => row.previous_status === "met")
+        .length,
+      current_met: metrics.filter((row) => row.current_status === "met")
+        .length,
+      previous_not_met: metrics.filter(
+        (row) => row.previous_status === "not_met",
+      ).length,
+      current_not_met: metrics.filter(
+        (row) => row.current_status === "not_met",
+      ).length,
+      recovered_metrics: metrics.filter(
+        (row) => row.compliance_transition === "recovered",
+      ).length,
+      new_breaches: metrics.filter(
+        (row) => row.compliance_transition === "new_breach",
+      ).length,
+      persistent_breaches: metrics.filter(
+        (row) => row.compliance_transition === "persistent_breach",
+      ).length,
+      target_changed_metrics: metrics.filter((row) => row.target_changed)
+        .length,
+      improved_actuals: metrics.filter(
+        (row) => row.actual_direction === "improved",
+      ).length,
+      worsened_actuals: metrics.filter(
+        (row) => row.actual_direction === "worsened",
+      ).length,
+    },
+    exceptions: {
+      previous_active: previousActive.length,
+      current_active: currentActive.length,
+      persistent_active: persistentActive,
+      newly_active: newlyActive,
+      resolved_since_previous: resolvedSincePrevious,
+      no_longer_present: noLongerPresent,
+      current_overdue: currentOverdue,
+    },
+  };
+}
+
+export function buildGovernanceAssuranceHistory(
+  reviews: ExecutiveGovernanceReview[],
+): GovernanceAssuranceHistoryPoint[] {
+  return reviews
+    .filter((review) => review.status === "finalized")
+    .slice()
+    .sort(
+      (a, b) =>
+        a.review_date.localeCompare(b.review_date) ||
+        (a.finalized_at ?? a.updated_at).localeCompare(
+          b.finalized_at ?? b.updated_at,
+        ),
+    )
+    .map((review) => {
+      const activeExceptions = review.exceptions_snapshot.filter(
+        isActiveAssuranceException,
+      );
+      return {
+        review_id: review.id,
+        review_date: review.review_date,
+        period_label: review.period_label,
+        assurance_conclusion: review.assurance_conclusion,
+        target_version: review.target_version,
+        met_count: review.target_assessments_snapshot.filter(
+          (row) => row.status === "met",
+        ).length,
+        not_met_count: review.target_assessments_snapshot.filter(
+          (row) => row.status === "not_met",
+        ).length,
+        insufficient_count: review.target_assessments_snapshot.filter(
+          (row) => row.status === "insufficient_data",
+        ).length,
+        no_target_count: review.target_assessments_snapshot.filter(
+          (row) => row.status === "no_target",
+        ).length,
+        active_exceptions: activeExceptions.length,
+        overdue_exceptions: activeExceptions.filter(
+          (row) => !!row.due_date && row.due_date < review.review_date,
+        ).length,
+        evidence_count: review.evidence_snapshot.length,
+      };
+    });
+}
+
+export function governanceAssuranceComparisonCsv(
+  comparison: GovernanceAssuranceReviewComparison,
+) {
+  const lines: string[] = [
+    csvLine([
+      "Governance Assurance Comparison",
+      comparison.previous_review.period_label,
+      comparison.current_review.period_label,
+    ]),
+    csvLine([
+      "Review Dates",
+      comparison.previous_review.review_date,
+      comparison.current_review.review_date,
+    ]),
+    csvLine([
+      "Target Versions",
+      comparison.previous_review.target_version,
+      comparison.current_review.target_version,
+    ]),
+    csvLine([
+      "Target Version Changed",
+      comparison.target_version_changed ? "yes" : "no",
+    ]),
+    "",
+    csvLine([
+      "Metric",
+      "Previous Actual",
+      "Current Actual",
+      "Actual Delta",
+      "Actual Direction",
+      "Previous Target",
+      "Current Target",
+      "Target Changed",
+      "Previous Status",
+      "Current Status",
+      "Compliance Transition",
+    ]),
+  ];
+
+  for (const row of comparison.metrics) {
+    lines.push(
+      csvLine([
+        row.label,
+        row.previous_actual ?? "",
+        row.current_actual ?? "",
+        row.actual_delta ?? "",
+        row.actual_direction,
+        row.previous_target ?? "",
+        row.current_target ?? "",
+        row.target_changed ? "yes" : "no",
+        row.previous_status,
+        row.current_status,
+        row.compliance_transition,
+      ]),
+    );
+  }
+
+  lines.push("");
+  lines.push(
+    csvLine([
+      "Exception Summary",
+      "Previous Active",
+      "Current Active",
+      "Persistent Active",
+      "Newly Active",
+      "Resolved Since Previous",
+      "No Longer Present",
+      "Current Overdue",
+    ]),
+  );
+  lines.push(
+    csvLine([
+      "Exceptions",
+      comparison.exceptions.previous_active,
+      comparison.exceptions.current_active,
+      comparison.exceptions.persistent_active,
+      comparison.exceptions.newly_active,
+      comparison.exceptions.resolved_since_previous,
+      comparison.exceptions.no_longer_present,
+      comparison.exceptions.current_overdue,
+    ]),
+  );
+
+  return "\uFEFF" + lines.join("\r\n");
+}
+
+export function downloadGovernanceAssuranceComparisonCsv(
+  comparison: GovernanceAssuranceReviewComparison,
+) {
+  const blob = new Blob([governanceAssuranceComparisonCsv(comparison)], {
+    type: "text/csv;charset=utf-8",
+  });
+  const href = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = href;
+  anchor.download =
+    "governance-assurance-comparison-" +
+    comparison.previous_review.review_date +
+    "-to-" +
+    comparison.current_review.review_date +
+    ".csv";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(href);
 }
