@@ -514,3 +514,13 @@ export async function updateExecutiveGovernanceException(
   writeLocal(store);
   return row;
 }
+
+
+export async function refreshGovernanceAlertNotifications(): Promise<number> {
+  if (!isSupabaseBackend()) return 0;
+  const count = await supabaseRest<unknown>(
+    "rpc/refresh_governance_alert_notifications",
+    { method: "POST", body: {} },
+  );
+  return typeof count === "number" && Number.isFinite(count) ? count : 0;
+}
