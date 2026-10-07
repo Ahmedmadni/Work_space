@@ -175,6 +175,21 @@ function notificationTitle(notification: UserNotification) {
     if (event === "exception_due_soon") {
       return `اقترب استحقاق Governance Exception «${title}»`;
     }
+    if (event === "assurance_signoff_assigned") {
+      return "تم إسناد Governance Assurance Sign-off إليك";
+    }
+    if (event === "assurance_signoff_ready") {
+      return "حان دورك في Governance Assurance Sign-off";
+    }
+    if (event === "assurance_signoff_step_completed") {
+      return "اكتملت خطوة في Governance Assurance Sign-off";
+    }
+    if (event === "assurance_signoff_completed") {
+      return "اكتمل Governance Assurance Sign-off";
+    }
+    if (event === "assurance_signoff_declined") {
+      return "تم رفض Governance Assurance Sign-off";
+    }
     if (event === "assurance_review_overdue") {
       return "تأخرت Governance Assurance Review";
     }
@@ -231,6 +246,23 @@ function notificationContext(notification: UserNotification) {
       typeof notification.metadata.event === "string"
         ? notification.metadata.event
         : "";
+    if (
+      event === "assurance_signoff_assigned" ||
+      event === "assurance_signoff_ready" ||
+      event === "assurance_signoff_step_completed" ||
+      event === "assurance_signoff_completed" ||
+      event === "assurance_signoff_declined"
+    ) {
+      const period =
+        typeof notification.metadata.review_period === "string"
+          ? notification.metadata.review_period
+          : "Governance Assurance Review";
+      const role =
+        typeof notification.metadata.role === "string"
+          ? notification.metadata.role
+          : "";
+      return role ? `${period} · ${role}` : period;
+    }
     if (
       event === "assurance_review_due_soon" ||
       event === "assurance_review_overdue"
