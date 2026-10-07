@@ -386,3 +386,44 @@ export interface AcknowledgeGovernanceAssuranceDistributionInput {
   >;
   note?: string | null;
 }
+
+
+export interface GovernanceAssuranceArchiveSnapshot {
+  archive_schema_version: 1;
+  review: ExecutiveGovernanceReview;
+  signoff: GovernanceAssuranceSignoff;
+  distribution: GovernanceAssuranceDistribution;
+}
+
+export interface GovernanceAssuranceArchive {
+  id: string;
+  certificate_code: string;
+  review_id: string;
+  signoff_id: string;
+  distribution_id: string;
+  owner_user_id: string;
+  review_version: number;
+  signoff_version: number;
+  distribution_version: number;
+  snapshot_schema_version: 1;
+  snapshot: GovernanceAssuranceArchiveSnapshot;
+  snapshot_sha256: string;
+  archived_at: string;
+  archived_by: string;
+}
+
+export interface GovernanceAssuranceArchiveData {
+  archives: GovernanceAssuranceArchive[];
+}
+
+export interface GovernanceAssuranceArchiveVerification {
+  archive: GovernanceAssuranceArchive;
+  stored_integrity: boolean;
+  source_integrity: boolean;
+  version_match: boolean;
+  lifecycle_match: boolean;
+  verified_at: string;
+  expected_sha256: string;
+  stored_computed_sha256: string;
+  live_sha256: string | null;
+}
