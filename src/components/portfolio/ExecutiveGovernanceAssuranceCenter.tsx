@@ -27,6 +27,7 @@ import {
   useUpdateExecutiveGovernanceReview,
 } from "@/hooks/use-governance-assurance";
 import { arabicNumber } from "@/lib/format";
+import { ExecutiveGovernanceAssuranceHistory } from "@/components/portfolio/ExecutiveGovernanceAssuranceHistory";
 import { downloadGovernanceAssuranceReviewCsv } from "@/services/governance-assurance.service";
 import { buildExecutiveGovernanceTrends } from "@/services/governance-trends.service";
 import { evaluateExecutiveGovernanceTargets } from "@/services/governance-targets.service";
@@ -1156,6 +1157,8 @@ export function ExecutiveGovernanceAssuranceCenter({
           </button>
         </div>
       )}
+
+      <ExecutiveGovernanceAssuranceHistory data={reviewData} />
 
       {!!reviews.length && (
         <div className="rounded-2xl border border-border bg-card p-4 shadow-[var(--shadow-frost)]">
