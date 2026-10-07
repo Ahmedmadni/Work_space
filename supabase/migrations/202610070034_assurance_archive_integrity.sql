@@ -44,6 +44,30 @@ alter table public.executive_governance_assurance_archives enable row level secu
 revoke all on table public.executive_governance_assurance_archives
   from anon, authenticated;
 
+create or replace function public.projectflow_block_governance_assurance_archive_update()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, extensions
+as $projectflow$
+begin
+  raise exception 'ASSURANCE_ARCHIVE_IMMUTABLE'
+    using errcode = '55000';
+end;
+$projectflow$;
+
+revoke all on function public.projectflow_block_governance_assurance_archive_update()
+  from public;
+
+drop trigger if exists projectflow_block_governance_assurance_archive_update
+  on public.executive_governance_assurance_archives;
+
+create trigger projectflow_block_governance_assurance_archive_update
+before update
+on public.executive_governance_assurance_archives
+for each row
+execute function public.projectflow_block_governance_assurance_archive_update();
+
 create or replace function public.projectflow_governance_archive_snapshot(
   p_review public.executive_governance_reviews,
   p_signoff public.executive_governance_review_signoffs,
