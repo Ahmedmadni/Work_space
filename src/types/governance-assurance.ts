@@ -125,3 +125,81 @@ export interface SaveGovernanceAssuranceCadenceInput {
   first_due_date: string;
   is_enabled: boolean;
 }
+
+
+export type GovernanceAssuranceActualDirection =
+  | "improved"
+  | "worsened"
+  | "unchanged"
+  | "insufficient_data";
+
+export type GovernanceAssuranceComplianceTransition =
+  | "recovered"
+  | "new_breach"
+  | "persistent_breach"
+  | "persistent_met"
+  | "status_changed"
+  | "no_target"
+  | "insufficient_data";
+
+export interface GovernanceAssuranceMetricComparison {
+  key: import("@/types/governance-targets").GovernanceTargetAssessment["key"];
+  label: string;
+  unit: "%" | "days" | "count";
+  operator: "gte" | "lte";
+  previous_actual: number | null;
+  current_actual: number | null;
+  actual_delta: number | null;
+  actual_direction: GovernanceAssuranceActualDirection;
+  previous_target: number | null;
+  current_target: number | null;
+  target_changed: boolean;
+  previous_status: import("@/types/governance-targets").GovernanceTargetStatus;
+  current_status: import("@/types/governance-targets").GovernanceTargetStatus;
+  compliance_transition: GovernanceAssuranceComplianceTransition;
+}
+
+export interface GovernanceAssuranceExceptionComparison {
+  previous_active: number;
+  current_active: number;
+  persistent_active: number;
+  newly_active: number;
+  resolved_since_previous: number;
+  no_longer_present: number;
+  current_overdue: number;
+}
+
+export interface GovernanceAssuranceReviewComparison {
+  previous_review: ExecutiveGovernanceReview;
+  current_review: ExecutiveGovernanceReview;
+  target_version_changed: boolean;
+  metrics: GovernanceAssuranceMetricComparison[];
+  summary: {
+    previous_met: number;
+    current_met: number;
+    previous_not_met: number;
+    current_not_met: number;
+    recovered_metrics: number;
+    new_breaches: number;
+    persistent_breaches: number;
+    target_changed_metrics: number;
+    improved_actuals: number;
+    worsened_actuals: number;
+  };
+  exceptions: GovernanceAssuranceExceptionComparison;
+}
+
+export interface GovernanceAssuranceHistoryPoint {
+  review_id: string;
+  review_date: string;
+  period_label: string;
+  assurance_conclusion: GovernanceAssuranceConclusion;
+  target_version: number;
+  met_count: number;
+  not_met_count: number;
+  insufficient_count: number;
+  no_target_count: number;
+  active_exceptions: number;
+  overdue_exceptions: number;
+  evidence_count: number;
+}
