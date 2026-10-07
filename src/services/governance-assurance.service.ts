@@ -14,6 +14,10 @@ import type {
   ExecutiveGovernanceReviewHistory,
   ExecutiveGovernanceReviewsData,
   AcknowledgeGovernanceAssuranceDistributionInput,
+  GovernanceAssuranceArchive,
+  GovernanceAssuranceArchiveData,
+  GovernanceAssuranceArchiveSnapshot,
+  GovernanceAssuranceArchiveVerification,
   GovernanceAssuranceConclusion,
   GovernanceAssuranceDistribution,
   GovernanceAssuranceDistributionData,
@@ -61,6 +65,7 @@ const LOCAL_KEY = "projectflow.executive-governance-assurance.v1";
 const CADENCE_LOCAL_KEY = "projectflow.executive-governance-assurance-cadence.v1";
 const SIGNOFF_LOCAL_KEY = "projectflow.executive-governance-assurance-signoff.v1";
 const DISTRIBUTION_LOCAL_KEY = "projectflow.executive-governance-assurance-distribution.v1";
+const ARCHIVE_LOCAL_KEY = "projectflow.executive-governance-assurance-archive.v1";
 
 interface LocalStore {
   version: 1;
