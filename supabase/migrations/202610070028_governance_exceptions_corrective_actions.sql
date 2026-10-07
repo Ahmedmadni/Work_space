@@ -292,6 +292,18 @@ begin
       using errcode = '22023';
   end if;
 
+  if (
+    select count(*)
+    from jsonb_array_elements_text(p_source_window_meeting_ids)
+  ) <> (
+    select count(distinct value)
+    from jsonb_array_elements_text(p_source_window_meeting_ids)
+  )
+  then
+    raise exception 'GOVERNANCE_EXCEPTION_DUPLICATE_MEETING_IDS'
+      using errcode = '22023';
+  end if;
+
   if (v_operator = 'gte' and p_actual_value >= v_target)
      or (v_operator = 'lte' and p_actual_value <= v_target)
   then
