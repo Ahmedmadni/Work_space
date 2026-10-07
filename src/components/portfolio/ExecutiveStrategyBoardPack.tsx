@@ -32,6 +32,7 @@ import type {
   ExecutiveGovernanceTargetEvaluation,
   ExecutiveGovernanceTargetsData,
 } from "@/types/governance-targets";
+import type { ExecutiveGovernanceExceptionsData } from "@/types/governance-exceptions";
 import type {
   PortfolioStrategyData,
   RecoveryPlanData,
@@ -162,11 +163,13 @@ function BoardPackContents({
   meetingEffectiveness,
   governanceTrends,
   governanceTargets,
+  governanceExceptions,
 }: {
   pack: ExecutiveStrategyBoardPack;
   meetingEffectiveness: ReturnType<typeof buildExecutiveMeetingEffectiveness> | null;
   governanceTrends: ReturnType<typeof buildExecutiveGovernanceTrends> | null;
   governanceTargets: ExecutiveGovernanceTargetEvaluation | null;
+  governanceExceptions: ExecutiveGovernanceExceptionsData | null;
 }) {
   const today = todayKeyLocal();
   const projectMap = new Map(
@@ -174,6 +177,16 @@ function BoardPackContents({
   );
   const objectiveMap = new Map(
     pack.objectives.map((row) => [row.objective.id, row.objective] as const),
+  );
+  const activeGovernanceExceptions =
+    governanceExceptions?.exceptions.filter(
+      (row) =>
+        row.status === "open" ||
+        row.status === "mitigating" ||
+        row.status === "accepted",
+    ) ?? [];
+  const overdueGovernanceExceptions = activeGovernanceExceptions.filter(
+    (row) => !!row.due_date && row.due_date < today,
   );
 
   return (
@@ -644,6 +657,83 @@ function BoardPackContents({
         </section>
       )}
 
+      {!!activeGovernanceExceptions.length && (
+        <section className="board-pack-avoid-break border-b border-border p-4 md:p-5">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold">
+                Governance Exceptions & Corrective Actions
+              </h3>
+              <p className="mt-1 text-[9px] text-muted-foreground">
+                Active exceptions preserve the Actual/Target snapshot from the
+                moment the deviation was recorded.
+              </p>
+            </div>
+            <div className="text-end text-[9px] text-muted-foreground">
+              <p>
+                Active:{" "}
+                <strong className="text-foreground">
+                  {arabicNumber(activeGovernanceExceptions.length)}
+                </strong>
+              </p>
+              <p className={overdueGovernanceExceptions.length ? "text-danger" : ""}>
+                Overdue: {arabicNumber(overdueGovernanceExceptions.length)}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+            {activeGovernanceExceptions.slice(0, 12).map((row) => {
+              const overdue = !!row.due_date && row.due_date < today;
+              return (
+                <div
+                  key={row.id}
+                  className="rounded-xl border border-border bg-background p-3"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="min-w-0 flex-1 text-xs font-semibold">
+                      {row.title}
+                    </p>
+                    <span
+                      className={
+                        overdue
+                          ? "rounded-full bg-danger/10 px-2 py-0.5 text-[8px] text-danger"
+                          : "rounded-full bg-warning/10 px-2 py-0.5 text-[8px] text-warning"
+                      }
+                    >
+                      {overdue ? "Overdue" : row.status}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-[8px] text-muted-foreground">
+                    {row.metric_key} · Actual {arabicNumber(row.actual_value)}
+                    {row.target_unit === "%" ? "%" : row.target_unit === "days" ? " يوم" : ""}
+                    {" · Target "}
+                    {row.target_operator === "gte" ? "≥ " : "≤ "}
+                    {arabicNumber(row.target_value)}
+                    {row.target_unit === "%" ? "%" : row.target_unit === "days" ? " يوم" : ""}
+                  </p>
+                  <p className="mt-2 text-[9px] leading-4 text-muted-foreground">
+                    {row.rationale}
+                  </p>
+                  {row.corrective_action && (
+                    <p className="mt-2 text-[9px] leading-4">
+                      <strong>Corrective Action:</strong>{" "}
+                      {row.corrective_action}
+                    </p>
+                  )}
+                  <p className="mt-2 text-[8px] text-muted-foreground">
+                    {row.responsible_name ?? "بدون مسؤول"}
+                    {row.due_date ? " · Due " + formatDate(row.due_date) : ""}
+                    {" · Target v"}
+                    {arabicNumber(row.target_version)}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       <section className="board-pack-page-break grid gap-4 border-b border-border p-4 md:p-5 xl:grid-cols-2">
         <div>
           <div className="mb-3 flex items-center gap-2">
@@ -1063,6 +1153,7 @@ export function ExecutiveStrategyBoardPack({
   execution,
   meetingData,
   targetData,
+  exceptionData,
   isLoading,
 }: {
   strategy: PortfolioStrategyData | undefined;
@@ -1076,6 +1167,7 @@ export function ExecutiveStrategyBoardPack({
   execution: ProjectExecutionSummary | undefined;
   meetingData: ExecutiveMeetingGovernanceData | undefined;
   targetData: ExecutiveGovernanceTargetsData | undefined;
+  exceptionData: ExecutiveGovernanceExceptionsData | undefined;
   isLoading: boolean;
 }) {
   const pack = useMemo(
@@ -1171,6 +1263,7 @@ export function ExecutiveStrategyBoardPack({
                 downloadExecutiveStrategyBoardPackCsv(
                   pack,
                   governanceTargets,
+                  exceptionData ?? null,
                 )
               }
               className="inline-flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-xs font-medium hover:bg-muted"
@@ -1194,6 +1287,7 @@ export function ExecutiveStrategyBoardPack({
           meetingEffectiveness={meetingEffectiveness}
           governanceTrends={governanceTrends}
           governanceTargets={governanceTargets}
+          governanceExceptions={exceptionData ?? null}
         />
       </section>
     </>
