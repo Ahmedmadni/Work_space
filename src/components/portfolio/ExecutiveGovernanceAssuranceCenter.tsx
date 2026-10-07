@@ -657,10 +657,16 @@ export function ExecutiveGovernanceAssuranceCenter({
     first_due_date: "",
     is_enabled: true,
   });
+  const [cadenceDraftSourceVersion, setCadenceDraftSourceVersion] = useState<
+    number | "none" | null
+  >(null);
   const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null);
 
   useEffect(() => {
     const profile = cadence.data?.profile;
+    const sourceVersion = profile?.version ?? "none";
+    if (cadenceDraftSourceVersion === sourceVersion) return;
+
     setCadenceDraft({
       review_interval_days: profile
         ? String(profile.review_interval_days)
@@ -672,7 +678,8 @@ export function ExecutiveGovernanceAssuranceCenter({
       first_due_date: profile?.first_due_date ?? "",
       is_enabled: profile?.is_enabled ?? true,
     });
-  }, [cadence.data?.profile]);
+    setCadenceDraftSourceVersion(sourceVersion);
+  }, [cadence.data?.profile, cadenceDraftSourceVersion]);
 
   const trends = useMemo(
     () =>
