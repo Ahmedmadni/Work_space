@@ -19,6 +19,7 @@ import {
 } from "@/services/strategy-board-pack.service";
 import { buildExecutiveMeetingEffectiveness } from "@/services/meeting-effectiveness.service";
 import { buildExecutiveGovernanceTrends } from "@/services/governance-trends.service";
+import { evaluateExecutiveGovernanceTargets } from "@/services/governance-targets.service";
 import { arabicNumber } from "@/lib/format";
 import type {
   BoardWithContext,
@@ -27,6 +28,10 @@ import type {
 } from "@/types";
 import type { ProjectDecision, ProjectRisk } from "@/types/action-center";
 import type { ExecutiveMeetingGovernanceData } from "@/types/executive-meetings";
+import type {
+  ExecutiveGovernanceTargetEvaluation,
+  ExecutiveGovernanceTargetsData,
+} from "@/types/governance-targets";
 import type {
   PortfolioStrategyData,
   RecoveryPlanData,
@@ -156,10 +161,12 @@ function BoardPackContents({
   pack,
   meetingEffectiveness,
   governanceTrends,
+  governanceTargets,
 }: {
   pack: ExecutiveStrategyBoardPack;
   meetingEffectiveness: ReturnType<typeof buildExecutiveMeetingEffectiveness> | null;
   governanceTrends: ReturnType<typeof buildExecutiveGovernanceTrends> | null;
+  governanceTargets: ExecutiveGovernanceTargetEvaluation | null;
 }) {
   const today = todayKeyLocal();
   const projectMap = new Map(
@@ -556,6 +563,84 @@ function BoardPackContents({
             الاجتماعات الأقدم حصلت على زمن أطول للإغلاق، لذلك تُستخدم كإشارة
             Follow-through وليست كاستنتاج سببي مستقل.
           </p>
+        </section>
+      )}
+
+      {governanceTargets && (
+        <section className="board-pack-avoid-break border-b border-border p-4 md:p-5">
+          <div className="mb-3">
+            <h3 className="text-sm font-semibold">
+              Governance Targets & Operating Rhythm
+            </h3>
+            <p className="mt-1 text-[9px] text-muted-foreground">
+              Internal management targets only; no external benchmark or hidden score.
+            </p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+            {governanceTargets.assessments.map((row) => (
+              <div
+                key={row.key}
+                className="rounded-xl border border-border bg-background p-3"
+              >
+                <p className="text-[8px] text-muted-foreground">{row.label}</p>
+                <p className="mt-1 text-base font-semibold">
+                  {row.actual == null
+                    ? "—"
+                    : arabicNumber(row.actual) +
+                      (row.unit === "%" ? "%" : row.unit === "days" ? " يوم" : "")}
+                </p>
+                <p className="mt-1 text-[8px] text-muted-foreground">
+                  Target {row.operator === "gte" ? "≥" : "≤"}{" "}
+                  {row.target == null
+                    ? "—"
+                    : arabicNumber(row.target) +
+                      (row.unit === "%" ? "%" : row.unit === "days" ? " يوم" : "")}
+                </p>
+                <p
+                  className={
+                    row.status === "met"
+                      ? "mt-1 text-[8px] text-success"
+                      : row.status === "not_met"
+                        ? "mt-1 text-[8px] text-danger"
+                        : row.status === "insufficient_data"
+                          ? "mt-1 text-[8px] text-info"
+                          : "mt-1 text-[8px] text-muted-foreground"
+                  }
+                >
+                  {row.status === "met"
+                    ? "Met"
+                    : row.status === "not_met"
+                      ? "Not Met"
+                      : row.status === "insufficient_data"
+                        ? "Insufficient Data"
+                        : "No Target"}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-3 rounded-xl border border-border bg-background p-3 text-[9px]">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <strong>Operating Rhythm:</strong>{" "}
+                {governanceTargets.rhythm.status === "on_schedule"
+                  ? "On Schedule"
+                  : governanceTargets.rhythm.status === "due_soon"
+                    ? "Due Soon"
+                    : governanceTargets.rhythm.status === "overdue"
+                      ? "Overdue"
+                      : governanceTargets.rhythm.status === "no_meetings"
+                        ? "No Finalized Meetings"
+                        : "No Cadence Target"}
+              </div>
+              <div className="text-muted-foreground">
+                Last: {formatDate(governanceTargets.rhythm.last_finalized_meeting_date)}
+                {" · "}
+                Next: {formatDate(governanceTargets.rhythm.next_due_date)}
+              </div>
+            </div>
+          </div>
         </section>
       )}
 
@@ -977,6 +1062,7 @@ export function ExecutiveStrategyBoardPack({
   boards,
   execution,
   meetingData,
+  targetData,
   isLoading,
 }: {
   strategy: PortfolioStrategyData | undefined;
@@ -989,6 +1075,7 @@ export function ExecutiveStrategyBoardPack({
   boards: BoardWithContext[];
   execution: ProjectExecutionSummary | undefined;
   meetingData: ExecutiveMeetingGovernanceData | undefined;
+  targetData: ExecutiveGovernanceTargetsData | undefined;
   isLoading: boolean;
 }) {
   const pack = useMemo(
@@ -1031,6 +1118,18 @@ export function ExecutiveStrategyBoardPack({
     () =>
       meetingData ? buildExecutiveGovernanceTrends(meetingData) : null,
     [meetingData],
+  );
+
+  const governanceTargets = useMemo(
+    () =>
+      targetData && meetingData && governanceTrends
+        ? evaluateExecutiveGovernanceTargets(
+            targetData,
+            governanceTrends,
+            meetingData,
+          )
+        : null,
+    [targetData, meetingData, governanceTrends],
   );
 
   if (isLoading) {
@@ -1089,6 +1188,7 @@ export function ExecutiveStrategyBoardPack({
           pack={pack}
           meetingEffectiveness={meetingEffectiveness}
           governanceTrends={governanceTrends}
+          governanceTargets={governanceTargets}
         />
       </section>
     </>
