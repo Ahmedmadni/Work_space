@@ -18,6 +18,7 @@ import {
   downloadExecutiveStrategyBoardPackCsv,
 } from "@/services/strategy-board-pack.service";
 import { buildExecutiveMeetingEffectiveness } from "@/services/meeting-effectiveness.service";
+import { buildExecutiveGovernanceTrends } from "@/services/governance-trends.service";
 import { arabicNumber } from "@/lib/format";
 import type {
   BoardWithContext,
@@ -154,9 +155,11 @@ function SummaryMetric({
 function BoardPackContents({
   pack,
   meetingEffectiveness,
+  governanceTrends,
 }: {
   pack: ExecutiveStrategyBoardPack;
   meetingEffectiveness: ReturnType<typeof buildExecutiveMeetingEffectiveness> | null;
+  governanceTrends: ReturnType<typeof buildExecutiveGovernanceTrends> | null;
 }) {
   const today = todayKeyLocal();
   const projectMap = new Map(
@@ -453,6 +456,108 @@ function BoardPackContents({
             </div>
           </section>
         )}
+
+      {governanceTrends && governanceTrends.period.window_size > 0 && (
+        <section className="board-pack-avoid-break border-b border-border p-4 md:p-5">
+          <div className="mb-3">
+            <h3 className="text-sm font-semibold">
+              Governance Trend Comparison
+            </h3>
+            <p className="mt-1 text-[9px] text-muted-foreground">
+              آخر {arabicNumber(governanceTrends.period.window_size)} اجتماع/اجتماعات
+              مقابل العدد نفسه قبلها. Current:{" "}
+              {governanceTrends.period.current_label} · Previous:{" "}
+              {governanceTrends.period.previous_label}
+            </p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+            {[
+              {
+                label: "Decision resolution",
+                metric: governanceTrends.summary.decision_resolution_rate,
+                suffix: "%",
+              },
+              {
+                label: "Deferred rate",
+                metric: governanceTrends.summary.deferred_rate,
+                suffix: "%",
+              },
+              {
+                label: "Action completion",
+                metric: governanceTrends.summary.action_completion_rate,
+                suffix: "%",
+              },
+              {
+                label: "Overdue open",
+                metric: governanceTrends.summary.overdue_open_rate,
+                suffix: "%",
+              },
+              {
+                label: "Unowned open",
+                metric: governanceTrends.summary.unowned_open_rate,
+                suffix: "%",
+              },
+              {
+                label: "On-time close",
+                metric: governanceTrends.summary.on_time_completion_rate,
+                suffix: "%",
+              },
+              {
+                label: "Median close",
+                metric: governanceTrends.summary.median_completion_days,
+                suffix: " يوم",
+              },
+              {
+                label: "Repeated deferrals",
+                metric: governanceTrends.summary.repeated_deferrals_open,
+                suffix: "",
+              },
+            ].map(({ label, metric, suffix }) => (
+              <div
+                key={label}
+                className="rounded-xl border border-border bg-background p-3"
+              >
+                <p className="text-[8px] text-muted-foreground">{label}</p>
+                <p className="mt-1 text-base font-semibold">
+                  {metric.current == null
+                    ? "—"
+                    : arabicNumber(metric.current) + suffix}
+                </p>
+                <p
+                  className={
+                    metric.direction === "improved"
+                      ? "mt-1 text-[8px] text-success"
+                      : metric.direction === "worsened"
+                        ? "mt-1 text-[8px] text-danger"
+                        : "mt-1 text-[8px] text-muted-foreground"
+                  }
+                >
+                  {metric.direction === "improved"
+                    ? "تحسن"
+                    : metric.direction === "worsened"
+                      ? "تراجع"
+                      : metric.direction === "unchanged"
+                        ? "بدون تغير"
+                        : "بيانات غير كافية"}
+                  {metric.delta == null
+                    ? ""
+                    : " · Δ " +
+                      (metric.delta > 0 ? "+" : "") +
+                      arabicNumber(metric.delta) +
+                      suffix}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <p className="mt-3 text-[8px] leading-4 text-muted-foreground">
+            Action metrics تقارن الحالة الحالية للـcohorts حسب اجتماع المنشأ؛
+            الاجتماعات الأقدم حصلت على زمن أطول للإغلاق، لذلك تُستخدم كإشارة
+            Follow-through وليست كاستنتاج سببي مستقل.
+          </p>
+        </section>
+      )}
 
       <section className="board-pack-page-break grid gap-4 border-b border-border p-4 md:p-5 xl:grid-cols-2">
         <div>
@@ -922,6 +1027,12 @@ export function ExecutiveStrategyBoardPack({
     [meetingData],
   );
 
+  const governanceTrends = useMemo(
+    () =>
+      meetingData ? buildExecutiveGovernanceTrends(meetingData) : null,
+    [meetingData],
+  );
+
   if (isLoading) {
     return (
       <section className="rounded-2xl border border-border bg-card p-6 shadow-[var(--shadow-frost)]">
@@ -977,6 +1088,7 @@ export function ExecutiveStrategyBoardPack({
         <BoardPackContents
           pack={pack}
           meetingEffectiveness={meetingEffectiveness}
+          governanceTrends={governanceTrends}
         />
       </section>
     </>
