@@ -58,6 +58,41 @@ create table if not exists public.executive_governance_review_attestations (
   unique(signoff_id, sequence_no)
 );
 
+create table if not exists public.executive_governance_review_signoff_history (
+  id uuid primary key default gen_random_uuid(),
+  signoff_id uuid not null
+    references public.executive_governance_review_signoffs(id)
+    on delete cascade,
+  review_id uuid not null
+    references public.executive_governance_reviews(id)
+    on delete cascade,
+  owner_user_id uuid not null references auth.users(id) on delete cascade,
+  version bigint not null,
+  event text not null
+    check (
+      event in (
+        'plan_created',
+        'plan_updated',
+        'step_attested',
+        'step_attested_with_reservation',
+        'step_declined',
+        'signoff_completed'
+      )
+    ),
+  actor_user_id uuid not null references auth.users(id) on delete cascade,
+  snapshot jsonb not null
+    check (jsonb_typeof(snapshot) = 'object'),
+  created_at timestamptz not null default now(),
+  unique(signoff_id, version)
+);
+
+create index if not exists executive_governance_review_signoff_history_idx
+  on public.executive_governance_review_signoff_history(
+    owner_user_id,
+    review_id,
+    created_at desc
+  );
+
 create index if not exists executive_governance_review_signoffs_owner_idx
   on public.executive_governance_review_signoffs(
     owner_user_id,
@@ -74,10 +109,13 @@ create index if not exists executive_governance_review_attestations_assignee_idx
 
 alter table public.executive_governance_review_signoffs enable row level security;
 alter table public.executive_governance_review_attestations enable row level security;
+alter table public.executive_governance_review_signoff_history enable row level security;
 
 revoke all on table public.executive_governance_review_signoffs
   from anon, authenticated;
 revoke all on table public.executive_governance_review_attestations
+  from anon, authenticated;
+revoke all on table public.executive_governance_review_signoff_history
   from anon, authenticated;
 
 create or replace function public.projectflow_governance_attestation_json(
@@ -171,6 +209,7 @@ declare
   v_distinct_users integer;
   v_any_acted boolean;
   v_project_id text;
+  v_history_event text;
 begin
   if auth.uid() is null then
     raise exception 'AUTH_REQUIRED' using errcode = '42501';
@@ -199,7 +238,7 @@ begin
       using errcode = '22023';
   end if;
 
-  select count(distinct value->>'assignee_user_id')
+  select count(distinct (value->>'assignee_user_id'))
   into v_distinct_users
   from jsonb_array_elements(p_assignments);
 
@@ -237,6 +276,8 @@ begin
     delete from public.executive_governance_review_attestations
     where signoff_id = v_signoff.id;
 
+    v_history_event := 'plan_updated';
+
     update public.executive_governance_review_signoffs
     set
       version = version + 1,
@@ -248,6 +289,8 @@ begin
       raise exception 'SIGNOFF_VERSION_MISMATCH'
         using errcode = '40001';
     end if;
+
+    v_history_event := 'plan_created';
 
     insert into public.executive_governance_review_signoffs (
       review_id,
@@ -395,6 +438,25 @@ begin
     raise exception 'SIGNOFF_REQUIRES_ALL_ROLES'
       using errcode = '22023';
   end if;
+
+  insert into public.executive_governance_review_signoff_history (
+    signoff_id,
+    review_id,
+    owner_user_id,
+    version,
+    event,
+    actor_user_id,
+    snapshot
+  )
+  values (
+    v_signoff.id,
+    v_review.id,
+    v_signoff.owner_user_id,
+    v_signoff.version,
+    v_history_event,
+    auth.uid(),
+    public.projectflow_governance_signoff_json(v_signoff)
+  );
 
   return public.projectflow_governance_signoff_json(v_signoff);
 end;
@@ -614,6 +676,31 @@ begin
       end if;
     end if;
   end if;
+
+  insert into public.executive_governance_review_signoff_history (
+    signoff_id,
+    review_id,
+    owner_user_id,
+    version,
+    event,
+    actor_user_id,
+    snapshot
+  )
+  values (
+    v_signoff.id,
+    v_review.id,
+    v_signoff.owner_user_id,
+    v_signoff.version,
+    case
+      when p_decision = 'declined' then 'step_declined'
+      when v_signoff.status = 'completed' then 'signoff_completed'
+      when p_decision = 'attested_with_reservation'
+        then 'step_attested_with_reservation'
+      else 'step_attested'
+    end,
+    auth.uid(),
+    public.projectflow_governance_signoff_json(v_signoff)
+  );
 
   return public.projectflow_governance_signoff_json(v_signoff);
 end;
