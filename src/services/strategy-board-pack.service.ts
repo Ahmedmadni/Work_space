@@ -9,6 +9,7 @@ import type {
 } from "@/types/action-center";
 import type { ExecutiveMeetingGovernanceData } from "@/types/executive-meetings";
 import type { ExecutiveGovernanceTargetEvaluation } from "@/types/governance-targets";
+import type { ExecutiveGovernanceExceptionsData } from "@/types/governance-exceptions";
 import type {
   PortfolioStrategyData,
   RecoveryPlanData,
@@ -484,6 +485,7 @@ function csvLine(values: unknown[]) {
 export function executiveStrategyBoardPackCsv(
   pack: ExecutiveStrategyBoardPack,
   governanceTargets?: ExecutiveGovernanceTargetEvaluation | null,
+  governanceExceptions?: ExecutiveGovernanceExceptionsData | null,
 ) {
   const lines: string[] = [
     csvLine([
@@ -698,15 +700,68 @@ export function executiveStrategyBoardPackCsv(
     );
   }
 
+  if (governanceExceptions) {
+    const active = governanceExceptions.exceptions.filter(
+      (row) =>
+        row.status === "open" ||
+        row.status === "mitigating" ||
+        row.status === "accepted",
+    );
+    lines.push("");
+    lines.push(
+      csvLine([
+        "Section",
+        "Metric",
+        "Title",
+        "Status",
+        "Actual",
+        "Operator",
+        "Target",
+        "Unit",
+        "Responsible",
+        "Due Date",
+        "Rationale",
+        "Corrective Action",
+        "Target Version",
+      ]),
+    );
+    for (const row of active) {
+      lines.push(
+        csvLine([
+          "Governance Exception",
+          row.metric_key,
+          row.title,
+          row.status,
+          row.actual_value,
+          row.target_operator === "gte" ? ">=" : "<=",
+          row.target_value,
+          row.target_unit,
+          row.responsible_name ?? "",
+          row.due_date ?? "",
+          row.rationale,
+          row.corrective_action ?? "",
+          row.target_version,
+        ]),
+      );
+    }
+  }
+
   return "\uFEFF" + lines.join("\r\n");
 }
 
 export function downloadExecutiveStrategyBoardPackCsv(
   pack: ExecutiveStrategyBoardPack,
   governanceTargets?: ExecutiveGovernanceTargetEvaluation | null,
+  governanceExceptions?: ExecutiveGovernanceExceptionsData | null,
 ) {
   const blob = new Blob(
-    [executiveStrategyBoardPackCsv(pack, governanceTargets)],
+    [
+      executiveStrategyBoardPackCsv(
+        pack,
+        governanceTargets,
+        governanceExceptions,
+      ),
+    ],
     {
       type: "text/csv;charset=utf-8",
     },
