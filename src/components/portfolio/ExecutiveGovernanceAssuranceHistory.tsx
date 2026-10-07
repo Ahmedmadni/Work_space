@@ -137,7 +137,13 @@ export function ExecutiveGovernanceAssuranceHistory({
   }
 
   const requestedCurrent = finalized.find((row) => row.id === currentId);
-  const currentReview = requestedCurrent ?? finalized.at(-1)!;
+  const requestedCurrentIndex = requestedCurrent
+    ? finalized.findIndex((row) => row.id === requestedCurrent.id)
+    : -1;
+  const currentReview =
+    requestedCurrent && requestedCurrentIndex > 0
+      ? requestedCurrent
+      : finalized.at(-1)!;
   const currentIndex = finalized.findIndex(
     (row) => row.id === currentReview.id,
   );
@@ -438,8 +444,9 @@ export function ExecutiveGovernanceAssuranceHistory({
             <button
               key={point.review_id}
               type="button"
+              disabled={point.review_id === finalized[0]?.id}
               onClick={() => setCurrentId(point.review_id)}
-              className="rounded-lg border border-border p-3 text-start hover:bg-muted/40"
+              className="rounded-lg border border-border p-3 text-start hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <div className="flex items-center justify-between gap-2">
                 <p className="truncate text-[10px] font-semibold">
