@@ -445,6 +445,7 @@ set search_path = public
 as $projectflow$
 declare
   v_review public.executive_governance_reviews%rowtype;
+  v_verified_exceptions jsonb := '[]'::jsonb;
 begin
   if char_length(trim(coalesce(p_period_label, ''))) not between 1 and 180
      or p_review_date is null
@@ -473,6 +474,33 @@ begin
     p_operating_rhythm_snapshot,
     p_exceptions_snapshot
   );
+
+  if (
+    select count(*)
+    from jsonb_array_elements(p_exceptions_snapshot)
+  ) <> (
+    select count(distinct value->>'id')
+    from jsonb_array_elements(p_exceptions_snapshot)
+  )
+  then
+    raise exception 'GOVERNANCE_REVIEW_DUPLICATE_EXCEPTIONS'
+      using errcode = '22023';
+  end if;
+
+  select coalesce(
+    jsonb_agg(
+      public.projectflow_governance_exception_json(e)
+      order by e.updated_at desc, e.id
+    ),
+    '[]'::jsonb
+  )
+  into v_verified_exceptions
+  from public.executive_governance_exceptions e
+  where e.owner_user_id = auth.uid()
+    and e.id in (
+      select (value->>'id')::uuid
+      from jsonb_array_elements(p_exceptions_snapshot)
+    );
 
   insert into public.executive_governance_reviews (
     owner_user_id,
@@ -503,7 +531,7 @@ begin
     p_source_window_meeting_ids,
     p_target_assessments_snapshot,
     p_operating_rhythm_snapshot,
-    p_exceptions_snapshot,
+    v_verified_exceptions,
     p_evidence_snapshot,
     p_source_generated_at,
     auth.uid()
