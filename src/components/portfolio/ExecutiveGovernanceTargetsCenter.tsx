@@ -146,7 +146,8 @@ function nullableNumber(value: string) {
 
 function nullableInteger(value: string) {
   const parsed = nullableNumber(value);
-  return parsed == null ? null : Math.trunc(parsed);
+  if (parsed == null) return null;
+  return Number.isInteger(parsed) ? parsed : Number.NaN;
 }
 
 function formatAssessmentValue(
