@@ -25,6 +25,7 @@ import { ExecutiveMeetingEffectivenessCenter } from "@/components/portfolio/Exec
 import { ExecutiveGovernanceTrendsCenter } from "@/components/portfolio/ExecutiveGovernanceTrendsCenter";
 import { ExecutiveGovernanceTargetsCenter } from "@/components/portfolio/ExecutiveGovernanceTargetsCenter";
 import { ExecutiveGovernanceExceptionsCenter } from "@/components/portfolio/ExecutiveGovernanceExceptionsCenter";
+import { ExecutiveGovernanceAssuranceCenter } from "@/components/portfolio/ExecutiveGovernanceAssuranceCenter";
 import { useProjects } from "@/hooks/use-projects";
 import { useBoards } from "@/hooks/use-boards";
 import { useProjectExecutionSummary } from "@/hooks/use-canvas";
@@ -41,6 +42,7 @@ import { useStrategyCalendar } from "@/hooks/use-strategy-calendar";
 import { useExecutiveStrategyMeetings } from "@/hooks/use-executive-meetings";
 import { useExecutiveGovernanceTargets } from "@/hooks/use-governance-targets";
 import { useExecutiveGovernanceExceptions } from "@/hooks/use-governance-exceptions";
+import { useExecutiveGovernanceReviews } from "@/hooks/use-governance-assurance";
 import { arabicNumber, greeting, longDate } from "@/lib/format";
 
 export const Route = createFileRoute("/")({
@@ -81,6 +83,7 @@ function Dashboard() {
   const executiveMeetings = useExecutiveStrategyMeetings();
   const governanceTargets = useExecutiveGovernanceTargets();
   const governanceExceptions = useExecutiveGovernanceExceptions();
+  const governanceReviews = useExecutiveGovernanceReviews();
 
   const stats = [
     { label: "المشاريع", value: projects.data?.length ?? 0 },
@@ -210,6 +213,19 @@ function Dashboard() {
         targetData={governanceTargets.data}
         meetingData={executiveMeetings.data}
         isLoading={
+          governanceExceptions.isLoading ||
+          governanceTargets.isLoading ||
+          executiveMeetings.isLoading
+        }
+      />
+
+      <ExecutiveGovernanceAssuranceCenter
+        reviewData={governanceReviews.data}
+        targetData={governanceTargets.data}
+        exceptionData={governanceExceptions.data}
+        meetingData={executiveMeetings.data}
+        isLoading={
+          governanceReviews.isLoading ||
           governanceExceptions.isLoading ||
           governanceTargets.isLoading ||
           executiveMeetings.isLoading
