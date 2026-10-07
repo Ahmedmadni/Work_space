@@ -22,6 +22,7 @@ import { StrategyCalendarCenter } from "@/components/portfolio/StrategyCalendarC
 import { ExecutiveStrategyBoardPack } from "@/components/portfolio/ExecutiveStrategyBoardPack";
 import { ExecutiveMeetingGovernanceCenter } from "@/components/portfolio/ExecutiveMeetingGovernanceCenter";
 import { ExecutiveMeetingEffectivenessCenter } from "@/components/portfolio/ExecutiveMeetingEffectivenessCenter";
+import { ExecutiveGovernanceTrendsCenter } from "@/components/portfolio/ExecutiveGovernanceTrendsCenter";
 import { useProjects } from "@/hooks/use-projects";
 import { useBoards } from "@/hooks/use-boards";
 import { useProjectExecutionSummary } from "@/hooks/use-canvas";
@@ -176,6 +177,11 @@ function Dashboard() {
       />
 
       <ExecutiveMeetingEffectivenessCenter
+        meetingData={executiveMeetings.data}
+        isLoading={executiveMeetings.isLoading}
+      />
+
+      <ExecutiveGovernanceTrendsCenter
         meetingData={executiveMeetings.data}
         isLoading={executiveMeetings.isLoading}
       />
