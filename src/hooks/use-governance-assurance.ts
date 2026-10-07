@@ -5,10 +5,13 @@ import {
   createExecutiveGovernanceReview,
   finalizeExecutiveGovernanceReview,
   listExecutiveGovernanceReviews,
+  listGovernanceAssuranceCadence,
+  saveGovernanceAssuranceCadence,
   updateExecutiveGovernanceReview,
 } from "@/services/governance-assurance.service";
 import type {
   CreateExecutiveGovernanceReviewInput,
+  SaveGovernanceAssuranceCadenceInput,
   UpdateExecutiveGovernanceReviewInput,
 } from "@/types/governance-assurance";
 
@@ -23,6 +26,9 @@ export function useExecutiveGovernanceReviews() {
 function invalidate(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({
     queryKey: ["executive-governance-reviews"],
+  });
+  void queryClient.invalidateQueries({
+    queryKey: ["governance-assurance-cadence"],
   });
 }
 
@@ -81,6 +87,33 @@ export function useFinalizeExecutiveGovernanceReview() {
         error instanceof Error
           ? error.message
           : "تعذر Finalize للمراجعة.",
+      ),
+  });
+}
+
+
+export function useGovernanceAssuranceCadence() {
+  return useQuery({
+    queryKey: ["governance-assurance-cadence"],
+    queryFn: listGovernanceAssuranceCadence,
+    refetchInterval: 30_000,
+  });
+}
+
+export function useSaveGovernanceAssuranceCadence() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: SaveGovernanceAssuranceCadenceInput) =>
+      saveGovernanceAssuranceCadence(input),
+    onSuccess: () => {
+      invalidate(queryClient);
+      toast.success("تم حفظ Assurance Review Cadence.");
+    },
+    onError: (error) =>
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "تعذر حفظ Assurance Review Cadence.",
       ),
   });
 }
