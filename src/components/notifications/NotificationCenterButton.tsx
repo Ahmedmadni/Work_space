@@ -244,8 +244,7 @@ function notificationContext(notification: UserNotification) {
         : "";
     const metric =
       GOVERNANCE_METRIC_LABELS[metricKey] ??
-      metricKey ??
-      "Governance Target";
+      (metricKey || "Governance Target");
     const dueDate =
       typeof notification.metadata.due_date === "string"
         ? notification.metadata.due_date
