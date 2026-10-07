@@ -655,7 +655,7 @@ export async function createExecutiveGovernanceReview(
       reference: row.reference.trim(),
       note: row.note?.trim() || null,
     })),
-    source_generated_at: trends.generated_at,
+    source_generated_at: now,
     finalized_at: null,
     version: 1,
     created_by: profile.owner_user_id,
