@@ -175,6 +175,15 @@ function notificationTitle(notification: UserNotification) {
     if (event === "exception_due_soon") {
       return `اقترب استحقاق Governance Exception «${title}»`;
     }
+    if (event === "assurance_distribution_assigned") {
+      return "تم توزيع Governance Assurance Pack عليك";
+    }
+    if (event === "assurance_distribution_acknowledged") {
+      return "تم تسجيل Acknowledgement على Governance Assurance Pack";
+    }
+    if (event === "assurance_distribution_closed") {
+      return "تم إغلاق Governance Assurance Distribution";
+    }
     if (event === "assurance_signoff_assigned") {
       return "تم إسناد Governance Assurance Sign-off إليك";
     }
@@ -246,6 +255,17 @@ function notificationContext(notification: UserNotification) {
       typeof notification.metadata.event === "string"
         ? notification.metadata.event
         : "";
+    if (
+      event === "assurance_distribution_assigned" ||
+      event === "assurance_distribution_acknowledged" ||
+      event === "assurance_distribution_closed"
+    ) {
+      const period =
+        typeof notification.metadata.review_period === "string"
+          ? notification.metadata.review_period
+          : "Governance Assurance Review";
+      return period + " · Distribution Register";
+    }
     if (
       event === "assurance_signoff_assigned" ||
       event === "assurance_signoff_ready" ||

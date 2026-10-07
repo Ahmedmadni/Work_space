@@ -4,18 +4,25 @@ import { toast } from "sonner";
 import {
   createExecutiveGovernanceReview,
   finalizeExecutiveGovernanceReview,
+  acknowledgeGovernanceAssuranceDistribution,
   actOnGovernanceAssuranceAttestation,
+  closeGovernanceAssuranceDistribution,
+  distributeGovernanceAssurancePack,
   listExecutiveGovernanceReviews,
   listGovernanceAssuranceCadence,
+  listGovernanceAssuranceDistributions,
   listGovernanceAssuranceSignoffs,
   saveGovernanceAssuranceCadence,
+  saveGovernanceAssuranceDistributionPlan,
   saveGovernanceAssuranceSignoffPlan,
   updateExecutiveGovernanceReview,
 } from "@/services/governance-assurance.service";
 import type {
+  AcknowledgeGovernanceAssuranceDistributionInput,
   ActOnGovernanceAssuranceAttestationInput,
   CreateExecutiveGovernanceReviewInput,
   SaveGovernanceAssuranceCadenceInput,
+  SaveGovernanceAssuranceDistributionPlanInput,
   SaveGovernanceAssuranceSignoffPlanInput,
   UpdateExecutiveGovernanceReviewInput,
 } from "@/types/governance-assurance";
@@ -37,6 +44,9 @@ function invalidate(queryClient: ReturnType<typeof useQueryClient>) {
   });
   void queryClient.invalidateQueries({
     queryKey: ["governance-assurance-signoffs"],
+  });
+  void queryClient.invalidateQueries({
+    queryKey: ["governance-assurance-distributions"],
   });
 }
 
@@ -167,6 +177,105 @@ export function useActOnGovernanceAssuranceAttestation() {
         error instanceof Error
           ? error.message
           : "تعذر تسجيل Attestation.",
+      ),
+  });
+}
+
+
+export function useGovernanceAssuranceDistributions() {
+  return useQuery({
+    queryKey: ["governance-assurance-distributions"],
+    queryFn: listGovernanceAssuranceDistributions,
+    refetchInterval: 20_000,
+  });
+}
+
+export function useSaveGovernanceAssuranceDistributionPlan() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: SaveGovernanceAssuranceDistributionPlanInput) =>
+      saveGovernanceAssuranceDistributionPlan(input),
+    onSuccess: () => {
+      invalidate(queryClient);
+      toast.success("تم حفظ Distribution Register.");
+    },
+    onError: (error) =>
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "تعذر حفظ Distribution Register.",
+      ),
+  });
+}
+
+export function useDistributeGovernanceAssurancePack() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      distributionId,
+      expectedVersion,
+    }: {
+      distributionId: string;
+      expectedVersion: number;
+    }) =>
+      distributeGovernanceAssurancePack(
+        distributionId,
+        expectedVersion,
+      ),
+    onSuccess: () => {
+      invalidate(queryClient);
+      toast.success("تم توزيع Governance Assurance Pack.");
+    },
+    onError: (error) =>
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "تعذر توزيع Governance Assurance Pack.",
+      ),
+  });
+}
+
+export function useAcknowledgeGovernanceAssuranceDistribution() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: AcknowledgeGovernanceAssuranceDistributionInput) =>
+      acknowledgeGovernanceAssuranceDistribution(input),
+    onSuccess: () => {
+      invalidate(queryClient);
+      toast.success("تم تسجيل Acknowledgement.");
+    },
+    onError: (error) =>
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "تعذر تسجيل Acknowledgement.",
+      ),
+  });
+}
+
+export function useCloseGovernanceAssuranceDistribution() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      distributionId,
+      expectedVersion,
+    }: {
+      distributionId: string;
+      expectedVersion: number;
+    }) =>
+      closeGovernanceAssuranceDistribution(
+        distributionId,
+        expectedVersion,
+      ),
+    onSuccess: () => {
+      invalidate(queryClient);
+      toast.success("تم إغلاق Distribution Register.");
+    },
+    onError: (error) =>
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "تعذر إغلاق Distribution Register.",
       ),
   });
 }

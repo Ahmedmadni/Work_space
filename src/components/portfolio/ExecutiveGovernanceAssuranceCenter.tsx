@@ -23,6 +23,7 @@ import {
   useCreateExecutiveGovernanceReview,
   useFinalizeExecutiveGovernanceReview,
   useGovernanceAssuranceCadence,
+  useGovernanceAssuranceDistributions,
   useGovernanceAssuranceSignoffs,
   useSaveGovernanceAssuranceCadence,
   useUpdateExecutiveGovernanceReview,
@@ -30,6 +31,7 @@ import {
 import { arabicNumber } from "@/lib/format";
 import { ExecutiveGovernanceAssuranceHistory } from "@/components/portfolio/ExecutiveGovernanceAssuranceHistory";
 import { ExecutiveGovernanceAssuranceSignoff } from "@/components/portfolio/ExecutiveGovernanceAssuranceSignoff";
+import { ExecutiveGovernanceAssuranceDistribution } from "@/components/portfolio/ExecutiveGovernanceAssuranceDistribution";
 import { downloadGovernanceAssuranceReviewCsv } from "@/services/governance-assurance.service";
 import { buildExecutiveGovernanceTrends } from "@/services/governance-trends.service";
 import { evaluateExecutiveGovernanceTargets } from "@/services/governance-targets.service";
@@ -41,6 +43,7 @@ import type {
   GovernanceAssuranceCadenceStatus,
   GovernanceAssuranceConclusion,
   GovernanceAssuranceEvidenceItem,
+  GovernanceAssuranceDistribution,
   GovernanceAssuranceEvidenceType,
   GovernanceAssuranceSignoff,
 } from "@/types/governance-assurance";
@@ -372,9 +375,11 @@ function EvidenceEditor({
 function AssurancePack({
   review,
   signoff,
+  distribution,
 }: {
   review: ExecutiveGovernanceReview;
   signoff: GovernanceAssuranceSignoff | null;
+  distribution: GovernanceAssuranceDistribution | null;
 }) {
   const meta = CONCLUSION_META[review.assurance_conclusion];
   const met = review.target_assessments_snapshot.filter(
@@ -683,6 +688,60 @@ function AssurancePack({
         </section>
       )}
 
+      {distribution && (
+        <section className="assurance-page-break border-b border-border p-4 md:p-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-semibold">Distribution Register</p>
+            <span
+              className={
+                distribution.status === "closed"
+                  ? "rounded-full bg-success/10 px-2 py-0.5 text-[8px] text-success"
+                  : distribution.status === "distributed"
+                    ? "rounded-full bg-info/10 px-2 py-0.5 text-[8px] text-info"
+                    : "rounded-full bg-muted px-2 py-0.5 text-[8px] text-muted-foreground"
+              }
+            >
+              {distribution.status}
+            </span>
+          </div>
+          <p className="mt-1 text-[8px] text-muted-foreground">
+            Distributed {formatTimestamp(distribution.distributed_at)}
+            {" · "}Closed {formatTimestamp(distribution.closed_at)}
+          </p>
+          {distribution.distribution_note && (
+            <p className="mt-3 whitespace-pre-wrap text-[9px] leading-4 text-muted-foreground">
+              {distribution.distribution_note}
+            </p>
+          )}
+          <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            {distribution.recipients.map((recipient) => (
+              <div
+                key={recipient.id}
+                className="assurance-avoid-break rounded-xl border border-border bg-background p-3"
+              >
+                <p className="text-[10px] font-semibold">
+                  {recipient.recipient_name_snapshot}
+                </p>
+                <p className="mt-1 text-[8px] text-muted-foreground">
+                  {recipient.recipient_email_snapshot ?? "—"}
+                </p>
+                <p className="mt-2 text-[8px]">
+                  Status: <strong>{recipient.status}</strong>
+                  {recipient.acknowledged_at
+                    ? " · " + formatTimestamp(recipient.acknowledged_at)
+                    : ""}
+                </p>
+                {recipient.acknowledgement_note && (
+                  <p className="mt-2 whitespace-pre-wrap rounded-lg border border-info/20 bg-info/5 p-2 text-[8px] leading-4 text-info">
+                    Note: {recipient.acknowledgement_note}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       <footer className="border-t border-border p-4 text-[8px] leading-4 text-muted-foreground">
         <strong className="text-foreground">Audit basis:</strong> This pack is
         a stored snapshot. Finalized reviews cannot be edited. A later target,
@@ -711,6 +770,7 @@ export function ExecutiveGovernanceAssuranceCenter({
   const finalize = useFinalizeExecutiveGovernanceReview();
   const cadence = useGovernanceAssuranceCadence();
   const signoffs = useGovernanceAssuranceSignoffs();
+  const distributions = useGovernanceAssuranceDistributions();
   const saveCadence = useSaveGovernanceAssuranceCadence();
   const [draft, setDraft] = useState<ReviewDraft | null>(null);
   const [cadenceDraft, setCadenceDraft] = useState<CadenceDraft>({
@@ -1226,6 +1286,11 @@ export function ExecutiveGovernanceAssuranceCenter({
         meetingData={meetingData}
       />
 
+      <ExecutiveGovernanceAssuranceDistribution
+        reviewData={reviewData}
+        meetingData={meetingData}
+      />
+
       {!!reviews.length && (
         <div className="rounded-2xl border border-border bg-card p-4 shadow-[var(--shadow-frost)]">
           <div className="flex items-center gap-2">
@@ -1374,6 +1439,11 @@ export function ExecutiveGovernanceAssuranceCenter({
             signoffs.data?.owned.find(
               (row) => row.review.id === selectedReview.id,
             )?.signoff ?? null
+          }
+          distribution={
+            distributions.data?.owned.find(
+              (row) => row.review.id === selectedReview.id,
+            )?.distribution ?? null
           }
         />
       ) : (
