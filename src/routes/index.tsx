@@ -23,6 +23,7 @@ import { ExecutiveStrategyBoardPack } from "@/components/portfolio/ExecutiveStra
 import { ExecutiveMeetingGovernanceCenter } from "@/components/portfolio/ExecutiveMeetingGovernanceCenter";
 import { ExecutiveMeetingEffectivenessCenter } from "@/components/portfolio/ExecutiveMeetingEffectivenessCenter";
 import { ExecutiveGovernanceTrendsCenter } from "@/components/portfolio/ExecutiveGovernanceTrendsCenter";
+import { ExecutiveGovernanceTargetsCenter } from "@/components/portfolio/ExecutiveGovernanceTargetsCenter";
 import { useProjects } from "@/hooks/use-projects";
 import { useBoards } from "@/hooks/use-boards";
 import { useProjectExecutionSummary } from "@/hooks/use-canvas";
@@ -37,6 +38,7 @@ import { usePortfolioCollaborators } from "@/hooks/use-collaboration";
 import { useStrategyRecoveryPlans } from "@/hooks/use-strategy-recovery";
 import { useStrategyCalendar } from "@/hooks/use-strategy-calendar";
 import { useExecutiveStrategyMeetings } from "@/hooks/use-executive-meetings";
+import { useExecutiveGovernanceTargets } from "@/hooks/use-governance-targets";
 import { arabicNumber, greeting, longDate } from "@/lib/format";
 
 export const Route = createFileRoute("/")({
@@ -75,6 +77,7 @@ function Dashboard() {
   const portfolioCollaborators = usePortfolioCollaborators(projectIds);
   const strategyCalendar = useStrategyCalendar();
   const executiveMeetings = useExecutiveStrategyMeetings();
+  const governanceTargets = useExecutiveGovernanceTargets();
 
   const stats = [
     { label: "المشاريع", value: projects.data?.length ?? 0 },
@@ -184,6 +187,15 @@ function Dashboard() {
       <ExecutiveGovernanceTrendsCenter
         meetingData={executiveMeetings.data}
         isLoading={executiveMeetings.isLoading}
+      />
+
+      <ExecutiveGovernanceTargetsCenter
+        targetData={governanceTargets.data}
+        meetingData={executiveMeetings.data}
+        isLoading={
+          governanceTargets.isLoading ||
+          executiveMeetings.isLoading
+        }
       />
 
       <StrategicAlignmentCenter
