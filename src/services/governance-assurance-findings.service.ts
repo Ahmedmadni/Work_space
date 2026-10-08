@@ -666,6 +666,18 @@ export async function saveGovernanceAssuranceFinding(
   if (existing && existing.archive_id !== archive.id) {
     throw new Error("Archive الخاصة بالـFinding لا يمكن تغييرها.");
   }
+  if (
+    existing?.verification_status === "pending" &&
+    (
+      input.status !== existing.status ||
+      (input.responsible_user_id ?? null) !==
+        existing.responsible_user_id
+    )
+  ) {
+    throw new Error(
+      "لا يمكن تغيير Status أو Responsible أثناء Verification Pending.",
+    );
+  }
 
   if (!existing && input.status === "resolved") {
     throw new Error("أضف Closure Evidence قبل تحويل Finding إلى Resolved.");
