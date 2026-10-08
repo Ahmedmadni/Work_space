@@ -175,6 +175,13 @@ function notificationTitle(notification: UserNotification) {
     if (event === "exception_due_soon") {
       return `اقترب استحقاق Governance Exception «${title}»`;
     }
+    if (event === "assurance_finding_assigned") {
+      const findingTitle =
+        typeof notification.metadata.title === "string"
+          ? notification.metadata.title
+          : "Assurance Finding";
+      return `تم إسناد Assurance Finding: «${findingTitle}»`;
+    }
     if (event === "assurance_archive_sealed") {
       return "تم ختم Governance Assurance Archive";
     }
@@ -258,6 +265,19 @@ function notificationContext(notification: UserNotification) {
       typeof notification.metadata.event === "string"
         ? notification.metadata.event
         : "";
+    if (event === "assurance_finding_assigned") {
+      const certificate =
+        typeof notification.metadata.certificate_code === "string"
+          ? notification.metadata.certificate_code
+          : "Archive Certificate";
+      const dueDate =
+        typeof notification.metadata.due_date === "string"
+          ? notification.metadata.due_date
+          : "";
+      return dueDate
+        ? `${certificate} · Due ${dueDate}`
+        : certificate;
+    }
     if (event === "assurance_archive_sealed") {
       const period =
         typeof notification.metadata.review_period === "string"
