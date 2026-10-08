@@ -409,6 +409,11 @@ export async function listGovernanceAssuranceFindings(): Promise<GovernanceAssur
 
     return {
       findings,
+      manageable_archive_ids: Array.isArray(raw.manageable_archive_ids)
+        ? raw.manageable_archive_ids.filter(
+            (value): value is string => typeof value === "string",
+          )
+        : [],
       summary: normalizeSummary(raw.summary),
     };
   }
@@ -427,6 +432,7 @@ export async function listGovernanceAssuranceFindings(): Promise<GovernanceAssur
 
   return {
     findings,
+    manageable_archive_ids: archives.archives.map((archive) => archive.id),
     summary: buildSummary(findings.map((row) => row.finding)),
   };
 }
