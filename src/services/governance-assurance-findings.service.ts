@@ -122,6 +122,8 @@ function normalizeFinding(value: unknown): GovernanceAssuranceFinding | null {
         ? row.responsible_email_snapshot
         : null,
     due_date: typeof row.due_date === "string" ? row.due_date : null,
+    reminder_date:
+      typeof row.reminder_date === "string" ? row.reminder_date : null,
     corrective_action:
       typeof row.corrective_action === "string"
         ? row.corrective_action
@@ -152,6 +154,7 @@ function emptySummary(): GovernanceAssuranceFindingSummary {
     high_active: 0,
     overdue_active: 0,
     unassigned_active: 0,
+    assigned_to_me_active: 0,
   };
 }
 
@@ -172,6 +175,7 @@ function normalizeSummary(value: unknown): GovernanceAssuranceFindingSummary {
     high_active: read("high_active"),
     overdue_active: read("overdue_active"),
     unassigned_active: read("unassigned_active"),
+    assigned_to_me_active: read("assigned_to_me_active"),
   };
 }
 
@@ -234,6 +238,9 @@ function buildSummary(
     ).length,
     unassigned_active: active.filter((row) => !row.responsible_user_id)
       .length,
+    assigned_to_me_active: active.filter(
+      (row) => row.responsible_user_id === "local-user",
+    ).length,
   };
 }
 
@@ -252,6 +259,12 @@ function validateInput(input: SaveGovernanceAssuranceFindingInput) {
   }
   if ((input.resolution_note?.length ?? 0) > 12000) {
     throw new Error("Resolution Note طويلة جدًا.");
+  }
+  if (
+    input.reminder_date &&
+    (!input.due_date || input.reminder_date > input.due_date)
+  ) {
+    throw new Error("Reminder Date تتطلب Due Date ولا يمكن أن تكون بعدها.");
   }
   if (
     (input.status === "resolved" || input.status === "accepted") &&
@@ -411,6 +424,7 @@ export async function listGovernanceAssuranceFindings(): Promise<GovernanceAssur
               finding,
               archive,
               can_manage: row.can_manage === true,
+              is_responsible: row.is_responsible === true,
             },
           ];
         })
@@ -437,6 +451,7 @@ export async function listGovernanceAssuranceFindings(): Promise<GovernanceAssur
       finding,
       archive: archiveMap.get(finding.archive_id)!,
       can_manage: true,
+      is_responsible: finding.responsible_user_id === "local-user",
     }));
 
   return {
@@ -468,6 +483,7 @@ export async function saveGovernanceAssuranceFinding(
           p_status: input.status,
           p_responsible_user_id: input.responsible_user_id ?? null,
           p_due_date: input.due_date ?? null,
+          p_reminder_date: input.reminder_date ?? null,
           p_corrective_action: input.corrective_action ?? null,
           p_resolution_note: input.resolution_note ?? null,
         },
@@ -550,6 +566,7 @@ export async function saveGovernanceAssuranceFinding(
     responsible_name_snapshot: responsible?.display_name ?? null,
     responsible_email_snapshot: responsible?.email ?? null,
     due_date: input.due_date || null,
+    reminder_date: input.reminder_date || null,
     corrective_action: input.corrective_action?.trim() || null,
     resolution_note: input.resolution_note?.trim() || null,
     version: existing ? existing.version + 1 : 1,
@@ -572,4 +589,14 @@ export async function saveGovernanceAssuranceFinding(
   ];
   writeLocal(store);
   return finding;
+}
+
+
+export async function refreshGovernanceAssuranceFindingNotifications() {
+  if (!isSupabaseBackend()) return 0;
+  const raw = await supabaseRest<unknown>(
+    "rpc/refresh_assurance_finding_notifications",
+    { method: "POST", body: {} },
+  );
+  return typeof raw === "number" ? raw : Number(raw ?? 0) || 0;
 }
