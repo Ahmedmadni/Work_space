@@ -64,6 +64,7 @@ export interface GovernanceAssuranceFindingSummary {
 
 export interface GovernanceAssuranceFindingData {
   findings: GovernanceAssuranceFindingRow[];
+  manageable_archive_ids: string[];
   summary: GovernanceAssuranceFindingSummary;
 }
 
