@@ -1,6 +1,5 @@
 import {
   AlertTriangle,
-  BadgeCheck,
   CalendarClock,
   CheckCircle2,
   ClipboardList,
@@ -12,7 +11,7 @@ import {
   UserRoundX,
   X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import {
   useGovernanceAssuranceArchives,
