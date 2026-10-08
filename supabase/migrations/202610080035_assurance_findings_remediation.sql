@@ -581,6 +581,12 @@ begin
         auth.uid()
       )
     ), '[]'::jsonb),
+    'manageable_archive_ids',
+    coalesce((
+      select jsonb_agg(a.id order by a.archived_at desc)
+      from public.executive_governance_assurance_archives a
+      where a.owner_user_id = auth.uid()
+    ), '[]'::jsonb),
     'summary',
     coalesce((
       select jsonb_build_object(
