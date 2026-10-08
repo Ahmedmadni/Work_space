@@ -152,51 +152,52 @@ security definer
 set search_path = public
 as $projectflow$
 begin
-  if tg_op = 'UPDATE'
-     and old.verification_status = 'pending'
-     and not (
-       auth.uid() = old.verifier_user_id
-       and new.verification_status in (
-         'effective',
-         'partially_effective',
-         'ineffective'
+  if tg_op = 'UPDATE' then
+    if old.verification_status = 'pending'
+       and not (
+         auth.uid() = old.verifier_user_id
+         and new.verification_status in (
+           'effective',
+           'partially_effective',
+           'ineffective'
+         )
+         and new.responsible_user_id is not distinct from old.responsible_user_id
        )
-       and new.responsible_user_id is not distinct from old.responsible_user_id
-     )
-  then
-    raise exception 'ASSURANCE_FINDING_VERIFICATION_PENDING'
-      using errcode = '55000';
-  end if;
+    then
+      raise exception 'ASSURANCE_FINDING_VERIFICATION_PENDING'
+        using errcode = '55000';
+    end if;
 
-  if tg_op = 'UPDATE'
-     and old.status = 'resolved'
-     and new.status is distinct from 'resolved'
-     and old.verification_status <> 'pending'
-  then
-    new.verification_status := 'not_requested';
-    new.verifier_user_id := null;
-    new.verifier_name_snapshot := null;
-    new.verifier_email_snapshot := null;
-    new.verification_requested_at := null;
-    new.verified_at := null;
-    new.effectiveness_note := null;
+    if old.status = 'resolved'
+       and new.status is distinct from 'resolved'
+       and old.verification_status <> 'pending'
+    then
+      new.verification_status := 'not_requested';
+      new.verifier_user_id := null;
+      new.verifier_name_snapshot := null;
+      new.verifier_email_snapshot := null;
+      new.verification_requested_at := null;
+      new.verified_at := null;
+      new.effectiveness_note := null;
+    end if;
   end if;
 
   if new.status = 'resolved' then
-    if tg_op = 'INSERT'
-       or not exists (
-         select 1
-         from public.executive_governance_assurance_finding_evidence e
-         where e.finding_id = new.id
-       )
-    then
+    if tg_op = 'INSERT' then
       raise exception 'ASSURANCE_FINDING_EVIDENCE_REQUIRED_BEFORE_RESOLUTION'
         using errcode = '55000';
     end if;
 
-    if tg_op = 'INSERT'
-       or old.status is distinct from 'resolved'
-    then
+    if not exists (
+      select 1
+      from public.executive_governance_assurance_finding_evidence e
+      where e.finding_id = new.id
+    ) then
+      raise exception 'ASSURANCE_FINDING_EVIDENCE_REQUIRED_BEFORE_RESOLUTION'
+        using errcode = '55000';
+    end if;
+
+    if old.status is distinct from 'resolved' then
       new.verification_status := 'not_requested';
       new.verifier_user_id := null;
       new.verifier_name_snapshot := null;
