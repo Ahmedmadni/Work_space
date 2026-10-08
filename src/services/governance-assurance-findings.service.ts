@@ -666,16 +666,9 @@ export async function saveGovernanceAssuranceFinding(
   if (existing && existing.archive_id !== archive.id) {
     throw new Error("Archive الخاصة بالـFinding لا يمكن تغييرها.");
   }
-  if (
-    existing?.verification_status === "pending" &&
-    (
-      input.status !== existing.status ||
-      (input.responsible_user_id ?? null) !==
-        existing.responsible_user_id
-    )
-  ) {
+  if (existing?.verification_status === "pending") {
     throw new Error(
-      "لا يمكن تغيير Status أو Responsible أثناء Verification Pending.",
+      "Finding مقفلة أثناء Effectiveness Review حتى يسجل Verifier النتيجة.",
     );
   }
 
@@ -817,6 +810,11 @@ export async function addGovernanceAssuranceFindingEvidence(
   const store = readLocal();
   const finding = store.findings.find((row) => row.id === input.finding_id);
   if (!finding) throw new Error("Assurance Finding غير موجود.");
+  if (finding.verification_status === "pending") {
+    throw new Error(
+      "Closure Evidence مقفلة أثناء Effectiveness Review.",
+    );
+  }
   const now = new Date().toISOString();
   const evidence: GovernanceAssuranceFindingEvidence = {
     id: crypto.randomUUID(),
