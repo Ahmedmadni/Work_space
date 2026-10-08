@@ -14,6 +14,7 @@ import type {
   GovernanceAssuranceFindingData,
   GovernanceAssuranceFindingEvidence,
   GovernanceAssuranceFindingEvidenceType,
+  GovernanceAssuranceArchiveRemediationSummary,
   GovernanceAssuranceFindingResponsibleCandidate,
   GovernanceAssuranceFindingRow,
   GovernanceAssuranceFindingSeverity,
@@ -22,6 +23,9 @@ import type {
   GovernanceAssuranceFindingStatus,
   GovernanceAssuranceFindingSummary,
   GovernanceAssuranceFindingVerificationStatus,
+  GovernanceAssuranceRemediationAnalytics,
+  GovernanceAssuranceRemediationAgingBucket,
+  GovernanceAssuranceSeverityEffectivenessSummary,
   RequestGovernanceAssuranceFindingVerificationInput,
   SaveGovernanceAssuranceFindingInput,
 } from "@/types/governance-assurance-findings";
@@ -967,4 +971,335 @@ export async function refreshGovernanceAssuranceFindingNotifications() {
     { method: "POST", body: {} },
   );
   return typeof raw === "number" ? raw : Number(raw ?? 0) || 0;
+}
+
+
+function dateDiffDays(start: string, end: string) {
+  const startMs = new Date(start).getTime();
+  const endMs = new Date(end).getTime();
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) {
+    return null;
+  }
+  return Math.max(0, Math.round((endMs - startMs) / 86_400_000));
+}
+
+function median(values: number[]) {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) return sorted[middle];
+  return Math.round(((sorted[middle - 1] + sorted[middle]) / 2) * 10) / 10;
+}
+
+function findingIsActive(finding: GovernanceAssuranceFinding) {
+  return finding.status === "open" || finding.status === "in_progress";
+}
+
+function findingIsOverdue(
+  finding: GovernanceAssuranceFinding,
+  today: string,
+) {
+  return (
+    findingIsActive(finding) &&
+    !!finding.due_date &&
+    finding.due_date < today
+  );
+}
+
+function activeAgeDays(finding: GovernanceAssuranceFinding, nowIso: string) {
+  return dateDiffDays(finding.created_at, nowIso) ?? 0;
+}
+
+function buildAgingBuckets(
+  findings: GovernanceAssuranceFinding[],
+  nowIso: string,
+): GovernanceAssuranceRemediationAgingBucket[] {
+  const active = findings.filter(findingIsActive);
+  const buckets: GovernanceAssuranceRemediationAgingBucket[] = [
+    { key: "0_7", label: "0–7 days", min_days: 0, max_days: 7, count: 0 },
+    { key: "8_30", label: "8–30 days", min_days: 8, max_days: 30, count: 0 },
+    { key: "31_60", label: "31–60 days", min_days: 31, max_days: 60, count: 0 },
+    { key: "61_plus", label: "61+ days", min_days: 61, max_days: null, count: 0 },
+  ];
+
+  for (const finding of active) {
+    const age = activeAgeDays(finding, nowIso);
+    const bucket =
+      age <= 7
+        ? buckets[0]
+        : age <= 30
+          ? buckets[1]
+          : age <= 60
+            ? buckets[2]
+            : buckets[3];
+    bucket.count += 1;
+  }
+
+  return buckets;
+}
+
+function buildArchiveSummaries(
+  rows: GovernanceAssuranceFindingRow[],
+  today: string,
+): GovernanceAssuranceArchiveRemediationSummary[] {
+  const groups = new Map<string, GovernanceAssuranceFindingRow[]>();
+  for (const row of rows) {
+    const current = groups.get(row.archive.id) ?? [];
+    current.push(row);
+    groups.set(row.archive.id, current);
+  }
+
+  return [...groups.entries()]
+    .map(([archiveId, group]) => {
+      const archive = group[0].archive;
+      const findings = group.map((row) => row.finding);
+      const active = findings.filter(findingIsActive);
+      return {
+        archive_id: archiveId,
+        certificate_code: archive.certificate_code,
+        period_label: archive.snapshot.review.period_label,
+        archived_at: archive.archived_at,
+        total: findings.length,
+        active: active.length,
+        critical_high_active: active.filter(
+          (row) => row.severity === "critical" || row.severity === "high",
+        ).length,
+        overdue_active: findings.filter((row) =>
+          findingIsOverdue(row, today),
+        ).length,
+        resolved: findings.filter((row) => row.status === "resolved").length,
+        accepted: findings.filter((row) => row.status === "accepted").length,
+        verification_pending: findings.filter(
+          (row) => row.verification_status === "pending",
+        ).length,
+        effective: findings.filter(
+          (row) => row.verification_status === "effective",
+        ).length,
+        partially_effective: findings.filter(
+          (row) => row.verification_status === "partially_effective",
+        ).length,
+        ineffective: findings.filter(
+          (row) => row.verification_status === "ineffective",
+        ).length,
+      };
+    })
+    .sort(
+      (a, b) =>
+        b.archived_at.localeCompare(a.archived_at) ||
+        a.certificate_code.localeCompare(b.certificate_code),
+    );
+}
+
+function buildSeverityEffectiveness(
+  findings: GovernanceAssuranceFinding[],
+): GovernanceAssuranceSeverityEffectivenessSummary[] {
+  const severities: GovernanceAssuranceFindingSeverity[] = [
+    "critical",
+    "high",
+    "medium",
+    "low",
+  ];
+  return severities.map((level) => {
+    const rows = findings.filter((row) => row.severity === level);
+    const effective = rows.filter(
+      (row) => row.verification_status === "effective",
+    ).length;
+    const partiallyEffective = rows.filter(
+      (row) => row.verification_status === "partially_effective",
+    ).length;
+    const ineffective = rows.filter(
+      (row) => row.verification_status === "ineffective",
+    ).length;
+    return {
+      severity: level,
+      total_findings: rows.length,
+      completed_verifications:
+        effective + partiallyEffective + ineffective,
+      effective,
+      partially_effective: partiallyEffective,
+      ineffective,
+    };
+  });
+}
+
+export function buildGovernanceAssuranceRemediationAnalytics(
+  data: GovernanceAssuranceFindingData,
+  now = new Date(),
+): GovernanceAssuranceRemediationAnalytics {
+  const nowIso = now.toISOString();
+  const today = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0"),
+  ].join("-");
+  const findings = data.findings.map((row) => row.finding);
+  const active = findings.filter(findingIsActive);
+  const closed = findings.filter(
+    (row) => row.status === "resolved" || row.status === "accepted",
+  );
+  const effective = findings.filter(
+    (row) => row.verification_status === "effective",
+  ).length;
+  const partiallyEffective = findings.filter(
+    (row) => row.verification_status === "partially_effective",
+  ).length;
+  const ineffective = findings.filter(
+    (row) => row.verification_status === "ineffective",
+  ).length;
+  const completedVerifications =
+    effective + partiallyEffective + ineffective;
+
+  const resolutionDays = findings.flatMap((row) => {
+    if (!row.resolved_at) return [];
+    const days = dateDiffDays(row.created_at, row.resolved_at);
+    return days == null ? [] : [days];
+  });
+  const acceptanceDays = findings.flatMap((row) => {
+    if (!row.accepted_at) return [];
+    const days = dateDiffDays(row.created_at, row.accepted_at);
+    return days == null ? [] : [days];
+  });
+
+  return {
+    generated_at: nowIso,
+    total_findings: findings.length,
+    active_findings: active.length,
+    closed_findings: closed.length,
+    overdue_active: findings.filter((row) => findingIsOverdue(row, today))
+      .length,
+    unassigned_active: active.filter((row) => !row.responsible_user_id).length,
+    verification_pending: findings.filter(
+      (row) => row.verification_status === "pending",
+    ).length,
+    completed_verifications: completedVerifications,
+    effective_verifications: effective,
+    partially_effective_verifications: partiallyEffective,
+    ineffective_verifications: ineffective,
+    effectiveness_rate_pct:
+      completedVerifications > 0
+        ? Math.round((effective / completedVerifications) * 1000) / 10
+        : null,
+    median_resolution_days: median(resolutionDays),
+    median_acceptance_days: median(acceptanceDays),
+    reopened_by_effectiveness: findings.filter(
+      (row) =>
+        findingIsActive(row) &&
+        (
+          row.verification_status === "partially_effective" ||
+          row.verification_status === "ineffective"
+        ),
+    ).length,
+    active_aging: buildAgingBuckets(findings, nowIso),
+    by_archive: buildArchiveSummaries(data.findings, today),
+    by_severity: buildSeverityEffectiveness(findings),
+  };
+}
+
+function csvCell(value: string | number | null) {
+  if (value == null) return "";
+  const text = String(value);
+  return '"' + text.replaceAll('"', '""') + '"';
+}
+
+function csvRow(values: Array<string | number | null>) {
+  return values.map(csvCell).join(",");
+}
+
+export function governanceAssuranceRemediationAnalyticsCsv(
+  analytics: GovernanceAssuranceRemediationAnalytics,
+) {
+  const lines = [
+    csvRow(["Governance Assurance Remediation Analytics"]),
+    csvRow(["Generated At", analytics.generated_at]),
+    csvRow(["Total Findings", analytics.total_findings]),
+    csvRow(["Active Findings", analytics.active_findings]),
+    csvRow(["Closed Findings", analytics.closed_findings]),
+    csvRow(["Overdue Active", analytics.overdue_active]),
+    csvRow(["Unassigned Active", analytics.unassigned_active]),
+    csvRow(["Verification Pending", analytics.verification_pending]),
+    csvRow(["Completed Verifications", analytics.completed_verifications]),
+    csvRow(["Effective", analytics.effective_verifications]),
+    csvRow([
+      "Partially Effective",
+      analytics.partially_effective_verifications,
+    ]),
+    csvRow(["Ineffective", analytics.ineffective_verifications]),
+    csvRow(["Effectiveness Rate %", analytics.effectiveness_rate_pct]),
+    csvRow(["Median Resolution Days", analytics.median_resolution_days]),
+    csvRow(["Median Acceptance Days", analytics.median_acceptance_days]),
+    csvRow(["Reopened By Effectiveness", analytics.reopened_by_effectiveness]),
+    "",
+    csvRow(["Active Aging", "Count"]),
+    ...analytics.active_aging.map((row) => csvRow([row.label, row.count])),
+    "",
+    csvRow([
+      "Archive Certificate",
+      "Period",
+      "Archived At",
+      "Total",
+      "Active",
+      "Critical/High Active",
+      "Overdue Active",
+      "Resolved",
+      "Accepted",
+      "Verification Pending",
+      "Effective",
+      "Partially Effective",
+      "Ineffective",
+    ]),
+    ...analytics.by_archive.map((row) =>
+      csvRow([
+        row.certificate_code,
+        row.period_label,
+        row.archived_at,
+        row.total,
+        row.active,
+        row.critical_high_active,
+        row.overdue_active,
+        row.resolved,
+        row.accepted,
+        row.verification_pending,
+        row.effective,
+        row.partially_effective,
+        row.ineffective,
+      ]),
+    ),
+    "",
+    csvRow([
+      "Severity",
+      "Total Findings",
+      "Completed Verifications",
+      "Effective",
+      "Partially Effective",
+      "Ineffective",
+    ]),
+    ...analytics.by_severity.map((row) =>
+      csvRow([
+        row.severity,
+        row.total_findings,
+        row.completed_verifications,
+        row.effective,
+        row.partially_effective,
+        row.ineffective,
+      ]),
+    ),
+  ];
+  return "\uFEFF" + lines.join("\r\n");
+}
+
+export function downloadGovernanceAssuranceRemediationAnalyticsCsv(
+  analytics: GovernanceAssuranceRemediationAnalytics,
+) {
+  const blob = new Blob(
+    [governanceAssuranceRemediationAnalyticsCsv(analytics)],
+    { type: "text/csv;charset=utf-8" },
+  );
+  const href = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = href;
+  anchor.download = "governance-assurance-remediation-analytics.csv";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(href);
 }
