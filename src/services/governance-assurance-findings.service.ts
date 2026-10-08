@@ -335,8 +335,17 @@ export function buildGovernanceAssuranceFindingResponsibleCandidates(
         email,
         source,
       });
-    } else if (!existing.email && email) {
-      map.set(userId, { ...existing, email });
+    } else {
+      map.set(userId, {
+        ...existing,
+        display_name:
+          existing.display_name === existing.user_id &&
+          displayName.trim() &&
+          displayName.trim() !== userId
+            ? displayName.trim()
+            : existing.display_name,
+        email: existing.email ?? email,
+      });
     }
   };
 
