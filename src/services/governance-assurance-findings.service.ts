@@ -8,8 +8,12 @@ import type {
   GovernanceAssuranceSignatoryCandidate,
 } from "@/types/governance-assurance";
 import type {
+  ActOnGovernanceAssuranceFindingVerificationInput,
+  AddGovernanceAssuranceFindingEvidenceInput,
   GovernanceAssuranceFinding,
   GovernanceAssuranceFindingData,
+  GovernanceAssuranceFindingEvidence,
+  GovernanceAssuranceFindingEvidenceType,
   GovernanceAssuranceFindingResponsibleCandidate,
   GovernanceAssuranceFindingRow,
   GovernanceAssuranceFindingSeverity,
@@ -17,6 +21,8 @@ import type {
   GovernanceAssuranceFindingSourceType,
   GovernanceAssuranceFindingStatus,
   GovernanceAssuranceFindingSummary,
+  GovernanceAssuranceFindingVerificationStatus,
+  RequestGovernanceAssuranceFindingVerificationInput,
   SaveGovernanceAssuranceFindingInput,
 } from "@/types/governance-assurance-findings";
 
@@ -25,6 +31,7 @@ const LOCAL_KEY = "projectflow.executive-governance-assurance-findings.v1";
 interface LocalStore {
   version: 1;
   findings: GovernanceAssuranceFinding[];
+  evidence: GovernanceAssuranceFindingEvidence[];
 }
 
 function intOrNull(value: unknown) {
@@ -73,12 +80,68 @@ function status(
     : null;
 }
 
+function verificationStatus(
+  value: unknown,
+): GovernanceAssuranceFindingVerificationStatus | null {
+  return value === "not_requested" ||
+    value === "pending" ||
+    value === "effective" ||
+    value === "partially_effective" ||
+    value === "ineffective"
+    ? value
+    : null;
+}
+
+function evidenceType(
+  value: unknown,
+): GovernanceAssuranceFindingEvidenceType | null {
+  return value === "note" || value === "link" || value === "reference"
+    ? value
+    : null;
+}
+
+function normalizeEvidence(
+  value: unknown,
+): GovernanceAssuranceFindingEvidence | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const type = evidenceType(row.evidence_type);
+  if (
+    typeof row.id !== "string" ||
+    typeof row.finding_id !== "string" ||
+    typeof row.archive_id !== "string" ||
+    typeof row.owner_user_id !== "string" ||
+    typeof row.title !== "string" ||
+    typeof row.detail !== "string" ||
+    typeof row.created_by !== "string" ||
+    typeof row.created_at !== "string" ||
+    !type
+  ) {
+    return null;
+  }
+  return {
+    id: row.id,
+    finding_id: row.finding_id,
+    archive_id: row.archive_id,
+    owner_user_id: row.owner_user_id,
+    evidence_type: type,
+    title: row.title,
+    detail: row.detail,
+    reference_url:
+      typeof row.reference_url === "string" ? row.reference_url : null,
+    created_by: row.created_by,
+    created_at: row.created_at,
+  };
+}
+
 function normalizeFinding(value: unknown): GovernanceAssuranceFinding | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const row = value as Record<string, unknown>;
   const findingSource = sourceType(row.source_type);
   const findingSeverity = severity(row.severity);
   const findingStatus = status(row.status);
+  const findingVerificationStatus =
+    verificationStatus(row.verification_status) ?? "not_requested";
   const version = intOrNull(row.version);
 
   if (
@@ -132,6 +195,26 @@ function normalizeFinding(value: unknown): GovernanceAssuranceFinding | null {
       typeof row.resolution_note === "string"
         ? row.resolution_note
         : null,
+    verification_status: findingVerificationStatus,
+    verifier_user_id:
+      typeof row.verifier_user_id === "string" ? row.verifier_user_id : null,
+    verifier_name_snapshot:
+      typeof row.verifier_name_snapshot === "string"
+        ? row.verifier_name_snapshot
+        : null,
+    verifier_email_snapshot:
+      typeof row.verifier_email_snapshot === "string"
+        ? row.verifier_email_snapshot
+        : null,
+    verification_requested_at:
+      typeof row.verification_requested_at === "string"
+        ? row.verification_requested_at
+        : null,
+    verified_at: typeof row.verified_at === "string" ? row.verified_at : null,
+    effectiveness_note:
+      typeof row.effectiveness_note === "string"
+        ? row.effectiveness_note
+        : null,
     version,
     resolved_at:
       typeof row.resolved_at === "string" ? row.resolved_at : null,
@@ -155,6 +238,8 @@ function emptySummary(): GovernanceAssuranceFindingSummary {
     overdue_active: 0,
     unassigned_active: 0,
     assigned_to_me_active: 0,
+    verification_pending: 0,
+    ineffective_active: 0,
   };
 }
 
@@ -176,12 +261,14 @@ function normalizeSummary(value: unknown): GovernanceAssuranceFindingSummary {
     overdue_active: read("overdue_active"),
     unassigned_active: read("unassigned_active"),
     assigned_to_me_active: read("assigned_to_me_active"),
+    verification_pending: read("verification_pending"),
+    ineffective_active: read("ineffective_active"),
   };
 }
 
 function readLocal(): LocalStore {
   if (typeof window === "undefined") {
-    return { version: 1, findings: [] };
+    return { version: 1, findings: [], evidence: [] };
   }
   try {
     const parsed = JSON.parse(
@@ -196,9 +283,16 @@ function readLocal(): LocalStore {
               (item): item is GovernanceAssuranceFinding => !!item,
             )
         : [],
+      evidence: Array.isArray(parsed.evidence)
+        ? parsed.evidence
+            .map(normalizeEvidence)
+            .filter(
+              (item): item is GovernanceAssuranceFindingEvidence => !!item,
+            )
+        : [],
     };
   } catch {
-    return { version: 1, findings: [] };
+    return { version: 1, findings: [], evidence: [] };
   }
 }
 
@@ -240,6 +334,14 @@ function buildSummary(
       .length,
     assigned_to_me_active: active.filter(
       (row) => row.responsible_user_id === "local-user",
+    ).length,
+    verification_pending: findings.filter(
+      (row) => row.verification_status === "pending",
+    ).length,
+    ineffective_active: active.filter(
+      (row) =>
+        row.verification_status === "partially_effective" ||
+        row.verification_status === "ineffective",
     ).length,
   };
 }
@@ -425,6 +527,15 @@ export async function listGovernanceAssuranceFindings(): Promise<GovernanceAssur
               archive,
               can_manage: row.can_manage === true,
               is_responsible: row.is_responsible === true,
+              can_verify: row.can_verify === true,
+              evidence: Array.isArray(row.evidence)
+                ? row.evidence
+                    .map(normalizeEvidence)
+                    .filter(
+                      (item): item is GovernanceAssuranceFindingEvidence =>
+                        !!item,
+                    )
+                : [],
             },
           ];
         })
@@ -445,13 +556,21 @@ export async function listGovernanceAssuranceFindings(): Promise<GovernanceAssur
   const archiveMap = new Map(
     archives.archives.map((archive) => [archive.id, archive] as const),
   );
-  const findings = readLocal().findings
+  const localStore = readLocal();
+  const findings = localStore.findings
     .filter((finding) => archiveMap.has(finding.archive_id))
     .map((finding) => ({
       finding,
       archive: archiveMap.get(finding.archive_id)!,
       can_manage: true,
       is_responsible: finding.responsible_user_id === "local-user",
+      can_verify:
+        finding.verifier_user_id === "local-user" &&
+        finding.verification_status === "pending" &&
+        finding.status === "resolved",
+      evidence: localStore.evidence.filter(
+        (row) => row.finding_id === finding.id,
+      ),
     }));
 
   return {
@@ -547,8 +666,35 @@ export async function saveGovernanceAssuranceFinding(
   if (existing && existing.archive_id !== archive.id) {
     throw new Error("Archive الخاصة بالـFinding لا يمكن تغييرها.");
   }
+  if (existing?.verification_status === "pending") {
+    throw new Error(
+      "Finding مقفلة أثناء Effectiveness Review حتى يسجل Verifier النتيجة.",
+    );
+  }
+
+  if (!existing && input.status === "resolved") {
+    throw new Error("أضف Closure Evidence قبل تحويل Finding إلى Resolved.");
+  }
+  if (
+    existing &&
+    input.status === "resolved" &&
+    existing.status !== "resolved" &&
+    !store.evidence.some((row) => row.finding_id === existing.id)
+  ) {
+    throw new Error("أضف Closure Evidence قبل تحويل Finding إلى Resolved.");
+  }
 
   const now = new Date().toISOString();
+  const reopeningVerifiedFinding =
+    !!existing &&
+    existing.status === "resolved" &&
+    input.status !== "resolved" &&
+    existing.verification_status !== "pending";
+  const resolvingNewCycle =
+    !!existing &&
+    input.status === "resolved" &&
+    existing.status !== "resolved";
+
   const finding: GovernanceAssuranceFinding = {
     id: existing?.id ?? crypto.randomUUID(),
     archive_id: archive.id,
@@ -569,6 +715,34 @@ export async function saveGovernanceAssuranceFinding(
     reminder_date: input.reminder_date || null,
     corrective_action: input.corrective_action?.trim() || null,
     resolution_note: input.resolution_note?.trim() || null,
+    verification_status:
+      resolvingNewCycle || reopeningVerifiedFinding
+        ? "not_requested"
+        : existing?.verification_status ?? "not_requested",
+    verifier_user_id:
+      resolvingNewCycle || reopeningVerifiedFinding
+        ? null
+        : existing?.verifier_user_id ?? null,
+    verifier_name_snapshot:
+      resolvingNewCycle || reopeningVerifiedFinding
+        ? null
+        : existing?.verifier_name_snapshot ?? null,
+    verifier_email_snapshot:
+      resolvingNewCycle || reopeningVerifiedFinding
+        ? null
+        : existing?.verifier_email_snapshot ?? null,
+    verification_requested_at:
+      resolvingNewCycle || reopeningVerifiedFinding
+        ? null
+        : existing?.verification_requested_at ?? null,
+    verified_at:
+      resolvingNewCycle || reopeningVerifiedFinding
+        ? null
+        : existing?.verified_at ?? null,
+    effectiveness_note:
+      resolvingNewCycle || reopeningVerifiedFinding
+        ? null
+        : existing?.effectiveness_note ?? null,
     version: existing ? existing.version + 1 : 1,
     resolved_at:
       input.status === "resolved"
@@ -591,6 +765,200 @@ export async function saveGovernanceAssuranceFinding(
   return finding;
 }
 
+
+export async function addGovernanceAssuranceFindingEvidence(
+  input: AddGovernanceAssuranceFindingEvidenceInput,
+): Promise<GovernanceAssuranceFindingEvidence> {
+  if (!input.title.trim() || input.title.trim().length > 240) {
+    throw new Error("Evidence Title مطلوبة وبحد أقصى 240 حرفًا.");
+  }
+  if (!input.detail.trim() || input.detail.trim().length > 12000) {
+    throw new Error("Evidence Detail مطلوبة وبحد أقصى 12000 حرف.");
+  }
+  if ((input.reference_url?.length ?? 0) > 2000) {
+    throw new Error("Evidence URL طويلة جدًا.");
+  }
+  if (
+    input.reference_url?.trim() &&
+    !/^https?:\/\//i.test(input.reference_url.trim())
+  ) {
+    throw new Error("Evidence URL يجب أن تبدأ بـ http:// أو https://.");
+  }
+  if (input.evidence_type === "link" && !input.reference_url?.trim()) {
+    throw new Error("Link Evidence تتطلب URL.");
+  }
+
+  if (isSupabaseBackend()) {
+    const raw = await supabaseRest<unknown>(
+      "rpc/add_executive_governance_assurance_finding_evidence",
+      {
+        method: "POST",
+        body: {
+          p_finding_id: input.finding_id,
+          p_evidence_type: input.evidence_type,
+          p_title: input.title,
+          p_detail: input.detail,
+          p_reference_url: input.reference_url ?? null,
+        },
+      },
+    );
+    const evidence = normalizeEvidence(raw);
+    if (!evidence) throw new Error("عاد الخادم بـEvidence غير صالحة.");
+    return evidence;
+  }
+
+  const store = readLocal();
+  const finding = store.findings.find((row) => row.id === input.finding_id);
+  if (!finding) throw new Error("Assurance Finding غير موجود.");
+  if (finding.verification_status === "pending") {
+    throw new Error(
+      "Closure Evidence مقفلة أثناء Effectiveness Review.",
+    );
+  }
+  const now = new Date().toISOString();
+  const evidence: GovernanceAssuranceFindingEvidence = {
+    id: crypto.randomUUID(),
+    finding_id: finding.id,
+    archive_id: finding.archive_id,
+    owner_user_id: finding.owner_user_id,
+    evidence_type: input.evidence_type,
+    title: input.title.trim(),
+    detail: input.detail.trim(),
+    reference_url: input.reference_url?.trim() || null,
+    created_by: finding.owner_user_id,
+    created_at: now,
+  };
+  store.evidence = [evidence, ...store.evidence];
+  writeLocal(store);
+  return evidence;
+}
+
+export async function requestGovernanceAssuranceFindingVerification(
+  input: RequestGovernanceAssuranceFindingVerificationInput,
+): Promise<GovernanceAssuranceFinding> {
+  if (!input.verifier_user_id) throw new Error("Verifier مطلوبة.");
+
+  if (isSupabaseBackend()) {
+    const raw = await supabaseRest<unknown>(
+      "rpc/request_executive_governance_assurance_finding_verification",
+      {
+        method: "POST",
+        body: {
+          p_finding_id: input.finding_id,
+          p_expected_version: input.expected_version,
+          p_verifier_user_id: input.verifier_user_id,
+        },
+      },
+    );
+    const finding = normalizeFinding(raw);
+    if (!finding) throw new Error("تعذر قراءة Verification Request.");
+    return finding;
+  }
+
+  const store = readLocal();
+  const finding = store.findings.find((row) => row.id === input.finding_id);
+  if (!finding) throw new Error("Assurance Finding غير موجود.");
+  if (
+    finding.version !== input.expected_version ||
+    finding.status !== "resolved" ||
+    finding.verification_status === "pending"
+  ) {
+    throw new Error("Finding ليست جاهزة لطلب Verification.");
+  }
+  if (!store.evidence.some((row) => row.finding_id === finding.id)) {
+    throw new Error("Closure Evidence مطلوبة قبل Verification.");
+  }
+
+  const archives = await listGovernanceAssuranceArchives();
+  const archive = archives.archives.find((row) => row.id === finding.archive_id);
+  if (!archive) throw new Error("Archive Certificate غير موجودة.");
+  const candidate = buildGovernanceAssuranceFindingResponsibleCandidates(
+    archive,
+  ).find((row) => row.user_id === input.verifier_user_id);
+  if (
+    !candidate ||
+    candidate.user_id === finding.responsible_user_id
+  ) {
+    throw new Error("Verifier يجب أن تكون مستقلة عن Responsible.");
+  }
+
+  const now = new Date().toISOString();
+  const updated: GovernanceAssuranceFinding = {
+    ...finding,
+    verification_status: "pending",
+    verifier_user_id: candidate.user_id,
+    verifier_name_snapshot: candidate.display_name,
+    verifier_email_snapshot: candidate.email,
+    verification_requested_at: now,
+    verified_at: null,
+    effectiveness_note: null,
+    version: finding.version + 1,
+    updated_at: now,
+  };
+  store.findings = store.findings.map((row) =>
+    row.id === updated.id ? updated : row,
+  );
+  writeLocal(store);
+  return updated;
+}
+
+export async function actOnGovernanceAssuranceFindingVerification(
+  input: ActOnGovernanceAssuranceFindingVerificationInput,
+): Promise<GovernanceAssuranceFinding> {
+  if (
+    !input.effectiveness_note.trim() ||
+    input.effectiveness_note.trim().length > 12000
+  ) {
+    throw new Error("Effectiveness Note مطلوبة وبحد أقصى 12000 حرف.");
+  }
+
+  if (isSupabaseBackend()) {
+    const raw = await supabaseRest<unknown>(
+      "rpc/act_on_executive_governance_assurance_finding_verification",
+      {
+        method: "POST",
+        body: {
+          p_finding_id: input.finding_id,
+          p_expected_version: input.expected_version,
+          p_decision: input.decision,
+          p_effectiveness_note: input.effectiveness_note,
+        },
+      },
+    );
+    const finding = normalizeFinding(raw);
+    if (!finding) throw new Error("تعذر قراءة Verification Result.");
+    return finding;
+  }
+
+  const store = readLocal();
+  const finding = store.findings.find((row) => row.id === input.finding_id);
+  if (
+    !finding ||
+    finding.verifier_user_id !== "local-user" ||
+    finding.verification_status !== "pending" ||
+    finding.status !== "resolved" ||
+    finding.version !== input.expected_version
+  ) {
+    throw new Error("Verification ليست جاهزة لهذا المستخدم.");
+  }
+
+  const now = new Date().toISOString();
+  const updated: GovernanceAssuranceFinding = {
+    ...finding,
+    verification_status: input.decision,
+    verified_at: now,
+    effectiveness_note: input.effectiveness_note.trim(),
+    status: input.decision === "effective" ? "resolved" : "in_progress",
+    resolved_at: input.decision === "effective" ? finding.resolved_at : null,
+    version: finding.version + 1,
+    updated_at: now,
+  };
+  store.findings = store.findings.map((row) =>
+    row.id === updated.id ? updated : row,
+  );
+  writeLocal(store);
+  return updated;
+}
 
 export async function refreshGovernanceAssuranceFindingNotifications() {
   if (!isSupabaseBackend()) return 0;
