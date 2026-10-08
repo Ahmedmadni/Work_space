@@ -692,6 +692,16 @@ export async function saveGovernanceAssuranceFinding(
   }
 
   const now = new Date().toISOString();
+  const reopeningVerifiedFinding =
+    !!existing &&
+    existing.status === "resolved" &&
+    input.status !== "resolved" &&
+    existing.verification_status !== "pending";
+  const resolvingNewCycle =
+    !!existing &&
+    input.status === "resolved" &&
+    existing.status !== "resolved";
+
   const finding: GovernanceAssuranceFinding = {
     id: existing?.id ?? crypto.randomUUID(),
     archive_id: archive.id,
@@ -713,45 +723,31 @@ export async function saveGovernanceAssuranceFinding(
     corrective_action: input.corrective_action?.trim() || null,
     resolution_note: input.resolution_note?.trim() || null,
     verification_status:
-      existing &&
-      input.status === "resolved" &&
-      existing.status !== "resolved"
+      resolvingNewCycle || reopeningVerifiedFinding
         ? "not_requested"
         : existing?.verification_status ?? "not_requested",
     verifier_user_id:
-      existing &&
-      input.status === "resolved" &&
-      existing.status !== "resolved"
+      resolvingNewCycle || reopeningVerifiedFinding
         ? null
         : existing?.verifier_user_id ?? null,
     verifier_name_snapshot:
-      existing &&
-      input.status === "resolved" &&
-      existing.status !== "resolved"
+      resolvingNewCycle || reopeningVerifiedFinding
         ? null
         : existing?.verifier_name_snapshot ?? null,
     verifier_email_snapshot:
-      existing &&
-      input.status === "resolved" &&
-      existing.status !== "resolved"
+      resolvingNewCycle || reopeningVerifiedFinding
         ? null
         : existing?.verifier_email_snapshot ?? null,
     verification_requested_at:
-      existing &&
-      input.status === "resolved" &&
-      existing.status !== "resolved"
+      resolvingNewCycle || reopeningVerifiedFinding
         ? null
         : existing?.verification_requested_at ?? null,
     verified_at:
-      existing &&
-      input.status === "resolved" &&
-      existing.status !== "resolved"
+      resolvingNewCycle || reopeningVerifiedFinding
         ? null
         : existing?.verified_at ?? null,
     effectiveness_note:
-      existing &&
-      input.status === "resolved" &&
-      existing.status !== "resolved"
+      resolvingNewCycle || reopeningVerifiedFinding
         ? null
         : existing?.effectiveness_note ?? null,
     version: existing ? existing.version + 1 : 1,
