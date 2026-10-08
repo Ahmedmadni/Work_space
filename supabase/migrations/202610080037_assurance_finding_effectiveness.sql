@@ -154,10 +154,6 @@ as $projectflow$
 begin
   if tg_op = 'UPDATE'
      and old.verification_status = 'pending'
-     and (
-       new.status is distinct from old.status
-       or new.responsible_user_id is distinct from old.responsible_user_id
-     )
      and not (
        auth.uid() = old.verifier_user_id
        and new.verification_status in (
@@ -272,6 +268,11 @@ begin
   if not found then
     raise exception 'ASSURANCE_FINDING_NOT_FOUND'
       using errcode = 'P0002';
+  end if;
+
+  if v_finding.verification_status = 'pending' then
+    raise exception 'ASSURANCE_FINDING_EVIDENCE_LOCKED_DURING_VERIFICATION'
+      using errcode = '55000';
   end if;
 
   insert into public.executive_governance_assurance_finding_evidence (
