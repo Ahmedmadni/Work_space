@@ -2,10 +2,18 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import {
+  actOnGovernanceAssuranceFindingVerification,
+  addGovernanceAssuranceFindingEvidence,
   listGovernanceAssuranceFindings,
+  requestGovernanceAssuranceFindingVerification,
   saveGovernanceAssuranceFinding,
 } from "@/services/governance-assurance-findings.service";
-import type { SaveGovernanceAssuranceFindingInput } from "@/types/governance-assurance-findings";
+import type {
+  ActOnGovernanceAssuranceFindingVerificationInput,
+  AddGovernanceAssuranceFindingEvidenceInput,
+  RequestGovernanceAssuranceFindingVerificationInput,
+  SaveGovernanceAssuranceFindingInput,
+} from "@/types/governance-assurance-findings";
 
 export function useGovernanceAssuranceFindings() {
   return useQuery({
@@ -31,6 +39,73 @@ export function useSaveGovernanceAssuranceFinding() {
         error instanceof Error
           ? error.message
           : "تعذر حفظ Assurance Finding.",
+      ),
+  });
+}
+
+
+function invalidateFindings(queryClient: ReturnType<typeof useQueryClient>) {
+  void queryClient.invalidateQueries({
+    queryKey: ["governance-assurance-findings"],
+  });
+}
+
+export function useAddGovernanceAssuranceFindingEvidence() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: AddGovernanceAssuranceFindingEvidenceInput) =>
+      addGovernanceAssuranceFindingEvidence(input),
+    onSuccess: () => {
+      invalidateFindings(queryClient);
+      toast.success("تمت إضافة Closure Evidence.");
+    },
+    onError: (error) =>
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "تعذر إضافة Closure Evidence.",
+      ),
+  });
+}
+
+export function useRequestGovernanceAssuranceFindingVerification() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (
+      input: RequestGovernanceAssuranceFindingVerificationInput,
+    ) => requestGovernanceAssuranceFindingVerification(input),
+    onSuccess: () => {
+      invalidateFindings(queryClient);
+      toast.success("تم إرسال Effectiveness Review إلى Verifier.");
+    },
+    onError: (error) =>
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "تعذر طلب Effectiveness Review.",
+      ),
+  });
+}
+
+export function useActOnGovernanceAssuranceFindingVerification() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (
+      input: ActOnGovernanceAssuranceFindingVerificationInput,
+    ) => actOnGovernanceAssuranceFindingVerification(input),
+    onSuccess: (finding) => {
+      invalidateFindings(queryClient);
+      toast.success(
+        finding.verification_status === "effective"
+          ? "تم اعتماد فعالية المعالجة."
+          : "تم تسجيل نتيجة التحقق وإعادة فتح Finding.",
+      );
+    },
+    onError: (error) =>
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "تعذر تسجيل Effectiveness Review.",
       ),
   });
 }
