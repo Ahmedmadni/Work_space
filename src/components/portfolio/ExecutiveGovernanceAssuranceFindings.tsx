@@ -816,8 +816,7 @@ export function ExecutiveGovernanceAssuranceFindings() {
         </div>
       ) : (
         <div className="space-y-2">
-          {filteredRows.map(
-            ({ finding, archive, can_manage, can_verify, evidence }) => {
+          {filteredRows.map(({ finding, archive, can_manage, can_verify, evidence }) => {
             const active =
               finding.status === "open" ||
               finding.status === "in_progress";
@@ -1102,7 +1101,13 @@ export function ExecutiveGovernanceAssuranceFindings() {
                               !evidenceDraft.title.trim() ||
                               !evidenceDraft.detail.trim() ||
                               (evidenceDraft.evidence_type === "link" &&
-                                !evidenceDraft.reference_url.trim())
+                                !evidenceDraft.reference_url.trim()) ||
+                              (
+                                !!evidenceDraft.reference_url.trim() &&
+                                !/^https?:\/\//i.test(
+                                  evidenceDraft.reference_url.trim(),
+                                )
+                              )
                             }
                             onClick={() =>
                               addEvidence.mutate(
@@ -1345,8 +1350,7 @@ export function ExecutiveGovernanceAssuranceFindings() {
                 </div>
               </div>
             );
-          },
-          )}
+          })}
         </div>
       )}
     </section>
