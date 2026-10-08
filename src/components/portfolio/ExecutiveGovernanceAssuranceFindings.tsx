@@ -816,7 +816,8 @@ export function ExecutiveGovernanceAssuranceFindings() {
         </div>
       ) : (
         <div className="space-y-2">
-          {filteredRows.map(({ finding, archive, can_manage }) => {
+          {filteredRows.map(
+            ({ finding, archive, can_manage, can_verify, evidence }) => {
             const active =
               finding.status === "open" ||
               finding.status === "in_progress";
@@ -826,6 +827,15 @@ export function ExecutiveGovernanceAssuranceFindings() {
               finding.due_date < todayKey();
             const severityMeta = SEVERITY_META[finding.severity];
             const statusMeta = STATUS_META[finding.status];
+            const verificationMeta =
+              VERIFICATION_META[finding.verification_status];
+            const verifierCandidates =
+              buildGovernanceAssuranceFindingResponsibleCandidates(
+                archive,
+              ).filter(
+                (candidate) =>
+                  candidate.user_id !== finding.responsible_user_id,
+              );
 
             return (
               <div
@@ -858,6 +868,14 @@ export function ExecutiveGovernanceAssuranceFindings() {
                       >
                         {statusMeta.label}
                       </span>
+                      <span
+                        className={
+                          "rounded-full px-2 py-0.5 text-[8px] " +
+                          verificationMeta.className
+                        }
+                      >
+                        {verificationMeta.label}
+                      </span>
                       {overdue && (
                         <span className="rounded-full bg-danger/10 px-2 py-0.5 text-[8px] font-semibold text-danger">
                           Overdue
@@ -886,6 +904,12 @@ export function ExecutiveGovernanceAssuranceFindings() {
                       <span>
                         Reminder: {formatDate(finding.reminder_date)}
                       </span>
+                      <span>
+                        Evidence: {arabicNumber(evidence.length)}
+                      </span>
+                      <span>
+                        Verifier: {finding.verifier_name_snapshot ?? "—"}
+                      </span>
                       <span>v{arabicNumber(finding.version)}</span>
                     </div>
 
@@ -906,6 +930,406 @@ export function ExecutiveGovernanceAssuranceFindings() {
                         {finding.resolution_note}
                       </div>
                     )}
+
+                    {finding.effectiveness_note && (
+                      <div
+                        className={
+                          finding.verification_status === "effective"
+                            ? "mt-2 rounded-lg border border-success/20 bg-success/5 p-3 text-[8px] leading-4 text-muted-foreground"
+                            : "mt-2 rounded-lg border border-warning/20 bg-warning/5 p-3 text-[8px] leading-4 text-muted-foreground"
+                        }
+                      >
+                        <strong className="text-foreground">
+                          Effectiveness Review:
+                        </strong>{" "}
+                        {finding.effectiveness_note}
+                      </div>
+                    )}
+
+                    {!!evidence.length && (
+                      <div className="mt-3 rounded-xl border border-border p-3">
+                        <p className="text-[9px] font-semibold">
+                          Closure Evidence
+                        </p>
+                        <div className="mt-2 space-y-2">
+                          {evidence.map((item) => (
+                            <div
+                              key={item.id}
+                              className="rounded-lg bg-muted/30 p-2 text-[8px] leading-4 text-muted-foreground"
+                            >
+                              <div className="flex flex-wrap items-center gap-2">
+                                <strong className="text-foreground">
+                                  {item.title}
+                                </strong>
+                                <span className="rounded-full bg-background px-2 py-0.5">
+                                  {item.evidence_type}
+                                </span>
+                                <span>{formatDate(item.created_at)}</span>
+                              </div>
+                              <p className="mt-1 whitespace-pre-wrap">
+                                {item.detail}
+                              </p>
+                              {item.reference_url && (
+                                <a
+                                  href={item.reference_url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="mt-1 inline-block break-all text-brand underline"
+                                >
+                                  {item.reference_url}
+                                </a>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {can_manage && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEvidenceDraft({
+                              finding_id: finding.id,
+                              evidence_type: "note",
+                              title: "",
+                              detail: "",
+                              reference_url: "",
+                            })
+                          }
+                          className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-2 text-[9px] hover:bg-muted"
+                        >
+                          <FilePlus2 className="h-3.5 w-3.5" />
+                          Add Evidence
+                        </button>
+
+                        {finding.status === "resolved" &&
+                          finding.verification_status === "not_requested" &&
+                          evidence.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setVerificationRequest({
+                                  finding_id: finding.id,
+                                  verifier_user_id: "",
+                                })
+                              }
+                              className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-2 text-[9px] hover:bg-muted"
+                            >
+                              <ShieldCheck className="h-3.5 w-3.5" />
+                              Request Effectiveness Review
+                            </button>
+                          )}
+                      </div>
+                    )}
+
+                    {evidenceDraft?.finding_id === finding.id && (
+                      <div className="mt-3 rounded-xl border border-brand/20 bg-card p-3">
+                        <div className="grid gap-2 md:grid-cols-2">
+                          <label className="text-[8px] text-muted-foreground">
+                            Evidence Type
+                            <select
+                              value={evidenceDraft.evidence_type}
+                              onChange={(event) =>
+                                setEvidenceDraft({
+                                  ...evidenceDraft,
+                                  evidence_type:
+                                    event.target
+                                      .value as GovernanceAssuranceFindingEvidenceType,
+                                })
+                              }
+                              className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-[10px]"
+                            >
+                              <option value="note">Note</option>
+                              <option value="link">Link</option>
+                              <option value="reference">Reference</option>
+                            </select>
+                          </label>
+                          <label className="text-[8px] text-muted-foreground">
+                            Title
+                            <input
+                              value={evidenceDraft.title}
+                              maxLength={240}
+                              onChange={(event) =>
+                                setEvidenceDraft({
+                                  ...evidenceDraft,
+                                  title: event.target.value,
+                                })
+                              }
+                              className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-[10px]"
+                            />
+                          </label>
+                          <label className="text-[8px] text-muted-foreground md:col-span-2">
+                            Detail
+                            <textarea
+                              rows={3}
+                              maxLength={12000}
+                              value={evidenceDraft.detail}
+                              onChange={(event) =>
+                                setEvidenceDraft({
+                                  ...evidenceDraft,
+                                  detail: event.target.value,
+                                })
+                              }
+                              className="mt-1 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-[10px]"
+                            />
+                          </label>
+                          {(evidenceDraft.evidence_type === "link" ||
+                            evidenceDraft.reference_url) && (
+                            <label className="text-[8px] text-muted-foreground md:col-span-2">
+                              Reference URL
+                              <input
+                                type="url"
+                                maxLength={2000}
+                                value={evidenceDraft.reference_url}
+                                onChange={(event) =>
+                                  setEvidenceDraft({
+                                    ...evidenceDraft,
+                                    reference_url: event.target.value,
+                                  })
+                                }
+                                className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-[10px]"
+                              />
+                            </label>
+                          )}
+                        </div>
+                        <div className="mt-3 flex gap-2">
+                          <button
+                            type="button"
+                            disabled={
+                              addEvidence.isPending ||
+                              !evidenceDraft.title.trim() ||
+                              !evidenceDraft.detail.trim() ||
+                              (evidenceDraft.evidence_type === "link" &&
+                                !evidenceDraft.reference_url.trim())
+                            }
+                            onClick={() =>
+                              addEvidence.mutate(
+                                {
+                                  finding_id: finding.id,
+                                  evidence_type:
+                                    evidenceDraft.evidence_type,
+                                  title: evidenceDraft.title,
+                                  detail: evidenceDraft.detail,
+                                  reference_url:
+                                    evidenceDraft.reference_url || null,
+                                },
+                                {
+                                  onSuccess: () =>
+                                    setEvidenceDraft(null),
+                                },
+                              )
+                            }
+                            className="rounded-lg bg-brand px-3 py-2 text-[9px] font-semibold text-primary-foreground disabled:opacity-40"
+                          >
+                            حفظ Evidence
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEvidenceDraft(null)}
+                            className="rounded-lg border border-border px-3 py-2 text-[9px] hover:bg-muted"
+                          >
+                            إلغاء
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {verificationRequest?.finding_id === finding.id && (
+                      <div className="mt-3 rounded-xl border border-info/20 bg-info/5 p-3">
+                        <p className="text-[9px] font-semibold">
+                          Independent Verifier
+                        </p>
+                        <select
+                          value={verificationRequest.verifier_user_id}
+                          onChange={(event) =>
+                            setVerificationRequest({
+                              ...verificationRequest,
+                              verifier_user_id: event.target.value,
+                            })
+                          }
+                          className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-[10px]"
+                        >
+                          <option value="">اختر Verifier</option>
+                          {verifierCandidates.map((candidate) => (
+                            <option
+                              key={candidate.user_id}
+                              value={candidate.user_id}
+                            >
+                              {candidate.display_name}
+                              {candidate.email
+                                ? " · " + candidate.email
+                                : ""}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="mt-1 text-[8px] text-muted-foreground">
+                          Responsible مستبعدة من قائمة Verifier.
+                        </p>
+                        <div className="mt-3 flex gap-2">
+                          <button
+                            type="button"
+                            disabled={
+                              requestVerification.isPending ||
+                              !verificationRequest.verifier_user_id
+                            }
+                            onClick={() =>
+                              requestVerification.mutate(
+                                {
+                                  finding_id: finding.id,
+                                  expected_version: finding.version,
+                                  verifier_user_id:
+                                    verificationRequest.verifier_user_id,
+                                },
+                                {
+                                  onSuccess: () =>
+                                    setVerificationRequest(null),
+                                },
+                              )
+                            }
+                            className="rounded-lg bg-brand px-3 py-2 text-[9px] font-semibold text-primary-foreground disabled:opacity-40"
+                          >
+                            إرسال للـVerifier
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setVerificationRequest(null)}
+                            className="rounded-lg border border-border px-3 py-2 text-[9px] hover:bg-muted"
+                          >
+                            إلغاء
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {finding.verification_status === "pending" && (
+                      <div className="mt-3 rounded-xl border border-info/20 bg-info/5 p-3 text-[8px] leading-4 text-muted-foreground">
+                        Effectiveness Review pending with{" "}
+                        <strong className="text-foreground">
+                          {finding.verifier_name_snapshot ?? "Verifier"}
+                        </strong>
+                        {" · Requested "}
+                        {formatDate(finding.verification_requested_at)}
+                      </div>
+                    )}
+
+                    {can_verify && (
+                      <div className="mt-3 rounded-xl border border-brand/20 bg-card p-3">
+                        <div className="flex items-center gap-2">
+                          <ShieldCheck className="h-4 w-4 text-brand" />
+                          <p className="text-[9px] font-semibold">
+                            My Effectiveness Review
+                          </p>
+                        </div>
+
+                        {verificationAction?.finding_id !== finding.id ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setVerificationAction({
+                                finding_id: finding.id,
+                                decision: "effective",
+                                effectiveness_note: "",
+                              })
+                            }
+                            className="mt-3 rounded-lg bg-brand px-3 py-2 text-[9px] font-semibold text-primary-foreground"
+                          >
+                            بدء التحقق
+                          </button>
+                        ) : (
+                          <>
+                            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                              {(
+                                [
+                                  ["effective", "Effective"],
+                                  [
+                                    "partially_effective",
+                                    "Partially Effective",
+                                  ],
+                                  ["ineffective", "Ineffective"],
+                                ] as const
+                              ).map(([value, label]) => (
+                                <button
+                                  key={value}
+                                  type="button"
+                                  onClick={() =>
+                                    setVerificationAction({
+                                      ...verificationAction,
+                                      decision: value,
+                                    })
+                                  }
+                                  className={
+                                    verificationAction.decision === value
+                                      ? "rounded-lg border border-brand bg-brand/10 px-2 py-2 text-[8px] font-semibold text-brand"
+                                      : "rounded-lg border border-border px-2 py-2 text-[8px] text-muted-foreground hover:bg-muted"
+                                  }
+                                >
+                                  {label}
+                                </button>
+                              ))}
+                            </div>
+                            <textarea
+                              rows={3}
+                              maxLength={12000}
+                              value={
+                                verificationAction.effectiveness_note
+                              }
+                              onChange={(event) =>
+                                setVerificationAction({
+                                  ...verificationAction,
+                                  effectiveness_note:
+                                    event.target.value,
+                                })
+                              }
+                              placeholder="Effectiveness Note — مطلوبة"
+                              className="mt-3 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-[10px]"
+                            />
+                            <p className="mt-1 text-[8px] text-muted-foreground">
+                              Partially Effective أو Ineffective تعيد
+                              Finding إلى In Progress تلقائيًا.
+                            </p>
+                            <div className="mt-3 flex gap-2">
+                              <button
+                                type="button"
+                                disabled={
+                                  actVerification.isPending ||
+                                  !verificationAction.effectiveness_note.trim()
+                                }
+                                onClick={() =>
+                                  actVerification.mutate(
+                                    {
+                                      finding_id: finding.id,
+                                      expected_version: finding.version,
+                                      decision:
+                                        verificationAction.decision,
+                                      effectiveness_note:
+                                        verificationAction.effectiveness_note,
+                                    },
+                                    {
+                                      onSuccess: () =>
+                                        setVerificationAction(null),
+                                    },
+                                  )
+                                }
+                                className="rounded-lg bg-brand px-3 py-2 text-[9px] font-semibold text-primary-foreground disabled:opacity-40"
+                              >
+                                تسجيل نتيجة التحقق
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setVerificationAction(null)
+                                }
+                                className="rounded-lg border border-border px-3 py-2 text-[9px] hover:bg-muted"
+                              >
+                                إلغاء
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {can_manage && (
@@ -921,7 +1345,8 @@ export function ExecutiveGovernanceAssuranceFindings() {
                 </div>
               </div>
             );
-          })}
+          },
+          )}
         </div>
       )}
     </section>
