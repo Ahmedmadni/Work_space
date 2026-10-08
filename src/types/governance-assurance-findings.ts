@@ -158,3 +158,59 @@ export interface ActOnGovernanceAssuranceFindingVerificationInput {
   >;
   effectiveness_note: string;
 }
+
+
+export interface GovernanceAssuranceRemediationAgingBucket {
+  key: "0_7" | "8_30" | "31_60" | "61_plus";
+  label: string;
+  min_days: number;
+  max_days: number | null;
+  count: number;
+}
+
+export interface GovernanceAssuranceArchiveRemediationSummary {
+  archive_id: string;
+  certificate_code: string;
+  period_label: string;
+  archived_at: string;
+  total: number;
+  active: number;
+  critical_high_active: number;
+  overdue_active: number;
+  resolved: number;
+  accepted: number;
+  verification_pending: number;
+  effective: number;
+  partially_effective: number;
+  ineffective: number;
+}
+
+export interface GovernanceAssuranceSeverityEffectivenessSummary {
+  severity: GovernanceAssuranceFindingSeverity;
+  total_findings: number;
+  completed_verifications: number;
+  effective: number;
+  partially_effective: number;
+  ineffective: number;
+}
+
+export interface GovernanceAssuranceRemediationAnalytics {
+  generated_at: string;
+  total_findings: number;
+  active_findings: number;
+  closed_findings: number;
+  overdue_active: number;
+  unassigned_active: number;
+  verification_pending: number;
+  completed_verifications: number;
+  effective_verifications: number;
+  partially_effective_verifications: number;
+  ineffective_verifications: number;
+  effectiveness_rate_pct: number | null;
+  median_resolution_days: number | null;
+  median_acceptance_days: number | null;
+  reopened_by_effectiveness: number;
+  active_aging: GovernanceAssuranceRemediationAgingBucket[];
+  by_archive: GovernanceAssuranceArchiveRemediationSummary[];
+  by_severity: GovernanceAssuranceSeverityEffectivenessSummary[];
+}
