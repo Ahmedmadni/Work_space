@@ -3,11 +3,14 @@ import {
   CalendarClock,
   CheckCircle2,
   ClipboardList,
+  FilePlus2,
   FileWarning,
   Pencil,
+  RefreshCw,
   Plus,
   Save,
   ShieldAlert,
+  ShieldCheck,
   UserCheck,
   UserRoundX,
   X,
@@ -18,7 +21,10 @@ import {
   useGovernanceAssuranceArchives,
 } from "@/hooks/use-governance-assurance";
 import {
+  useActOnGovernanceAssuranceFindingVerification,
+  useAddGovernanceAssuranceFindingEvidence,
   useGovernanceAssuranceFindings,
+  useRequestGovernanceAssuranceFindingVerification,
   useSaveGovernanceAssuranceFinding,
 } from "@/hooks/use-governance-assurance-findings";
 import { arabicNumber } from "@/lib/format";
@@ -31,10 +37,34 @@ import type {
 } from "@/types/governance-assurance";
 import type {
   GovernanceAssuranceFinding,
+  GovernanceAssuranceFindingEvidenceType,
   GovernanceAssuranceFindingSeverity,
   GovernanceAssuranceFindingSourceType,
   GovernanceAssuranceFindingStatus,
+  GovernanceAssuranceFindingVerificationStatus,
 } from "@/types/governance-assurance-findings";
+
+interface EvidenceDraft {
+  finding_id: string;
+  evidence_type: GovernanceAssuranceFindingEvidenceType;
+  title: string;
+  detail: string;
+  reference_url: string;
+}
+
+interface VerificationRequestDraft {
+  finding_id: string;
+  verifier_user_id: string;
+}
+
+interface VerificationActionDraft {
+  finding_id: string;
+  decision: Extract<
+    GovernanceAssuranceFindingVerificationStatus,
+    "effective" | "partially_effective" | "ineffective"
+  >;
+  effectiveness_note: string;
+}
 
 interface FindingDraft {
   id: string | null;
@@ -94,6 +124,32 @@ const STATUS_META: Record<
   accepted: {
     label: "Accepted",
     className: "bg-info/10 text-info",
+  },
+};
+
+const VERIFICATION_META: Record<
+  GovernanceAssuranceFindingVerificationStatus,
+  { label: string; className: string }
+> = {
+  not_requested: {
+    label: "Not Requested",
+    className: "bg-muted text-muted-foreground",
+  },
+  pending: {
+    label: "Verification Pending",
+    className: "bg-info/10 text-info",
+  },
+  effective: {
+    label: "Effective",
+    className: "bg-success/10 text-success",
+  },
+  partially_effective: {
+    label: "Partially Effective",
+    className: "bg-warning/10 text-warning",
+  },
+  ineffective: {
+    label: "Ineffective",
+    className: "bg-danger/10 text-danger",
   },
 };
 
@@ -181,7 +237,18 @@ export function ExecutiveGovernanceAssuranceFindings() {
   const findings = useGovernanceAssuranceFindings();
   const archives = useGovernanceAssuranceArchives();
   const saveFinding = useSaveGovernanceAssuranceFinding();
+  const addEvidence = useAddGovernanceAssuranceFindingEvidence();
+  const requestVerification =
+    useRequestGovernanceAssuranceFindingVerification();
+  const actVerification =
+    useActOnGovernanceAssuranceFindingVerification();
   const [draft, setDraft] = useState<FindingDraft | null>(null);
+  const [evidenceDraft, setEvidenceDraft] =
+    useState<EvidenceDraft | null>(null);
+  const [verificationRequest, setVerificationRequest] =
+    useState<VerificationRequestDraft | null>(null);
+  const [verificationAction, setVerificationAction] =
+    useState<VerificationActionDraft | null>(null);
   const [archiveFilter, setArchiveFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<
     GovernanceAssuranceFindingStatus | "all"
@@ -215,6 +282,8 @@ export function ExecutiveGovernanceAssuranceFindings() {
       overdue_active: 0,
       unassigned_active: 0,
       assigned_to_me_active: 0,
+      verification_pending: 0,
+      ineffective_active: 0,
     },
   };
   const archiveRows = archives.data?.archives ?? [];
@@ -250,6 +319,11 @@ export function ExecutiveGovernanceAssuranceFindings() {
     ? sourceDetail(draftArchive, draft)
     : null;
 
+  const draftRow = draft?.id
+    ? data.findings.find((row) => row.finding.id === draft.id) ?? null
+    : null;
+  const draftHasEvidence = (draftRow?.evidence.length ?? 0) > 0;
+
   const canSave =
     !!draft &&
     !!draftArchive &&
@@ -264,6 +338,10 @@ export function ExecutiveGovernanceAssuranceFindings() {
     (
       (draft.status !== "resolved" && draft.status !== "accepted") ||
       !!draft.resolution_note.trim()
+    ) &&
+    (
+      draft.status !== "resolved" ||
+      (!!draft.id && draftHasEvidence)
     );
 
   const summaryCards = [
@@ -296,6 +374,18 @@ export function ExecutiveGovernanceAssuranceFindings() {
       value: data.summary.assigned_to_me_active,
       className: "text-brand",
       icon: UserCheck,
+    },
+    {
+      label: "Verification Pending",
+      value: data.summary.verification_pending,
+      className: "text-info",
+      icon: RefreshCw,
+    },
+    {
+      label: "Ineffective Active",
+      value: data.summary.ineffective_active,
+      className: "text-danger",
+      icon: ShieldAlert,
     },
     {
       label: "Resolved",
@@ -331,7 +421,7 @@ export function ExecutiveGovernanceAssuranceFindings() {
         )}
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
         {summaryCards.map((card) => {
           const Icon = card.icon;
           return (
@@ -669,6 +759,9 @@ export function ExecutiveGovernanceAssuranceFindings() {
                 />
                 <span className="mt-1 block text-[8px]">
                   مطلوبة عند Resolved أو Accepted.
+                  {draft.status === "resolved" && !draftHasEvidence
+                    ? " أضف Closure Evidence أولًا."
+                    : ""}
                 </span>
               </label>
             )}
