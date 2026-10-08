@@ -8,6 +8,7 @@ import {
   Plus,
   Save,
   ShieldAlert,
+  UserCheck,
   UserRoundX,
   X,
 } from "lucide-react";
@@ -47,6 +48,7 @@ interface FindingDraft {
   status: GovernanceAssuranceFindingStatus;
   responsible_user_id: string;
   due_date: string;
+  reminder_date: string;
   corrective_action: string;
   resolution_note: string;
 }
@@ -134,6 +136,7 @@ function emptyDraft(archiveId: string): FindingDraft {
     status: "open",
     responsible_user_id: "",
     due_date: "",
+    reminder_date: "",
     corrective_action: "",
     resolution_note: "",
   };
@@ -152,6 +155,7 @@ function editDraft(finding: GovernanceAssuranceFinding): FindingDraft {
     status: finding.status,
     responsible_user_id: finding.responsible_user_id ?? "",
     due_date: finding.due_date ?? "",
+    reminder_date: finding.reminder_date ?? "",
     corrective_action: finding.corrective_action ?? "",
     resolution_note: finding.resolution_note ?? "",
   };
@@ -182,6 +186,9 @@ export function ExecutiveGovernanceAssuranceFindings() {
   const [statusFilter, setStatusFilter] = useState<
     GovernanceAssuranceFindingStatus | "all"
   >("all");
+  const [scopeFilter, setScopeFilter] = useState<"all" | "assigned_to_me">(
+    "all",
+  );
 
   if (findings.isLoading || archives.isLoading) {
     return (
@@ -207,6 +214,7 @@ export function ExecutiveGovernanceAssuranceFindings() {
       high_active: 0,
       overdue_active: 0,
       unassigned_active: 0,
+      assigned_to_me_active: 0,
     },
   };
   const archiveRows = archives.data?.archives ?? [];
@@ -223,6 +231,9 @@ export function ExecutiveGovernanceAssuranceFindings() {
       return false;
     }
     if (statusFilter !== "all" && row.finding.status !== statusFilter) {
+      return false;
+    }
+    if (scopeFilter === "assigned_to_me" && !row.is_responsible) {
       return false;
     }
     return true;
@@ -246,6 +257,10 @@ export function ExecutiveGovernanceAssuranceFindings() {
     !!draft.title.trim() &&
     !!draft.description.trim() &&
     (draft.source_type === "manual" || !!draft.source_ref_id) &&
+    (
+      !draft.reminder_date ||
+      (!!draft.due_date && draft.reminder_date <= draft.due_date)
+    ) &&
     (
       (draft.status !== "resolved" && draft.status !== "accepted") ||
       !!draft.resolution_note.trim()
@@ -275,6 +290,12 @@ export function ExecutiveGovernanceAssuranceFindings() {
       value: data.summary.unassigned_active,
       className: "text-warning",
       icon: UserRoundX,
+    },
+    {
+      label: "Assigned to Me",
+      value: data.summary.assigned_to_me_active,
+      className: "text-brand",
+      icon: UserCheck,
     },
     {
       label: "Resolved",
@@ -310,7 +331,7 @@ export function ExecutiveGovernanceAssuranceFindings() {
         )}
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
         {summaryCards.map((card) => {
           const Icon = card.icon;
           return (
@@ -332,8 +353,8 @@ export function ExecutiveGovernanceAssuranceFindings() {
         })}
       </div>
 
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <label className="flex-1 text-[9px] text-muted-foreground">
+      <div className="grid gap-2 sm:grid-cols-3">
+        <label className="text-[9px] text-muted-foreground">
           Archive
           <select
             value={archiveFilter}
@@ -349,7 +370,7 @@ export function ExecutiveGovernanceAssuranceFindings() {
             ))}
           </select>
         </label>
-        <label className="flex-1 text-[9px] text-muted-foreground">
+        <label className="text-[9px] text-muted-foreground">
           Status
           <select
             value={statusFilter}
@@ -367,6 +388,21 @@ export function ExecutiveGovernanceAssuranceFindings() {
             <option value="in_progress">In Progress</option>
             <option value="resolved">Resolved</option>
             <option value="accepted">Accepted</option>
+          </select>
+        </label>
+        <label className="text-[9px] text-muted-foreground">
+          Responsibility
+          <select
+            value={scopeFilter}
+            onChange={(event) =>
+              setScopeFilter(
+                event.target.value as "all" | "assigned_to_me",
+              )
+            }
+            className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+          >
+            <option value="all">كل Findings المرئية</option>
+            <option value="assigned_to_me">Assigned to Me</option>
           </select>
         </label>
       </div>
@@ -564,10 +600,39 @@ export function ExecutiveGovernanceAssuranceFindings() {
                 type="date"
                 value={draft.due_date}
                 onChange={(event) =>
-                  setDraft({ ...draft, due_date: event.target.value })
+                  setDraft({
+                    ...draft,
+                    due_date: event.target.value,
+                    reminder_date:
+                      draft.reminder_date &&
+                      event.target.value &&
+                      draft.reminder_date > event.target.value
+                        ? ""
+                        : draft.reminder_date,
+                  })
                 }
                 className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs"
               />
+            </label>
+
+            <label className="text-[9px] text-muted-foreground">
+              Reminder Date
+              <input
+                type="date"
+                max={draft.due_date || undefined}
+                disabled={!draft.due_date}
+                value={draft.reminder_date}
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    reminder_date: event.target.value,
+                  })
+                }
+                className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs disabled:opacity-50"
+              />
+              <span className="mt-1 block text-[8px]">
+                اختيارية، ولا توجد نافذة تذكير افتراضية.
+              </span>
             </label>
 
             <label className="text-[9px] text-muted-foreground md:col-span-2">
@@ -630,6 +695,7 @@ export function ExecutiveGovernanceAssuranceFindings() {
                   responsible_user_id:
                     draft.responsible_user_id || null,
                   due_date: draft.due_date || null,
+                  reminder_date: draft.reminder_date || null,
                   corrective_action: draft.corrective_action || null,
                   resolution_note: draft.resolution_note || null,
                 },
@@ -723,6 +789,9 @@ export function ExecutiveGovernanceAssuranceFindings() {
                       </span>
                       <span>
                         Due: {formatDate(finding.due_date)}
+                      </span>
+                      <span>
+                        Reminder: {formatDate(finding.reminder_date)}
                       </span>
                       <span>v{arabicNumber(finding.version)}</span>
                     </div>

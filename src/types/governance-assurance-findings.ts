@@ -34,6 +34,7 @@ export interface GovernanceAssuranceFinding {
   responsible_name_snapshot: string | null;
   responsible_email_snapshot: string | null;
   due_date: string | null;
+  reminder_date: string | null;
   corrective_action: string | null;
   resolution_note: string | null;
   version: number;
@@ -48,6 +49,7 @@ export interface GovernanceAssuranceFindingRow {
   finding: GovernanceAssuranceFinding;
   archive: GovernanceAssuranceArchive;
   can_manage: boolean;
+  is_responsible: boolean;
 }
 
 export interface GovernanceAssuranceFindingSummary {
@@ -60,6 +62,7 @@ export interface GovernanceAssuranceFindingSummary {
   high_active: number;
   overdue_active: number;
   unassigned_active: number;
+  assigned_to_me_active: number;
 }
 
 export interface GovernanceAssuranceFindingData {
@@ -80,6 +83,7 @@ export interface SaveGovernanceAssuranceFindingInput {
   status: GovernanceAssuranceFindingStatus;
   responsible_user_id?: string | null;
   due_date?: string | null;
+  reminder_date?: string | null;
   corrective_action?: string | null;
   resolution_note?: string | null;
 }
