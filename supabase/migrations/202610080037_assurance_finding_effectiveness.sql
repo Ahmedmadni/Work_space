@@ -54,7 +54,13 @@ create table if not exists public.executive_governance_assurance_finding_evidenc
   detail text not null
     check (char_length(trim(detail)) between 1 and 12000),
   reference_url text
-    check (char_length(coalesce(reference_url, '')) <= 2000),
+    check (
+      char_length(coalesce(reference_url, '')) <= 2000
+      and (
+        reference_url is null
+        or reference_url ~* '^https?://'
+      )
+    ),
   created_by uuid not null default auth.uid()
     references auth.users(id) on delete cascade,
   created_at timestamptz not null default now()
@@ -146,33 +152,40 @@ security definer
 set search_path = public
 as $projectflow$
 begin
-  if new.status = 'resolved'
+  if tg_op = 'UPDATE'
+     and old.verification_status = 'pending'
      and (
-       tg_op = 'INSERT'
-       or old.status is distinct from 'resolved'
+       new.status is distinct from old.status
+       or new.responsible_user_id is distinct from old.responsible_user_id
      )
   then
-    if tg_op = 'INSERT' then
+    raise exception 'ASSURANCE_FINDING_VERIFICATION_PENDING'
+      using errcode = '55000';
+  end if;
+
+  if new.status = 'resolved' then
+    if tg_op = 'INSERT'
+       or not exists (
+         select 1
+         from public.executive_governance_assurance_finding_evidence e
+         where e.finding_id = new.id
+       )
+    then
       raise exception 'ASSURANCE_FINDING_EVIDENCE_REQUIRED_BEFORE_RESOLUTION'
         using errcode = '55000';
     end if;
 
-    if not exists (
-      select 1
-      from public.executive_governance_assurance_finding_evidence e
-      where e.finding_id = new.id
-    ) then
-      raise exception 'ASSURANCE_FINDING_EVIDENCE_REQUIRED_BEFORE_RESOLUTION'
-        using errcode = '55000';
+    if tg_op = 'INSERT'
+       or old.status is distinct from 'resolved'
+    then
+      new.verification_status := 'not_requested';
+      new.verifier_user_id := null;
+      new.verifier_name_snapshot := null;
+      new.verifier_email_snapshot := null;
+      new.verification_requested_at := null;
+      new.verified_at := null;
+      new.effectiveness_note := null;
     end if;
-
-    new.verification_status := 'not_requested';
-    new.verifier_user_id := null;
-    new.verifier_name_snapshot := null;
-    new.verifier_email_snapshot := null;
-    new.verification_requested_at := null;
-    new.verified_at := null;
-    new.effectiveness_note := null;
   end if;
 
   return new;
@@ -186,7 +199,7 @@ drop trigger if exists projectflow_validate_assurance_finding_resolution
   on public.executive_governance_assurance_findings;
 
 create trigger projectflow_validate_assurance_finding_resolution
-before insert or update of status
+before insert or update
 on public.executive_governance_assurance_findings
 for each row
 execute function public.projectflow_validate_assurance_finding_resolution();
@@ -215,6 +228,10 @@ begin
      or char_length(trim(coalesce(p_title, ''))) not between 1 and 240
      or char_length(trim(coalesce(p_detail, ''))) not between 1 and 12000
      or char_length(coalesce(p_reference_url, '')) > 2000
+     or (
+       nullif(trim(coalesce(p_reference_url, '')), '') is not null
+       and trim(p_reference_url) !~* '^https?://'
+     )
      or (
        p_evidence_type = 'link'
        and nullif(trim(coalesce(p_reference_url, '')), '') is null
