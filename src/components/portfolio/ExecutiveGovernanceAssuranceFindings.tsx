@@ -984,7 +984,8 @@ export function ExecutiveGovernanceAssuranceFindings() {
                       </div>
                     )}
 
-                    {can_manage && (
+                    {can_manage &&
+                      finding.verification_status !== "pending" && (
                       <div className="mt-3 flex flex-wrap gap-2">
                         <button
                           type="button"
@@ -1337,7 +1338,8 @@ export function ExecutiveGovernanceAssuranceFindings() {
                     )}
                   </div>
 
-                  {can_manage && (
+                  {can_manage &&
+                    finding.verification_status !== "pending" && (
                     <button
                       type="button"
                       onClick={() => setDraft(editDraft(finding))}
