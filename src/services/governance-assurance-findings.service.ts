@@ -351,7 +351,7 @@ export function buildGovernanceAssuranceFindingResponsibleCandidates(
 
   add(
     archive.owner_user_id,
-    archive.owner_user_id,
+    "Archive Owner",
     null,
     "creator",
   );
