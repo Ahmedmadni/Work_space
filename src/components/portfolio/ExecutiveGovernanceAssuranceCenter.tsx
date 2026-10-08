@@ -33,6 +33,7 @@ import { ExecutiveGovernanceAssuranceHistory } from "@/components/portfolio/Exec
 import { ExecutiveGovernanceAssuranceSignoff } from "@/components/portfolio/ExecutiveGovernanceAssuranceSignoff";
 import { ExecutiveGovernanceAssuranceDistribution } from "@/components/portfolio/ExecutiveGovernanceAssuranceDistribution";
 import { ExecutiveGovernanceAssuranceArchiveVault } from "@/components/portfolio/ExecutiveGovernanceAssuranceArchiveVault";
+import { ExecutiveGovernanceAssuranceFindings } from "@/components/portfolio/ExecutiveGovernanceAssuranceFindings";
 import { downloadGovernanceAssuranceReviewCsv } from "@/services/governance-assurance.service";
 import { buildExecutiveGovernanceTrends } from "@/services/governance-trends.service";
 import { evaluateExecutiveGovernanceTargets } from "@/services/governance-targets.service";
@@ -1293,6 +1294,8 @@ export function ExecutiveGovernanceAssuranceCenter({
       />
 
       <ExecutiveGovernanceAssuranceArchiveVault />
+
+      <ExecutiveGovernanceAssuranceFindings />
 
       {!!reviews.length && (
         <div className="rounded-2xl border border-border bg-card p-4 shadow-[var(--shadow-frost)]">
