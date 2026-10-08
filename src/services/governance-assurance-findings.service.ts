@@ -140,7 +140,8 @@ function normalizeFinding(value: unknown): GovernanceAssuranceFinding | null {
   const findingSource = sourceType(row.source_type);
   const findingSeverity = severity(row.severity);
   const findingStatus = status(row.status);
-  const findingVerificationStatus = verificationStatus(row.verification_status);
+  const findingVerificationStatus =
+    verificationStatus(row.verification_status) ?? "not_requested";
   const version = intOrNull(row.version);
 
   if (
@@ -155,7 +156,6 @@ function normalizeFinding(value: unknown): GovernanceAssuranceFinding | null {
     !findingSource ||
     !findingSeverity ||
     !findingStatus ||
-    !findingVerificationStatus ||
     version == null
   ) {
     return null;
@@ -776,6 +776,12 @@ export async function addGovernanceAssuranceFindingEvidence(
   }
   if ((input.reference_url?.length ?? 0) > 2000) {
     throw new Error("Evidence URL طويلة جدًا.");
+  }
+  if (
+    input.reference_url?.trim() &&
+    !/^https?:\/\//i.test(input.reference_url.trim())
+  ) {
+    throw new Error("Evidence URL يجب أن تبدأ بـ http:// أو https://.");
   }
   if (input.evidence_type === "link" && !input.reference_url?.trim()) {
     throw new Error("Link Evidence تتطلب URL.");
