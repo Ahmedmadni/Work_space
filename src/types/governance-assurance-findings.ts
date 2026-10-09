@@ -32,6 +32,30 @@ export type GovernanceAssuranceFindingEvidenceType =
   | "link"
   | "reference";
 
+export type GovernanceAssuranceFindingCategory =
+  | "control_design"
+  | "control_operation"
+  | "process_gap"
+  | "data_quality"
+  | "compliance"
+  | "governance"
+  | "security_access"
+  | "documentation"
+  | "execution"
+  | "third_party"
+  | "other";
+
+export type GovernanceAssuranceRootCauseCategory =
+  | "people"
+  | "process"
+  | "technology"
+  | "data"
+  | "governance"
+  | "third_party"
+  | "external"
+  | "unknown"
+  | "other";
+
 export interface GovernanceAssuranceFinding {
   id: string;
   archive_id: string;
@@ -56,6 +80,16 @@ export interface GovernanceAssuranceFinding {
   verification_requested_at: string | null;
   verified_at: string | null;
   effectiveness_note: string | null;
+  finding_category: GovernanceAssuranceFindingCategory | null;
+  root_cause_category: GovernanceAssuranceRootCauseCategory | null;
+  root_cause_detail: string | null;
+  recurrence_parent_finding_id: string | null;
+  recurrence_root_finding_id: string | null;
+  recurrence_sequence: number;
+  recurrence_reason: string | null;
+  taxonomy_version: number;
+  classified_by: string | null;
+  classified_at: string | null;
   version: number;
   resolved_at: string | null;
   accepted_at: string | null;
@@ -143,6 +177,36 @@ export interface AddGovernanceAssuranceFindingEvidenceInput {
   reference_url?: string | null;
 }
 
+export interface ClassifyGovernanceAssuranceFindingInput {
+  finding_id: string;
+  expected_version: number;
+  finding_category: GovernanceAssuranceFindingCategory | null;
+  root_cause_category: GovernanceAssuranceRootCauseCategory | null;
+  root_cause_detail?: string | null;
+  recurrence_parent_finding_id?: string | null;
+  recurrence_reason?: string | null;
+}
+
+export type GovernanceAssuranceRecurrenceCandidateMatch =
+  | "exact_taxonomy"
+  | "same_category"
+  | "other";
+
+export interface GovernanceAssuranceRecurrenceCandidate {
+  finding_id: string;
+  archive_id: string;
+  certificate_code: string;
+  period_label: string;
+  archived_at: string;
+  title: string;
+  severity: GovernanceAssuranceFindingSeverity;
+  status: GovernanceAssuranceFindingStatus;
+  finding_category: GovernanceAssuranceFindingCategory | null;
+  root_cause_category: GovernanceAssuranceRootCauseCategory | null;
+  recurrence_sequence: number;
+  match: GovernanceAssuranceRecurrenceCandidateMatch;
+}
+
 export interface RequestGovernanceAssuranceFindingVerificationInput {
   finding_id: string;
   expected_version: number;
@@ -194,6 +258,16 @@ export interface GovernanceAssuranceSeverityEffectivenessSummary {
   ineffective: number;
 }
 
+export interface GovernanceAssuranceTaxonomyAnalyticsRow {
+  key: string;
+  total: number;
+  active: number;
+  recurring: number;
+  effective: number;
+  partially_effective: number;
+  ineffective: number;
+}
+
 export interface GovernanceAssuranceRemediationAnalytics {
   generated_at: string;
   total_findings: number;
@@ -210,7 +284,14 @@ export interface GovernanceAssuranceRemediationAnalytics {
   median_resolution_days: number | null;
   median_acceptance_days: number | null;
   reopened_by_effectiveness: number;
+  classified_findings: number;
+  unclassified_findings: number;
+  recurring_findings: number;
+  recurring_active: number;
+  recurrence_chains: number;
   active_aging: GovernanceAssuranceRemediationAgingBucket[];
   by_archive: GovernanceAssuranceArchiveRemediationSummary[];
   by_severity: GovernanceAssuranceSeverityEffectivenessSummary[];
+  by_category: GovernanceAssuranceTaxonomyAnalyticsRow[];
+  by_root_cause: GovernanceAssuranceTaxonomyAnalyticsRow[];
 }
