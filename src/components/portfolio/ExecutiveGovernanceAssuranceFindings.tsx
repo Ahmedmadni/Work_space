@@ -5,12 +5,14 @@ import {
   ClipboardList,
   FilePlus2,
   FileWarning,
+  GitBranch,
   Pencil,
   RefreshCw,
   Plus,
   Save,
   ShieldAlert,
   ShieldCheck,
+  Tags,
   UserCheck,
   UserRoundX,
   X,
@@ -23,6 +25,7 @@ import {
 import {
   useActOnGovernanceAssuranceFindingVerification,
   useAddGovernanceAssuranceFindingEvidence,
+  useClassifyGovernanceAssuranceFinding,
   useGovernanceAssuranceFindings,
   useRequestGovernanceAssuranceFindingVerification,
   useSaveGovernanceAssuranceFinding,
@@ -31,18 +34,30 @@ import { arabicNumber } from "@/lib/format";
 import {
   buildGovernanceAssuranceFindingResponsibleCandidates,
   buildGovernanceAssuranceFindingSourceCandidates,
+  buildGovernanceAssuranceRecurrenceCandidates,
 } from "@/services/governance-assurance-findings.service";
 import type {
   GovernanceAssuranceArchive,
 } from "@/types/governance-assurance";
 import type {
   GovernanceAssuranceFinding,
+  GovernanceAssuranceFindingCategory,
   GovernanceAssuranceFindingEvidenceType,
   GovernanceAssuranceFindingSeverity,
   GovernanceAssuranceFindingSourceType,
   GovernanceAssuranceFindingStatus,
   GovernanceAssuranceFindingVerificationStatus,
+  GovernanceAssuranceRootCauseCategory,
 } from "@/types/governance-assurance-findings";
+
+interface TaxonomyDraft {
+  finding_id: string;
+  finding_category: GovernanceAssuranceFindingCategory | "";
+  root_cause_category: GovernanceAssuranceRootCauseCategory | "";
+  root_cause_detail: string;
+  recurrence_parent_finding_id: string;
+  recurrence_reason: string;
+}
 
 interface EvidenceDraft {
   finding_id: string;
@@ -82,6 +97,38 @@ interface FindingDraft {
   corrective_action: string;
   resolution_note: string;
 }
+
+const CATEGORY_LABELS: Record<
+  GovernanceAssuranceFindingCategory,
+  string
+> = {
+  control_design: "Control Design",
+  control_operation: "Control Operation",
+  process_gap: "Process Gap",
+  data_quality: "Data Quality",
+  compliance: "Compliance",
+  governance: "Governance",
+  security_access: "Security / Access",
+  documentation: "Documentation",
+  execution: "Execution",
+  third_party: "Third Party",
+  other: "Other",
+};
+
+const ROOT_CAUSE_LABELS: Record<
+  GovernanceAssuranceRootCauseCategory,
+  string
+> = {
+  people: "People",
+  process: "Process",
+  technology: "Technology",
+  data: "Data",
+  governance: "Governance",
+  third_party: "Third Party",
+  external: "External",
+  unknown: "Unknown",
+  other: "Other",
+};
 
 const SEVERITY_META: Record<
   GovernanceAssuranceFindingSeverity,
@@ -237,12 +284,15 @@ export function ExecutiveGovernanceAssuranceFindings() {
   const findings = useGovernanceAssuranceFindings();
   const archives = useGovernanceAssuranceArchives();
   const saveFinding = useSaveGovernanceAssuranceFinding();
+  const classifyFinding = useClassifyGovernanceAssuranceFinding();
   const addEvidence = useAddGovernanceAssuranceFindingEvidence();
   const requestVerification =
     useRequestGovernanceAssuranceFindingVerification();
   const actVerification =
     useActOnGovernanceAssuranceFindingVerification();
   const [draft, setDraft] = useState<FindingDraft | null>(null);
+  const [taxonomyDraft, setTaxonomyDraft] =
+    useState<TaxonomyDraft | null>(null);
   const [evidenceDraft, setEvidenceDraft] =
     useState<EvidenceDraft | null>(null);
   const [verificationRequest, setVerificationRequest] =
@@ -835,6 +885,24 @@ export function ExecutiveGovernanceAssuranceFindings() {
                 (candidate) =>
                   candidate.user_id !== finding.responsible_user_id,
               );
+            const recurrenceParent =
+              finding.recurrence_parent_finding_id
+                ? data.findings.find(
+                    (row) =>
+                      row.finding.id ===
+                      finding.recurrence_parent_finding_id,
+                  ) ?? null
+                : null;
+            const editingTaxonomy =
+              taxonomyDraft?.finding_id === finding.id;
+            const recurrenceCandidates = editingTaxonomy
+              ? buildGovernanceAssuranceRecurrenceCandidates(
+                  data,
+                  finding.id,
+                  taxonomyDraft.finding_category || null,
+                  taxonomyDraft.root_cause_category || null,
+                )
+              : [];
 
             return (
               <div
@@ -875,6 +943,24 @@ export function ExecutiveGovernanceAssuranceFindings() {
                       >
                         {verificationMeta.label}
                       </span>
+                      {finding.finding_category && (
+                        <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[8px] text-brand">
+                          {CATEGORY_LABELS[finding.finding_category]}
+                        </span>
+                      )}
+                      {finding.root_cause_category && (
+                        <span className="rounded-full bg-info/10 px-2 py-0.5 text-[8px] text-info">
+                          Root:{" "}
+                          {ROOT_CAUSE_LABELS[
+                            finding.root_cause_category
+                          ]}
+                        </span>
+                      )}
+                      {finding.recurrence_parent_finding_id && (
+                        <span className="rounded-full bg-warning/10 px-2 py-0.5 text-[8px] font-semibold text-warning">
+                          Recurring #{arabicNumber(finding.recurrence_sequence)}
+                        </span>
+                      )}
                       {overdue && (
                         <span className="rounded-full bg-danger/10 px-2 py-0.5 text-[8px] font-semibold text-danger">
                           Overdue
@@ -909,8 +995,74 @@ export function ExecutiveGovernanceAssuranceFindings() {
                       <span>
                         Verifier: {finding.verifier_name_snapshot ?? "—"}
                       </span>
+                      <span>
+                        Classified: {formatDate(finding.classified_at)}
+                      </span>
+                      <span>Taxonomy v{arabicNumber(finding.taxonomy_version)}</span>
                       <span>v{arabicNumber(finding.version)}</span>
                     </div>
+
+                    {(finding.finding_category ||
+                      finding.root_cause_category ||
+                      finding.recurrence_parent_finding_id) && (
+                      <div className="mt-3 rounded-xl border border-brand/15 bg-brand/[0.025] p-3 text-[8px] leading-4 text-muted-foreground">
+                        <div className="flex flex-wrap gap-x-4 gap-y-1">
+                          <span>
+                            Category:{" "}
+                            <strong className="text-foreground">
+                              {finding.finding_category
+                                ? CATEGORY_LABELS[
+                                    finding.finding_category
+                                  ]
+                                : "—"}
+                            </strong>
+                          </span>
+                          <span>
+                            Root Cause:{" "}
+                            <strong className="text-foreground">
+                              {finding.root_cause_category
+                                ? ROOT_CAUSE_LABELS[
+                                    finding.root_cause_category
+                                  ]
+                                : "—"}
+                            </strong>
+                          </span>
+                        </div>
+                        {finding.root_cause_detail && (
+                          <p className="mt-2 whitespace-pre-wrap">
+                            <strong className="text-foreground">
+                              Root Cause Detail:
+                            </strong>{" "}
+                            {finding.root_cause_detail}
+                          </p>
+                        )}
+                        {finding.recurrence_parent_finding_id && (
+                          <div className="mt-2 rounded-lg border border-warning/20 bg-warning/5 p-2">
+                            <p>
+                              <strong className="text-warning">
+                                Recurrence chain #{arabicNumber(
+                                  finding.recurrence_sequence,
+                                )}
+                              </strong>
+                              {" · Previous: "}
+                              {recurrenceParent
+                                ? recurrenceParent.archive.certificate_code +
+                                  " · " +
+                                  recurrenceParent.finding.title
+                                : "Finding سابقة غير ظاهرة في نطاقك الحالي"}
+                            </p>
+                            {finding.recurrence_reason && (
+                              <p className="mt-1 whitespace-pre-wrap">
+                                <strong className="text-foreground">
+                                  Reason:
+                                </strong>{" "}
+                                {finding.recurrence_reason}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {finding.corrective_action && (
                       <div className="mt-3 rounded-lg border border-border p-3 text-[8px] leading-4 text-muted-foreground">
@@ -990,6 +1142,28 @@ export function ExecutiveGovernanceAssuranceFindings() {
                         <button
                           type="button"
                           onClick={() =>
+                            setTaxonomyDraft({
+                              finding_id: finding.id,
+                              finding_category:
+                                finding.finding_category ?? "",
+                              root_cause_category:
+                                finding.root_cause_category ?? "",
+                              root_cause_detail:
+                                finding.root_cause_detail ?? "",
+                              recurrence_parent_finding_id:
+                                finding.recurrence_parent_finding_id ?? "",
+                              recurrence_reason:
+                                finding.recurrence_reason ?? "",
+                            })
+                          }
+                          className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-2 text-[9px] hover:bg-muted"
+                        >
+                          <Tags className="h-3.5 w-3.5" />
+                          Taxonomy & Recurrence
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
                             setEvidenceDraft({
                               finding_id: finding.id,
                               evidence_type: "note",
@@ -1021,6 +1195,225 @@ export function ExecutiveGovernanceAssuranceFindings() {
                               Request Effectiveness Review
                             </button>
                           )}
+                      </div>
+                    )}
+
+                    {editingTaxonomy && taxonomyDraft && (
+                      <div className="mt-3 rounded-xl border border-brand/20 bg-card p-3">
+                        <div className="flex items-center gap-2">
+                          <GitBranch className="h-4 w-4 text-brand" />
+                          <div>
+                            <p className="text-[9px] font-semibold">
+                              Taxonomy, Root Cause & Recurrence
+                            </p>
+                            <p className="text-[8px] text-muted-foreground">
+                              Recurrence candidates are sorted only by explicit taxonomy.
+                              No text similarity or AI score is used.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 grid gap-2 md:grid-cols-2">
+                          <label className="text-[8px] text-muted-foreground">
+                            Finding Category
+                            <select
+                              value={taxonomyDraft.finding_category}
+                              onChange={(event) => {
+                                const value =
+                                  event.target.value as
+                                    | GovernanceAssuranceFindingCategory
+                                    | "";
+                                setTaxonomyDraft({
+                                  ...taxonomyDraft,
+                                  finding_category: value,
+                                  root_cause_category: value
+                                    ? taxonomyDraft.root_cause_category
+                                    : "",
+                                  root_cause_detail: value
+                                    ? taxonomyDraft.root_cause_detail
+                                    : "",
+                                });
+                              }}
+                              className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-[10px]"
+                            >
+                              <option value="">Unclassified</option>
+                              {Object.entries(CATEGORY_LABELS).map(
+                                ([value, label]) => (
+                                  <option key={value} value={value}>
+                                    {label}
+                                  </option>
+                                ),
+                              )}
+                            </select>
+                          </label>
+
+                          <label className="text-[8px] text-muted-foreground">
+                            Root Cause
+                            <select
+                              disabled={!taxonomyDraft.finding_category}
+                              value={taxonomyDraft.root_cause_category}
+                              onChange={(event) =>
+                                setTaxonomyDraft({
+                                  ...taxonomyDraft,
+                                  root_cause_category:
+                                    event.target.value as
+                                      | GovernanceAssuranceRootCauseCategory
+                                      | "",
+                                  root_cause_detail:
+                                    event.target.value
+                                      ? taxonomyDraft.root_cause_detail
+                                      : "",
+                                })
+                              }
+                              className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-[10px] disabled:opacity-50"
+                            >
+                              <option value="">Not specified</option>
+                              {Object.entries(ROOT_CAUSE_LABELS).map(
+                                ([value, label]) => (
+                                  <option key={value} value={value}>
+                                    {label}
+                                  </option>
+                                ),
+                              )}
+                            </select>
+                          </label>
+
+                          {taxonomyDraft.root_cause_category && (
+                            <label className="text-[8px] text-muted-foreground md:col-span-2">
+                              Root Cause Detail
+                              <textarea
+                                rows={3}
+                                maxLength={4000}
+                                value={taxonomyDraft.root_cause_detail}
+                                onChange={(event) =>
+                                  setTaxonomyDraft({
+                                    ...taxonomyDraft,
+                                    root_cause_detail:
+                                      event.target.value,
+                                  })
+                                }
+                                className="mt-1 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-[10px]"
+                              />
+                            </label>
+                          )}
+
+                          <label className="text-[8px] text-muted-foreground md:col-span-2">
+                            Previous Finding in Recurrence Chain
+                            <select
+                              value={
+                                taxonomyDraft.recurrence_parent_finding_id
+                              }
+                              onChange={(event) =>
+                                setTaxonomyDraft({
+                                  ...taxonomyDraft,
+                                  recurrence_parent_finding_id:
+                                    event.target.value,
+                                  recurrence_reason:
+                                    event.target.value
+                                      ? taxonomyDraft.recurrence_reason
+                                      : "",
+                                })
+                              }
+                              className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-[10px]"
+                            >
+                              <option value="">
+                                ليست Recurrence مرتبطة بسجل سابق
+                              </option>
+                              {recurrenceCandidates.map((candidate) => (
+                                <option
+                                  key={candidate.finding_id}
+                                  value={candidate.finding_id}
+                                >
+                                  {candidate.match === "exact_taxonomy"
+                                    ? "Exact taxonomy · "
+                                    : candidate.match === "same_category"
+                                      ? "Same category · "
+                                      : "Previous archive · "}
+                                  {candidate.certificate_code} ·{" "}
+                                  {candidate.title}
+                                </option>
+                              ))}
+                            </select>
+                            <span className="mt-1 block text-[8px]">
+                              يظهر فقط Findings من Archive أقدم. ترتيب المرشحين
+                              لا ينشئ Recurrence تلقائيًا.
+                            </span>
+                          </label>
+
+                          {taxonomyDraft.recurrence_parent_finding_id && (
+                            <label className="text-[8px] text-muted-foreground md:col-span-2">
+                              Recurrence Reason
+                              <textarea
+                                rows={3}
+                                maxLength={4000}
+                                value={taxonomyDraft.recurrence_reason}
+                                onChange={(event) =>
+                                  setTaxonomyDraft({
+                                    ...taxonomyDraft,
+                                    recurrence_reason:
+                                      event.target.value,
+                                  })
+                                }
+                                placeholder="اشرح لماذا تعتبر هذه Finding تكرارًا للسجل السابق."
+                                className="mt-1 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-[10px]"
+                              />
+                            </label>
+                          )}
+                        </div>
+
+                        <div className="mt-3 flex gap-2">
+                          <button
+                            type="button"
+                            disabled={
+                              classifyFinding.isPending ||
+                              (
+                                !!taxonomyDraft.root_cause_category &&
+                                !taxonomyDraft.finding_category
+                              ) ||
+                              (
+                                !!taxonomyDraft.root_cause_detail.trim() &&
+                                !taxonomyDraft.root_cause_category
+                              ) ||
+                              (
+                                !!taxonomyDraft.recurrence_parent_finding_id &&
+                                !taxonomyDraft.recurrence_reason.trim()
+                              )
+                            }
+                            onClick={() =>
+                              classifyFinding.mutate(
+                                {
+                                  finding_id: finding.id,
+                                  expected_version: finding.version,
+                                  finding_category:
+                                    taxonomyDraft.finding_category || null,
+                                  root_cause_category:
+                                    taxonomyDraft.root_cause_category || null,
+                                  root_cause_detail:
+                                    taxonomyDraft.root_cause_detail || null,
+                                  recurrence_parent_finding_id:
+                                    taxonomyDraft.recurrence_parent_finding_id ||
+                                    null,
+                                  recurrence_reason:
+                                    taxonomyDraft.recurrence_reason || null,
+                                },
+                                {
+                                  onSuccess: () =>
+                                    setTaxonomyDraft(null),
+                                },
+                              )
+                            }
+                            className="rounded-lg bg-brand px-3 py-2 text-[9px] font-semibold text-primary-foreground disabled:opacity-40"
+                          >
+                            حفظ Taxonomy
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setTaxonomyDraft(null)}
+                            className="rounded-lg border border-border px-3 py-2 text-[9px] hover:bg-muted"
+                          >
+                            إلغاء
+                          </button>
+                        </div>
                       </div>
                     )}
 
