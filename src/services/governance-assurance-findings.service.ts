@@ -10,13 +10,16 @@ import type {
 import type {
   ActOnGovernanceAssuranceFindingVerificationInput,
   AddGovernanceAssuranceFindingEvidenceInput,
+  ClassifyGovernanceAssuranceFindingInput,
   GovernanceAssuranceFinding,
+  GovernanceAssuranceFindingCategory,
   GovernanceAssuranceFindingData,
   GovernanceAssuranceFindingEvidence,
   GovernanceAssuranceFindingEvidenceType,
   GovernanceAssuranceArchiveRemediationSummary,
   GovernanceAssuranceFindingResponsibleCandidate,
   GovernanceAssuranceFindingRow,
+  GovernanceAssuranceRecurrenceCandidate,
   GovernanceAssuranceFindingSeverity,
   GovernanceAssuranceFindingSourceCandidate,
   GovernanceAssuranceFindingSourceType,
@@ -25,7 +28,9 @@ import type {
   GovernanceAssuranceFindingVerificationStatus,
   GovernanceAssuranceRemediationAnalytics,
   GovernanceAssuranceRemediationAgingBucket,
+  GovernanceAssuranceRootCauseCategory,
   GovernanceAssuranceSeverityEffectivenessSummary,
+  GovernanceAssuranceTaxonomyAnalyticsRow,
   RequestGovernanceAssuranceFindingVerificationInput,
   SaveGovernanceAssuranceFindingInput,
 } from "@/types/governance-assurance-findings";
@@ -96,6 +101,40 @@ function verificationStatus(
     : null;
 }
 
+function findingCategory(
+  value: unknown,
+): GovernanceAssuranceFindingCategory | null {
+  return value === "control_design" ||
+    value === "control_operation" ||
+    value === "process_gap" ||
+    value === "data_quality" ||
+    value === "compliance" ||
+    value === "governance" ||
+    value === "security_access" ||
+    value === "documentation" ||
+    value === "execution" ||
+    value === "third_party" ||
+    value === "other"
+    ? value
+    : null;
+}
+
+function rootCauseCategory(
+  value: unknown,
+): GovernanceAssuranceRootCauseCategory | null {
+  return value === "people" ||
+    value === "process" ||
+    value === "technology" ||
+    value === "data" ||
+    value === "governance" ||
+    value === "third_party" ||
+    value === "external" ||
+    value === "unknown" ||
+    value === "other"
+    ? value
+    : null;
+}
+
 function evidenceType(
   value: unknown,
 ): GovernanceAssuranceFindingEvidenceType | null {
@@ -146,6 +185,10 @@ function normalizeFinding(value: unknown): GovernanceAssuranceFinding | null {
   const findingStatus = status(row.status);
   const findingVerificationStatus =
     verificationStatus(row.verification_status) ?? "not_requested";
+  const normalizedFindingCategory = findingCategory(row.finding_category);
+  const normalizedRootCauseCategory = rootCauseCategory(
+    row.root_cause_category,
+  );
   const version = intOrNull(row.version);
 
   if (
@@ -219,6 +262,26 @@ function normalizeFinding(value: unknown): GovernanceAssuranceFinding | null {
       typeof row.effectiveness_note === "string"
         ? row.effectiveness_note
         : null,
+    finding_category: normalizedFindingCategory,
+    root_cause_category: normalizedRootCauseCategory,
+    root_cause_detail:
+      typeof row.root_cause_detail === "string" ? row.root_cause_detail : null,
+    recurrence_parent_finding_id:
+      typeof row.recurrence_parent_finding_id === "string"
+        ? row.recurrence_parent_finding_id
+        : null,
+    recurrence_root_finding_id:
+      typeof row.recurrence_root_finding_id === "string"
+        ? row.recurrence_root_finding_id
+        : null,
+    recurrence_sequence: intOrNull(row.recurrence_sequence) ?? 1,
+    recurrence_reason:
+      typeof row.recurrence_reason === "string" ? row.recurrence_reason : null,
+    taxonomy_version: intOrNull(row.taxonomy_version) ?? 1,
+    classified_by:
+      typeof row.classified_by === "string" ? row.classified_by : null,
+    classified_at:
+      typeof row.classified_at === "string" ? row.classified_at : null,
     version,
     resolved_at:
       typeof row.resolved_at === "string" ? row.resolved_at : null,
@@ -747,6 +810,18 @@ export async function saveGovernanceAssuranceFinding(
       resolvingNewCycle || reopeningVerifiedFinding
         ? null
         : existing?.effectiveness_note ?? null,
+    finding_category: existing?.finding_category ?? null,
+    root_cause_category: existing?.root_cause_category ?? null,
+    root_cause_detail: existing?.root_cause_detail ?? null,
+    recurrence_parent_finding_id:
+      existing?.recurrence_parent_finding_id ?? null,
+    recurrence_root_finding_id:
+      existing?.recurrence_root_finding_id ?? null,
+    recurrence_sequence: existing?.recurrence_sequence ?? 1,
+    recurrence_reason: existing?.recurrence_reason ?? null,
+    taxonomy_version: existing?.taxonomy_version ?? 1,
+    classified_by: existing?.classified_by ?? null,
+    classified_at: existing?.classified_at ?? null,
     version: existing ? existing.version + 1 : 1,
     resolved_at:
       input.status === "resolved"
@@ -769,6 +844,192 @@ export async function saveGovernanceAssuranceFinding(
   return finding;
 }
 
+
+export function buildGovernanceAssuranceRecurrenceCandidates(
+  data: GovernanceAssuranceFindingData,
+  findingId: string,
+  category: GovernanceAssuranceFindingCategory | null,
+  rootCause: GovernanceAssuranceRootCauseCategory | null,
+): GovernanceAssuranceRecurrenceCandidate[] {
+  const current = data.findings.find((row) => row.finding.id === findingId);
+  if (!current) return [];
+
+  const priority = {
+    exact_taxonomy: 0,
+    same_category: 1,
+    other: 2,
+  } as const;
+
+  return data.findings
+    .filter(
+      (row) =>
+        row.finding.id !== findingId &&
+        row.finding.owner_user_id === current.finding.owner_user_id &&
+        row.archive.id !== current.archive.id &&
+        row.archive.archived_at < current.archive.archived_at,
+    )
+    .map((row): GovernanceAssuranceRecurrenceCandidate => {
+      const exact =
+        !!category &&
+        !!rootCause &&
+        row.finding.finding_category === category &&
+        row.finding.root_cause_category === rootCause;
+      const sameCategory =
+        !!category && row.finding.finding_category === category;
+      return {
+        finding_id: row.finding.id,
+        archive_id: row.archive.id,
+        certificate_code: row.archive.certificate_code,
+        period_label: row.archive.snapshot.review.period_label,
+        archived_at: row.archive.archived_at,
+        title: row.finding.title,
+        severity: row.finding.severity,
+        status: row.finding.status,
+        finding_category: row.finding.finding_category,
+        root_cause_category: row.finding.root_cause_category,
+        recurrence_sequence: row.finding.recurrence_sequence,
+        match: exact
+          ? "exact_taxonomy"
+          : sameCategory
+            ? "same_category"
+            : "other",
+      };
+    })
+    .sort(
+      (a, b) =>
+        priority[a.match] - priority[b.match] ||
+        b.archived_at.localeCompare(a.archived_at) ||
+        a.title.localeCompare(b.title, "ar"),
+    );
+}
+
+export async function classifyGovernanceAssuranceFinding(
+  input: ClassifyGovernanceAssuranceFindingInput,
+): Promise<GovernanceAssuranceFinding> {
+  if (
+    input.root_cause_category &&
+    !input.finding_category
+  ) {
+    throw new Error("Root Cause تتطلب Finding Category.");
+  }
+  if (
+    input.root_cause_detail?.trim() &&
+    !input.root_cause_category
+  ) {
+    throw new Error("Root Cause Detail تتطلب Root Cause Category.");
+  }
+  if ((input.root_cause_detail?.length ?? 0) > 4000) {
+    throw new Error("Root Cause Detail طويلة جدًا.");
+  }
+  if ((input.recurrence_reason?.length ?? 0) > 4000) {
+    throw new Error("Recurrence Reason طويلة جدًا.");
+  }
+  if (
+    input.recurrence_parent_finding_id &&
+    !input.recurrence_reason?.trim()
+  ) {
+    throw new Error("Recurrence Reason مطلوبة عند ربط Finding سابقة.");
+  }
+  if (
+    !input.recurrence_parent_finding_id &&
+    input.recurrence_reason?.trim()
+  ) {
+    throw new Error("اختر Previous Finding أو امسح Recurrence Reason.");
+  }
+
+  if (isSupabaseBackend()) {
+    const raw = await supabaseRest<unknown>(
+      "rpc/classify_executive_governance_assurance_finding",
+      {
+        method: "POST",
+        body: {
+          p_finding_id: input.finding_id,
+          p_expected_version: input.expected_version,
+          p_finding_category: input.finding_category,
+          p_root_cause_category: input.root_cause_category,
+          p_root_cause_detail: input.root_cause_detail ?? null,
+          p_recurrence_parent_finding_id:
+            input.recurrence_parent_finding_id ?? null,
+          p_recurrence_reason: input.recurrence_reason ?? null,
+        },
+      },
+    );
+    const finding = normalizeFinding(raw);
+    if (!finding) throw new Error("تعذر قراءة Finding Classification.");
+    return finding;
+  }
+
+  const store = readLocal();
+  const finding = store.findings.find((row) => row.id === input.finding_id);
+  if (!finding) throw new Error("Assurance Finding غير موجود.");
+  if (finding.version !== input.expected_version) {
+    throw new Error("تم تعديل Finding. حدّث البيانات وأعد المحاولة.");
+  }
+  if (finding.verification_status === "pending") {
+    throw new Error(
+      "Finding مقفلة أثناء Effectiveness Review.",
+    );
+  }
+
+  const archives = await listGovernanceAssuranceArchives();
+  const archiveMap = new Map(
+    archives.archives.map((archive) => [archive.id, archive] as const),
+  );
+  const currentArchive = archiveMap.get(finding.archive_id);
+  if (!currentArchive) throw new Error("Archive Certificate غير موجودة.");
+
+  let recurrenceRoot: string | null = null;
+  let recurrenceSequence = 1;
+  if (input.recurrence_parent_finding_id) {
+    const parent = store.findings.find(
+      (row) => row.id === input.recurrence_parent_finding_id,
+    );
+    if (
+      !parent ||
+      parent.id === finding.id ||
+      parent.owner_user_id !== finding.owner_user_id
+    ) {
+      throw new Error("Previous Finding غير صالحة.");
+    }
+    const parentArchive = archiveMap.get(parent.archive_id);
+    if (
+      !parentArchive ||
+      parent.archive_id === finding.archive_id ||
+      parentArchive.archived_at >= currentArchive.archived_at
+    ) {
+      throw new Error(
+        "Recurrence يجب أن ترتبط بـFinding من Archive أقدم.",
+      );
+    }
+    recurrenceRoot = parent.recurrence_root_finding_id ?? parent.id;
+    recurrenceSequence = Math.max(2, parent.recurrence_sequence + 1);
+  }
+
+  const now = new Date().toISOString();
+  const updated: GovernanceAssuranceFinding = {
+    ...finding,
+    finding_category: input.finding_category,
+    root_cause_category: input.root_cause_category,
+    root_cause_detail: input.root_cause_detail?.trim() || null,
+    recurrence_parent_finding_id:
+      input.recurrence_parent_finding_id ?? null,
+    recurrence_root_finding_id: recurrenceRoot,
+    recurrence_sequence: recurrenceSequence,
+    recurrence_reason: input.recurrence_parent_finding_id
+      ? input.recurrence_reason?.trim() || null
+      : null,
+    taxonomy_version: 1,
+    classified_by: "local-user",
+    classified_at: now,
+    version: finding.version + 1,
+    updated_at: now,
+  };
+  store.findings = store.findings.map((row) =>
+    row.id === updated.id ? updated : row,
+  );
+  writeLocal(store);
+  return updated;
+}
 
 export async function addGovernanceAssuranceFindingEvidence(
   input: AddGovernanceAssuranceFindingEvidenceInput,
@@ -1122,6 +1383,45 @@ function buildSeverityEffectiveness(
   });
 }
 
+function buildTaxonomyAnalytics(
+  findings: GovernanceAssuranceFinding[],
+  getKey: (finding: GovernanceAssuranceFinding) => string | null,
+): GovernanceAssuranceTaxonomyAnalyticsRow[] {
+  const groups = new Map<string, GovernanceAssuranceFinding[]>();
+  for (const finding of findings) {
+    const key = getKey(finding);
+    if (!key) continue;
+    const current = groups.get(key) ?? [];
+    current.push(finding);
+    groups.set(key, current);
+  }
+
+  return [...groups.entries()]
+    .map(([key, rows]) => ({
+      key,
+      total: rows.length,
+      active: rows.filter(findingIsActive).length,
+      recurring: rows.filter(
+        (row) => !!row.recurrence_parent_finding_id,
+      ).length,
+      effective: rows.filter(
+        (row) => row.verification_status === "effective",
+      ).length,
+      partially_effective: rows.filter(
+        (row) => row.verification_status === "partially_effective",
+      ).length,
+      ineffective: rows.filter(
+        (row) => row.verification_status === "ineffective",
+      ).length,
+    }))
+    .sort(
+      (a, b) =>
+        b.active - a.active ||
+        b.total - a.total ||
+        a.key.localeCompare(b.key),
+    );
+}
+
 export function buildGovernanceAssuranceRemediationAnalytics(
   data: GovernanceAssuranceFindingData,
   now = new Date(),
@@ -1189,9 +1489,36 @@ export function buildGovernanceAssuranceRemediationAnalytics(
           row.verification_status === "ineffective"
         ),
     ).length,
+    classified_findings: findings.filter(
+      (row) => !!row.finding_category,
+    ).length,
+    unclassified_findings: findings.filter(
+      (row) => !row.finding_category,
+    ).length,
+    recurring_findings: findings.filter(
+      (row) => !!row.recurrence_parent_finding_id,
+    ).length,
+    recurring_active: active.filter(
+      (row) => !!row.recurrence_parent_finding_id,
+    ).length,
+    recurrence_chains: new Set(
+      findings.flatMap((row) =>
+        row.recurrence_root_finding_id
+          ? [row.recurrence_root_finding_id]
+          : [],
+      ),
+    ).size,
     active_aging: buildAgingBuckets(findings, nowIso),
     by_archive: buildArchiveSummaries(data.findings, today),
     by_severity: buildSeverityEffectiveness(findings),
+    by_category: buildTaxonomyAnalytics(
+      findings,
+      (row) => row.finding_category,
+    ),
+    by_root_cause: buildTaxonomyAnalytics(
+      findings,
+      (row) => row.root_cause_category,
+    ),
   };
 }
 
@@ -1228,6 +1555,11 @@ export function governanceAssuranceRemediationAnalyticsCsv(
     csvRow(["Median Resolution Days", analytics.median_resolution_days]),
     csvRow(["Median Acceptance Days", analytics.median_acceptance_days]),
     csvRow(["Reopened By Effectiveness", analytics.reopened_by_effectiveness]),
+    csvRow(["Classified Findings", analytics.classified_findings]),
+    csvRow(["Unclassified Findings", analytics.unclassified_findings]),
+    csvRow(["Recurring Findings", analytics.recurring_findings]),
+    csvRow(["Recurring Active", analytics.recurring_active]),
+    csvRow(["Recurrence Chains", analytics.recurrence_chains]),
     "",
     csvRow(["Active Aging", "Count"]),
     ...analytics.active_aging.map((row) => csvRow([row.label, row.count])),
@@ -1278,6 +1610,48 @@ export function governanceAssuranceRemediationAnalyticsCsv(
         row.severity,
         row.total_findings,
         row.completed_verifications,
+        row.effective,
+        row.partially_effective,
+        row.ineffective,
+      ]),
+    ),
+    "",
+    csvRow([
+      "Finding Category",
+      "Total",
+      "Active",
+      "Recurring",
+      "Effective",
+      "Partially Effective",
+      "Ineffective",
+    ]),
+    ...analytics.by_category.map((row) =>
+      csvRow([
+        row.key,
+        row.total,
+        row.active,
+        row.recurring,
+        row.effective,
+        row.partially_effective,
+        row.ineffective,
+      ]),
+    ),
+    "",
+    csvRow([
+      "Root Cause",
+      "Total",
+      "Active",
+      "Recurring",
+      "Effective",
+      "Partially Effective",
+      "Ineffective",
+    ]),
+    ...analytics.by_root_cause.map((row) =>
+      csvRow([
+        row.key,
+        row.total,
+        row.active,
+        row.recurring,
         row.effective,
         row.partially_effective,
         row.ineffective,
