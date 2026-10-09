@@ -12,6 +12,9 @@ import type {
   AddGovernanceAssuranceFindingEvidenceInput,
   ClassifyGovernanceAssuranceFindingInput,
   GovernanceAssuranceFinding,
+  GovernanceAssuranceFindingAction,
+  GovernanceAssuranceFindingActionStatus,
+  GovernanceAssuranceFindingActionType,
   GovernanceAssuranceFindingCategory,
   GovernanceAssuranceFindingData,
   GovernanceAssuranceFindingEvidence,
@@ -32,6 +35,7 @@ import type {
   GovernanceAssuranceSeverityEffectivenessSummary,
   GovernanceAssuranceTaxonomyAnalyticsRow,
   RequestGovernanceAssuranceFindingVerificationInput,
+  SaveGovernanceAssuranceFindingActionInput,
   SaveGovernanceAssuranceFindingInput,
 } from "@/types/governance-assurance-findings";
 
@@ -41,6 +45,7 @@ interface LocalStore {
   version: 1;
   findings: GovernanceAssuranceFinding[];
   evidence: GovernanceAssuranceFindingEvidence[];
+  actions: GovernanceAssuranceFindingAction[];
 }
 
 function intOrNull(value: unknown) {
@@ -133,6 +138,82 @@ function rootCauseCategory(
     value === "other"
     ? value
     : null;
+}
+
+function actionType(
+  value: unknown,
+): GovernanceAssuranceFindingActionType | null {
+  return value === "corrective" || value === "preventive" ? value : null;
+}
+
+function actionStatus(
+  value: unknown,
+): GovernanceAssuranceFindingActionStatus | null {
+  return value === "open" ||
+    value === "in_progress" ||
+    value === "completed" ||
+    value === "cancelled"
+    ? value
+    : null;
+}
+
+function normalizeAction(
+  value: unknown,
+): GovernanceAssuranceFindingAction | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const type = actionType(row.action_type);
+  const status = actionStatus(row.status);
+  const version = intOrNull(row.version);
+  if (
+    typeof row.id !== "string" ||
+    typeof row.finding_id !== "string" ||
+    typeof row.archive_id !== "string" ||
+    typeof row.owner_user_id !== "string" ||
+    typeof row.title !== "string" ||
+    typeof row.description !== "string" ||
+    typeof row.created_by !== "string" ||
+    typeof row.created_at !== "string" ||
+    typeof row.updated_at !== "string" ||
+    !type ||
+    !status ||
+    version == null
+  ) {
+    return null;
+  }
+  return {
+    id: row.id,
+    finding_id: row.finding_id,
+    archive_id: row.archive_id,
+    owner_user_id: row.owner_user_id,
+    action_type: type,
+    title: row.title,
+    description: row.description,
+    status,
+    responsible_user_id:
+      typeof row.responsible_user_id === "string"
+        ? row.responsible_user_id
+        : null,
+    responsible_name_snapshot:
+      typeof row.responsible_name_snapshot === "string"
+        ? row.responsible_name_snapshot
+        : null,
+    responsible_email_snapshot:
+      typeof row.responsible_email_snapshot === "string"
+        ? row.responsible_email_snapshot
+        : null,
+    due_date: typeof row.due_date === "string" ? row.due_date : null,
+    outcome_note:
+      typeof row.outcome_note === "string" ? row.outcome_note : null,
+    version,
+    completed_at:
+      typeof row.completed_at === "string" ? row.completed_at : null,
+    cancelled_at:
+      typeof row.cancelled_at === "string" ? row.cancelled_at : null,
+    created_by: row.created_by,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
 }
 
 function evidenceType(
@@ -335,7 +416,7 @@ function normalizeSummary(value: unknown): GovernanceAssuranceFindingSummary {
 
 function readLocal(): LocalStore {
   if (typeof window === "undefined") {
-    return { version: 1, findings: [], evidence: [] };
+    return { version: 1, findings: [], evidence: [], actions: [] };
   }
   try {
     const parsed = JSON.parse(
@@ -357,9 +438,16 @@ function readLocal(): LocalStore {
               (item): item is GovernanceAssuranceFindingEvidence => !!item,
             )
         : [],
+      actions: Array.isArray(parsed.actions)
+        ? parsed.actions
+            .map(normalizeAction)
+            .filter(
+              (item): item is GovernanceAssuranceFindingAction => !!item,
+            )
+        : [],
     };
   } catch {
-    return { version: 1, findings: [], evidence: [] };
+    return { version: 1, findings: [], evidence: [], actions: [] };
   }
 }
 
@@ -565,13 +653,30 @@ export async function listGovernanceAssuranceFindings(): Promise<GovernanceAssur
   const archiveDataPromise = listGovernanceAssuranceArchives();
 
   if (isSupabaseBackend()) {
-    const [raw, archives] = await Promise.all([
+    const [raw, actionRows, archives] = await Promise.all([
       supabaseRest<Record<string, unknown>>(
         "rpc/list_executive_governance_assurance_findings",
         { method: "POST", body: {} },
       ),
+      supabaseRest<unknown[]>(
+        "rpc/list_executive_governance_assurance_finding_actions",
+        { method: "POST", body: {} },
+      ),
       archiveDataPromise,
     ]);
+    const actionsByFinding = new Map<
+      string,
+      GovernanceAssuranceFindingAction[]
+    >();
+    for (const item of actionRows) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+      const rawAction = (item as Record<string, unknown>).action;
+      const action = normalizeAction(rawAction);
+      if (!action) continue;
+      const current = actionsByFinding.get(action.finding_id) ?? [];
+      current.push(action);
+      actionsByFinding.set(action.finding_id, current);
+    }
     const archiveMap = new Map(
       archives.archives.map((archive) => [archive.id, archive] as const),
     );
@@ -603,6 +708,7 @@ export async function listGovernanceAssuranceFindings(): Promise<GovernanceAssur
                         !!item,
                     )
                 : [],
+              actions: actionsByFinding.get(finding.id) ?? [],
             },
           ];
         })
@@ -638,6 +744,9 @@ export async function listGovernanceAssuranceFindings(): Promise<GovernanceAssur
       evidence: localStore.evidence.filter(
         (row) => row.finding_id === finding.id,
       ),
+      actions: localStore.actions
+        .filter((row) => row.finding_id === finding.id)
+        .sort((a, b) => b.updated_at.localeCompare(a.updated_at)),
     }));
 
   return {
@@ -844,6 +953,141 @@ export async function saveGovernanceAssuranceFinding(
   return finding;
 }
 
+
+export async function saveGovernanceAssuranceFindingAction(
+  input: SaveGovernanceAssuranceFindingActionInput,
+): Promise<GovernanceAssuranceFindingAction> {
+  if (!input.title.trim() || input.title.trim().length > 240) {
+    throw new Error("CAPA Action Title مطلوبة وبحد أقصى 240 حرفًا.");
+  }
+  if (
+    !input.description.trim() ||
+    input.description.trim().length > 12000
+  ) {
+    throw new Error("CAPA Action Description مطلوبة وبحد أقصى 12000 حرف.");
+  }
+  if ((input.outcome_note?.length ?? 0) > 12000) {
+    throw new Error("Outcome Note طويلة جدًا.");
+  }
+  if (
+    (input.status === "completed" || input.status === "cancelled") &&
+    !input.outcome_note?.trim()
+  ) {
+    throw new Error("Outcome Note مطلوبة للحالة النهائية.");
+  }
+  if (
+    (input.status === "open" || input.status === "in_progress") &&
+    input.outcome_note?.trim()
+  ) {
+    throw new Error("Outcome Note تستخدم فقط مع Completed أو Cancelled.");
+  }
+
+  if (isSupabaseBackend()) {
+    const raw = await supabaseRest<unknown>(
+      "rpc/save_executive_governance_assurance_finding_action",
+      {
+        method: "POST",
+        body: {
+          p_action_id: input.id ?? null,
+          p_expected_version: input.expected_version ?? null,
+          p_finding_id: input.finding_id,
+          p_action_type: input.action_type,
+          p_title: input.title,
+          p_description: input.description,
+          p_status: input.status,
+          p_responsible_user_id: input.responsible_user_id ?? null,
+          p_due_date: input.due_date ?? null,
+          p_outcome_note: input.outcome_note ?? null,
+        },
+      },
+    );
+    const action = normalizeAction(raw);
+    if (!action) throw new Error("عاد الخادم بـCAPA Action غير صالحة.");
+    return action;
+  }
+
+  const store = readLocal();
+  const finding = store.findings.find((row) => row.id === input.finding_id);
+  if (!finding) throw new Error("Assurance Finding غير موجود.");
+  if (finding.verification_status === "pending") {
+    throw new Error("CAPA Plan مقفلة أثناء Effectiveness Review.");
+  }
+
+  const archives = await listGovernanceAssuranceArchives();
+  const archive = archives.archives.find(
+    (row) => row.id === finding.archive_id,
+  );
+  if (!archive) throw new Error("Archive Certificate غير موجودة.");
+
+  const responsible = input.responsible_user_id
+    ? buildGovernanceAssuranceFindingResponsibleCandidates(archive).find(
+        (row) => row.user_id === input.responsible_user_id,
+      )
+    : null;
+  if (input.responsible_user_id && !responsible) {
+    throw new Error("CAPA Responsible ليست ضمن دورة الـArchive.");
+  }
+
+  const existing = input.id
+    ? store.actions.find((row) => row.id === input.id)
+    : null;
+  if (input.id && !existing) {
+    throw new Error("CAPA Action غير موجودة.");
+  }
+  if (
+    existing &&
+    (
+      input.expected_version == null ||
+      existing.version !== input.expected_version
+    )
+  ) {
+    throw new Error("تم تعديل CAPA Action. حدّث البيانات وأعد المحاولة.");
+  }
+  if (!existing && input.expected_version != null) {
+    throw new Error("تم تعديل CAPA Action. حدّث البيانات وأعد المحاولة.");
+  }
+  if (existing && existing.finding_id !== finding.id) {
+    throw new Error("Finding الخاصة بـCAPA Action لا يمكن تغييرها.");
+  }
+
+  const now = new Date().toISOString();
+  const action: GovernanceAssuranceFindingAction = {
+    id: existing?.id ?? crypto.randomUUID(),
+    finding_id: finding.id,
+    archive_id: finding.archive_id,
+    owner_user_id: finding.owner_user_id,
+    action_type: input.action_type,
+    title: input.title.trim(),
+    description: input.description.trim(),
+    status: input.status,
+    responsible_user_id: responsible?.user_id ?? null,
+    responsible_name_snapshot: responsible?.display_name ?? null,
+    responsible_email_snapshot: responsible?.email ?? null,
+    due_date: input.due_date || null,
+    outcome_note:
+      input.status === "completed" || input.status === "cancelled"
+        ? input.outcome_note?.trim() || null
+        : null,
+    version: existing ? existing.version + 1 : 1,
+    completed_at:
+      input.status === "completed"
+        ? existing?.completed_at ?? now
+        : null,
+    cancelled_at:
+      input.status === "cancelled"
+        ? existing?.cancelled_at ?? now
+        : null,
+    created_by: existing?.created_by ?? finding.owner_user_id,
+    created_at: existing?.created_at ?? now,
+    updated_at: now,
+  };
+  store.actions = [
+    action,
+    ...store.actions.filter((row) => row.id !== action.id),
+  ];
+  writeLocal(store);
+  return action;
+}
 
 export function buildGovernanceAssuranceRecurrenceCandidates(
   data: GovernanceAssuranceFindingData,
@@ -1444,6 +1688,7 @@ export function buildGovernanceAssuranceRemediationAnalytics(
     String(now.getDate()).padStart(2, "0"),
   ].join("-");
   const findings = data.findings.map((row) => row.finding);
+  const actions = data.findings.flatMap((row) => row.actions);
   const active = findings.filter(findingIsActive);
   const closed = findings.filter(
     (row) => row.status === "resolved" || row.status === "accepted",
@@ -1459,8 +1704,22 @@ export function buildGovernanceAssuranceRemediationAnalytics(
   ).length;
   const completedVerifications =
     effective + partiallyEffective + ineffective;
-
-  const resolutionDays = findings.flatMap((row) => {
+  const activeActions = actions.filter(
+    (row) => row.status === "open" || row.status === "in_progress",
+  );
+  const overdueActions = activeActions.filter(
+    (row) => !!row.due_date && row.due_date < today,
+  );
+  const recurringRows = data.findings.filter(
+    (row) => !!row.finding.recurrence_parent_finding_id,
+  );
+  const recurringWithPreventive = recurringRows.filter((row) =>
+    row.actions.some(
+      (action) =>
+        action.action_type === "preventive" &&
+        action.status !== "cancelled",
+    ),
+  ).length; = findings.flatMap((row) => {
     if (!row.resolved_at) return [];
     const days = dateDiffDays(row.created_at, row.resolved_at);
     return days == null ? [] : [days];
@@ -1519,6 +1778,23 @@ export function buildGovernanceAssuranceRemediationAnalytics(
           : [],
       ),
     ).size,
+    total_capa_actions: actions.length,
+    active_capa_actions: activeActions.length,
+    overdue_capa_actions: overdueActions.length,
+    preventive_actions: actions.filter(
+      (row) =>
+        row.action_type === "preventive" &&
+        row.status !== "cancelled",
+    ).length,
+    recurring_with_preventive_action: recurringWithPreventive,
+    recurring_without_preventive_action:
+      recurringRows.length - recurringWithPreventive,
+    preventive_coverage_pct:
+      recurringRows.length > 0
+        ? Math.round(
+            (recurringWithPreventive / recurringRows.length) * 1000,
+          ) / 10
+        : null,
     active_aging: buildAgingBuckets(findings, nowIso),
     by_archive: buildArchiveSummaries(data.findings, today),
     by_severity: buildSeverityEffectiveness(findings),
@@ -1571,6 +1847,22 @@ export function governanceAssuranceRemediationAnalyticsCsv(
     csvRow(["Recurring Findings", analytics.recurring_findings]),
     csvRow(["Recurring Active", analytics.recurring_active]),
     csvRow(["Recurrence Chains", analytics.recurrence_chains]),
+    csvRow(["Total CAPA Actions", analytics.total_capa_actions]),
+    csvRow(["Active CAPA Actions", analytics.active_capa_actions]),
+    csvRow(["Overdue CAPA Actions", analytics.overdue_capa_actions]),
+    csvRow(["Preventive Actions", analytics.preventive_actions]),
+    csvRow([
+      "Recurring With Preventive Action",
+      analytics.recurring_with_preventive_action,
+    ]),
+    csvRow([
+      "Recurring Without Preventive Action",
+      analytics.recurring_without_preventive_action,
+    ]),
+    csvRow([
+      "Preventive Coverage %",
+      analytics.preventive_coverage_pct,
+    ]),
     "",
     csvRow(["Active Aging", "Count"]),
     ...analytics.active_aging.map((row) => csvRow([row.label, row.count])),

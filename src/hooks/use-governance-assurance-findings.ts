@@ -8,12 +8,14 @@ import {
   listGovernanceAssuranceFindings,
   requestGovernanceAssuranceFindingVerification,
   saveGovernanceAssuranceFinding,
+  saveGovernanceAssuranceFindingAction,
 } from "@/services/governance-assurance-findings.service";
 import type {
   ActOnGovernanceAssuranceFindingVerificationInput,
   AddGovernanceAssuranceFindingEvidenceInput,
   ClassifyGovernanceAssuranceFindingInput,
   RequestGovernanceAssuranceFindingVerificationInput,
+  SaveGovernanceAssuranceFindingActionInput,
   SaveGovernanceAssuranceFindingInput,
 } from "@/types/governance-assurance-findings";
 
@@ -127,6 +129,25 @@ export function useClassifyGovernanceAssuranceFinding() {
         error instanceof Error
           ? error.message
           : "تعذر حفظ Finding Taxonomy.",
+      ),
+  });
+}
+
+
+export function useSaveGovernanceAssuranceFindingAction() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: SaveGovernanceAssuranceFindingActionInput) =>
+      saveGovernanceAssuranceFindingAction(input),
+    onSuccess: () => {
+      invalidateFindings(queryClient);
+      toast.success("تم حفظ CAPA Action.");
+    },
+    onError: (error) =>
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "تعذر حفظ CAPA Action.",
       ),
   });
 }
