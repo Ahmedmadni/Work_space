@@ -33,6 +33,7 @@ import {
 } from "@/hooks/use-governance-assurance-findings";
 import { arabicNumber } from "@/lib/format";
 import {
+  buildGovernanceAssuranceFindingClosureReadiness,
   buildGovernanceAssuranceFindingResponsibleCandidates,
   buildGovernanceAssuranceFindingSourceCandidates,
   buildGovernanceAssuranceRecurrenceCandidates,
@@ -942,7 +943,7 @@ export function ExecutiveGovernanceAssuranceFindings() {
         </div>
       ) : (
         <div className="space-y-2">
-          {filteredRows.map(({ finding, archive, can_manage, can_verify, evidence, actions }) => {
+          {filteredRows.map(({ finding, archive, can_manage, is_responsible, can_verify, evidence, actions }) => {
             const active =
               finding.status === "open" ||
               finding.status === "in_progress";
@@ -979,6 +980,16 @@ export function ExecutiveGovernanceAssuranceFindings() {
                   taxonomyDraft.root_cause_category || null,
                 )
               : [];
+            const closureReadiness =
+              buildGovernanceAssuranceFindingClosureReadiness({
+                finding,
+                archive,
+                can_manage,
+                is_responsible,
+                can_verify,
+                evidence,
+                actions,
+              });
 
             return (
               <div
@@ -1154,6 +1165,7 @@ export function ExecutiveGovernanceAssuranceFindings() {
                       archive={archive}
                       canManage={can_manage}
                       actions={actions}
+                      readiness={closureReadiness}
                     />
 
                     {finding.resolution_note && (
@@ -1263,7 +1275,7 @@ export function ExecutiveGovernanceAssuranceFindings() {
 
                         {finding.status === "resolved" &&
                           finding.verification_status === "not_requested" &&
-                          evidence.length > 0 && (
+                          closureReadiness.ready && (
                             <button
                               type="button"
                               onClick={() =>
