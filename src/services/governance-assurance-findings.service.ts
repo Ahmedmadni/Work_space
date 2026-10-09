@@ -1514,7 +1514,7 @@ export async function requestGovernanceAssuranceFindingVerification(
   if (
     finding.version !== input.expected_version ||
     finding.status !== "resolved" ||
-    finding.verification_status === "pending"
+    finding.verification_status !== "not_requested"
   ) {
     throw new Error("Finding ليست جاهزة لطلب Verification.");
   }
