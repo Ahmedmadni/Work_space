@@ -9,7 +9,9 @@ import {
   GitBranch,
   RefreshCw,
   ShieldAlert,
+  ShieldCheck,
   Tags,
+  Wrench,
 } from "lucide-react";
 import { useMemo } from "react";
 
@@ -425,6 +427,102 @@ export function ExecutiveGovernanceAssuranceRemediationAnalytics() {
               </div>
             </div>
           ))}
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-border bg-background p-4">
+        <div className="flex items-center gap-2">
+          <Wrench className="h-4 w-4 text-brand" />
+          <div>
+            <p className="text-xs font-semibold">
+              CAPA & Recurrence Prevention Coverage
+            </p>
+            <p className="text-[8px] text-muted-foreground">
+              Coverage = Recurring Findings التي لديها Preventive Action غير
+              ملغاة ÷ إجمالي Recurring Findings. لا يوجد وزن أو score.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-lg border border-border p-3">
+            <p className="text-[8px] text-muted-foreground">
+              Total CAPA Actions
+            </p>
+            <p className="mt-1 text-lg font-bold">
+              {arabicNumber(analytics.total_capa_actions)}
+            </p>
+          </div>
+          <div className="rounded-lg border border-border p-3">
+            <p className="text-[8px] text-muted-foreground">
+              Active CAPA
+            </p>
+            <p className="mt-1 text-lg font-bold text-warning">
+              {arabicNumber(analytics.active_capa_actions)}
+            </p>
+          </div>
+          <div className="rounded-lg border border-border p-3">
+            <p className="text-[8px] text-muted-foreground">
+              Overdue CAPA
+            </p>
+            <p className="mt-1 text-lg font-bold text-danger">
+              {arabicNumber(analytics.overdue_capa_actions)}
+            </p>
+          </div>
+          <div className="rounded-lg border border-border p-3">
+            <p className="text-[8px] text-muted-foreground">
+              Preventive Actions
+            </p>
+            <p className="mt-1 text-lg font-bold text-brand">
+              {arabicNumber(analytics.preventive_actions)}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_auto]">
+          <div className="grid gap-2 sm:grid-cols-2">
+            <div className="rounded-lg border border-success/20 bg-success/5 p-3">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-3.5 w-3.5 text-success" />
+                <p className="text-[8px] text-muted-foreground">
+                  Recurring with Preventive Action
+                </p>
+              </div>
+              <p className="mt-1 text-lg font-bold text-success">
+                {arabicNumber(
+                  analytics.recurring_with_preventive_action,
+                )}
+              </p>
+            </div>
+            <div className="rounded-lg border border-warning/20 bg-warning/5 p-3">
+              <p className="text-[8px] text-muted-foreground">
+                Recurring without Preventive Action
+              </p>
+              <p className="mt-1 text-lg font-bold text-warning">
+                {arabicNumber(
+                  analytics.recurring_without_preventive_action,
+                )}
+              </p>
+            </div>
+          </div>
+
+          <div className="min-w-44 rounded-lg border border-border p-3">
+            <p className="text-[8px] text-muted-foreground">
+              Preventive Coverage
+            </p>
+            <p className="mt-1 text-xl font-bold text-brand">
+              {numberOrDash(
+                analytics.preventive_coverage_pct,
+                "%",
+              )}
+            </p>
+            <p className="mt-1 text-[8px] text-muted-foreground">
+              {arabicNumber(
+                analytics.recurring_with_preventive_action,
+              )}{" "}
+              / {arabicNumber(analytics.recurring_findings)}
+            </p>
+          </div>
         </div>
       </div>
 
