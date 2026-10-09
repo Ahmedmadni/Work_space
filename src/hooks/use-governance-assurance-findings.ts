@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import {
   actOnGovernanceAssuranceFindingVerification,
   addGovernanceAssuranceFindingEvidence,
+  classifyGovernanceAssuranceFinding,
   listGovernanceAssuranceFindings,
   requestGovernanceAssuranceFindingVerification,
   saveGovernanceAssuranceFinding,
@@ -11,6 +12,7 @@ import {
 import type {
   ActOnGovernanceAssuranceFindingVerificationInput,
   AddGovernanceAssuranceFindingEvidenceInput,
+  ClassifyGovernanceAssuranceFindingInput,
   RequestGovernanceAssuranceFindingVerificationInput,
   SaveGovernanceAssuranceFindingInput,
 } from "@/types/governance-assurance-findings";
@@ -106,6 +108,25 @@ export function useActOnGovernanceAssuranceFindingVerification() {
         error instanceof Error
           ? error.message
           : "تعذر تسجيل Effectiveness Review.",
+      ),
+  });
+}
+
+
+export function useClassifyGovernanceAssuranceFinding() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ClassifyGovernanceAssuranceFindingInput) =>
+      classifyGovernanceAssuranceFinding(input),
+    onSuccess: () => {
+      invalidateFindings(queryClient);
+      toast.success("تم حفظ Taxonomy وRoot Cause وRecurrence.");
+    },
+    onError: (error) =>
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "تعذر حفظ Finding Taxonomy.",
       ),
   });
 }
