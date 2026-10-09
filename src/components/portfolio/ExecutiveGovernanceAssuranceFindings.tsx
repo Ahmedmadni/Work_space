@@ -22,6 +22,7 @@ import { useState } from "react";
 import {
   useGovernanceAssuranceArchives,
 } from "@/hooks/use-governance-assurance";
+import { ExecutiveGovernanceAssuranceFindingCapa } from "@/components/portfolio/ExecutiveGovernanceAssuranceFindingCapa";
 import {
   useActOnGovernanceAssuranceFindingVerification,
   useAddGovernanceAssuranceFindingEvidence,
@@ -941,7 +942,7 @@ export function ExecutiveGovernanceAssuranceFindings() {
         </div>
       ) : (
         <div className="space-y-2">
-          {filteredRows.map(({ finding, archive, can_manage, can_verify, evidence }) => {
+          {filteredRows.map(({ finding, archive, can_manage, can_verify, evidence, actions }) => {
             const active =
               finding.status === "open" ||
               finding.status === "in_progress";
@@ -1147,6 +1148,13 @@ export function ExecutiveGovernanceAssuranceFindings() {
                         {finding.corrective_action}
                       </div>
                     )}
+
+                    <ExecutiveGovernanceAssuranceFindingCapa
+                      finding={finding}
+                      archive={archive}
+                      canManage={can_manage}
+                      actions={actions}
+                    />
 
                     {finding.resolution_note && (
                       <div className="mt-2 rounded-lg border border-success/20 bg-success/5 p-3 text-[8px] leading-4 text-muted-foreground">
