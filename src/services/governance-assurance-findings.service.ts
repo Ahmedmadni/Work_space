@@ -8,6 +8,7 @@ import type {
   GovernanceAssuranceSignatoryCandidate,
 } from "@/types/governance-assurance";
 import type {
+  ActOnGovernanceAssuranceFindingActionInput,
   ActOnGovernanceAssuranceFindingVerificationInput,
   AddGovernanceAssuranceFindingEvidenceInput,
   ClassifyGovernanceAssuranceFindingInput,
@@ -16,6 +17,7 @@ import type {
   GovernanceAssuranceFindingActionStatus,
   GovernanceAssuranceFindingActionType,
   GovernanceAssuranceFindingCategory,
+  GovernanceAssuranceFindingClosureReadiness,
   GovernanceAssuranceFindingData,
   GovernanceAssuranceFindingEvidence,
   GovernanceAssuranceFindingEvidenceType,
@@ -213,6 +215,8 @@ function normalizeAction(
     created_by: row.created_by,
     created_at: row.created_at,
     updated_at: row.updated_at,
+    can_manage: row.can_manage === true,
+    is_responsible: row.is_responsible === true,
   };
 }
 
@@ -670,11 +674,16 @@ export async function listGovernanceAssuranceFindings(): Promise<GovernanceAssur
     >();
     for (const item of actionRows) {
       if (!item || typeof item !== "object" || Array.isArray(item)) continue;
-      const rawAction = (item as Record<string, unknown>).action;
-      const action = normalizeAction(rawAction);
+      const wrapper = item as Record<string, unknown>;
+      const action = normalizeAction(wrapper.action);
       if (!action) continue;
+      const scopedAction: GovernanceAssuranceFindingAction = {
+        ...action,
+        can_manage: wrapper.can_manage === true,
+        is_responsible: wrapper.is_responsible === true,
+      };
       const current = actionsByFinding.get(action.finding_id) ?? [];
-      current.push(action);
+      current.push(scopedAction);
       actionsByFinding.set(action.finding_id, current);
     }
     const archiveMap = new Map(
@@ -746,6 +755,11 @@ export async function listGovernanceAssuranceFindings(): Promise<GovernanceAssur
       ),
       actions: localStore.actions
         .filter((row) => row.finding_id === finding.id)
+        .map((row) => ({
+          ...row,
+          can_manage: true,
+          is_responsible: row.responsible_user_id === "local-user",
+        }))
         .sort((a, b) => b.updated_at.localeCompare(a.updated_at)),
     }));
 
@@ -953,6 +967,125 @@ export async function saveGovernanceAssuranceFinding(
   return finding;
 }
 
+
+export function buildGovernanceAssuranceFindingClosureReadiness(
+  row: GovernanceAssuranceFindingRow,
+): GovernanceAssuranceFindingClosureReadiness {
+  const activeCapa = row.actions.filter(
+    (action) => action.status === "open" || action.status === "in_progress",
+  ).length;
+  const preventiveRequired =
+    !!row.finding.recurrence_parent_finding_id;
+  const hasCompletedPreventive = row.actions.some(
+    (action) =>
+      action.action_type === "preventive" &&
+      action.status === "completed",
+  );
+  const hasEvidence = row.evidence.length > 0;
+  const reasons: GovernanceAssuranceFindingClosureReadiness["reasons"] = [];
+
+  if (!hasEvidence) reasons.push("evidence_required");
+  if (activeCapa > 0) reasons.push("active_capa_actions");
+  if (preventiveRequired && !hasCompletedPreventive) {
+    reasons.push("completed_preventive_required");
+  }
+
+  return {
+    ready: reasons.length === 0,
+    has_evidence: hasEvidence,
+    active_capa_actions: activeCapa,
+    has_completed_preventive_action: hasCompletedPreventive,
+    preventive_required: preventiveRequired,
+    reasons,
+  };
+}
+
+export async function actOnGovernanceAssuranceFindingAction(
+  input: ActOnGovernanceAssuranceFindingActionInput,
+): Promise<GovernanceAssuranceFindingAction> {
+  if (
+    input.status === "completed" &&
+    !input.outcome_note?.trim()
+  ) {
+    throw new Error("Outcome Note مطلوبة عند إكمال CAPA Action.");
+  }
+  if (
+    input.status === "in_progress" &&
+    input.outcome_note?.trim()
+  ) {
+    throw new Error("Outcome Note تستخدم فقط عند الإكمال.");
+  }
+  if ((input.outcome_note?.length ?? 0) > 12000) {
+    throw new Error("Outcome Note طويلة جدًا.");
+  }
+
+  if (isSupabaseBackend()) {
+    const raw = await supabaseRest<unknown>(
+      "rpc/act_on_executive_governance_assurance_finding_action",
+      {
+        method: "POST",
+        body: {
+          p_action_id: input.action_id,
+          p_expected_version: input.expected_version,
+          p_status: input.status,
+          p_outcome_note: input.outcome_note ?? null,
+        },
+      },
+    );
+    const action = normalizeAction(raw);
+    if (!action) throw new Error("تعذر قراءة CAPA Action بعد التحديث.");
+    return action;
+  }
+
+  const store = readLocal();
+  const action = store.actions.find((row) => row.id === input.action_id);
+  if (!action || action.responsible_user_id !== "local-user") {
+    throw new Error("CAPA Action غير مسندة لهذا المستخدم.");
+  }
+  if (action.version !== input.expected_version) {
+    throw new Error("تم تعديل CAPA Action. حدّث البيانات وأعد المحاولة.");
+  }
+  const finding = store.findings.find((row) => row.id === action.finding_id);
+  if (!finding) throw new Error("Assurance Finding غير موجود.");
+  if (finding.verification_status === "pending") {
+    throw new Error("CAPA Plan مقفلة أثناء Effectiveness Review.");
+  }
+  const validTransition =
+    (action.status === "open" &&
+      (input.status === "in_progress" || input.status === "completed")) ||
+    (action.status === "in_progress" && input.status === "completed");
+  if (!validTransition) {
+    throw new Error("انتقال حالة CAPA Action غير مسموح للمسؤول.");
+  }
+
+  const now = new Date().toISOString();
+  const updated: GovernanceAssuranceFindingAction = {
+    ...action,
+    status: input.status,
+    outcome_note:
+      input.status === "completed" ? input.outcome_note?.trim() || null : null,
+    completed_at: input.status === "completed" ? now : null,
+    cancelled_at: null,
+    version: action.version + 1,
+    updated_at: now,
+    can_manage: action.can_manage,
+    is_responsible: true,
+  };
+  store.actions = store.actions.map((row) =>
+    row.id === updated.id ? updated : row,
+  );
+  writeLocal(store);
+  return updated;
+}
+
+export async function refreshGovernanceAssuranceCapaNotifications() {
+  if (!isSupabaseBackend()) return 0;
+  const raw = await supabaseRest<unknown>(
+    "rpc/refresh_assurance_capa_action_notifications",
+    { method: "POST", body: {} },
+  );
+  return typeof raw === "number" ? raw : Number(raw ?? 0) || 0;
+}
 
 export async function saveGovernanceAssuranceFindingAction(
   input: SaveGovernanceAssuranceFindingActionInput,
@@ -1381,12 +1514,36 @@ export async function requestGovernanceAssuranceFindingVerification(
   if (
     finding.version !== input.expected_version ||
     finding.status !== "resolved" ||
-    finding.verification_status === "pending"
+    finding.verification_status !== "not_requested"
   ) {
     throw new Error("Finding ليست جاهزة لطلب Verification.");
   }
   if (!store.evidence.some((row) => row.finding_id === finding.id)) {
     throw new Error("Closure Evidence مطلوبة قبل Verification.");
+  }
+  const findingActions = store.actions.filter(
+    (row) => row.finding_id === finding.id,
+  );
+  if (
+    findingActions.some(
+      (row) => row.status === "open" || row.status === "in_progress",
+    )
+  ) {
+    throw new Error(
+      "أكمل CAPA Actions النشطة قبل طلب Effectiveness Review.",
+    );
+  }
+  if (
+    finding.recurrence_parent_finding_id &&
+    !findingActions.some(
+      (row) =>
+        row.action_type === "preventive" &&
+        row.status === "completed",
+    )
+  ) {
+    throw new Error(
+      "Recurring Finding تتطلب Preventive Action مكتملة قبل Verification.",
+    );
   }
 
   const archives = await listGovernanceAssuranceArchives();

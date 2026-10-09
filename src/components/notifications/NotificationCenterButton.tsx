@@ -175,6 +175,27 @@ function notificationTitle(notification: UserNotification) {
     if (event === "exception_due_soon") {
       return `اقترب استحقاق Governance Exception «${title}»`;
     }
+    if (event === "assurance_capa_action_overdue") {
+      const actionTitle =
+        typeof notification.metadata.title === "string"
+          ? notification.metadata.title
+          : "CAPA Action";
+      return `تأخرت CAPA Action: «${actionTitle}»`;
+    }
+    if (event === "assurance_capa_action_completed") {
+      const actionTitle =
+        typeof notification.metadata.title === "string"
+          ? notification.metadata.title
+          : "CAPA Action";
+      return `اكتملت CAPA Action: «${actionTitle}»`;
+    }
+    if (event === "assurance_capa_action_started") {
+      const actionTitle =
+        typeof notification.metadata.title === "string"
+          ? notification.metadata.title
+          : "CAPA Action";
+      return `بدأ تنفيذ CAPA Action: «${actionTitle}»`;
+    }
     if (event === "assurance_capa_action_assigned") {
       const actionTitle =
         typeof notification.metadata.title === "string"
@@ -313,6 +334,9 @@ function notificationContext(notification: UserNotification) {
     if (
       event === "assurance_finding_assigned" ||
       event === "assurance_capa_action_assigned" ||
+      event === "assurance_capa_action_started" ||
+      event === "assurance_capa_action_completed" ||
+      event === "assurance_capa_action_overdue" ||
       event === "assurance_finding_reminder" ||
       event === "assurance_finding_overdue" ||
       event === "assurance_finding_verification_requested" ||

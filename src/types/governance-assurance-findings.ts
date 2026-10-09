@@ -130,6 +130,21 @@ export interface GovernanceAssuranceFindingAction {
   created_by: string;
   created_at: string;
   updated_at: string;
+  can_manage?: boolean;
+  is_responsible?: boolean;
+}
+
+export interface GovernanceAssuranceFindingClosureReadiness {
+  ready: boolean;
+  has_evidence: boolean;
+  active_capa_actions: number;
+  has_completed_preventive_action: boolean;
+  preventive_required: boolean;
+  reasons: Array<
+    | "evidence_required"
+    | "active_capa_actions"
+    | "completed_preventive_required"
+  >;
 }
 
 export interface GovernanceAssuranceFindingEvidence {
@@ -203,6 +218,16 @@ export interface GovernanceAssuranceFindingSourceCandidate {
 export type GovernanceAssuranceFindingResponsibleCandidate =
   GovernanceAssuranceSignatoryCandidate;
 
+
+export interface ActOnGovernanceAssuranceFindingActionInput {
+  action_id: string;
+  expected_version: number;
+  status: Extract<
+    GovernanceAssuranceFindingActionStatus,
+    "in_progress" | "completed"
+  >;
+  outcome_note?: string | null;
+}
 
 export interface SaveGovernanceAssuranceFindingActionInput {
   id?: string | null;
