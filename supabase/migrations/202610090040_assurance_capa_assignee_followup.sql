@@ -400,8 +400,8 @@ begin
       using errcode = '55000';
   end if;
 
-  if v_finding.verification_status = 'pending' then
-    raise exception 'ASSURANCE_FINDING_VERIFICATION_ALREADY_PENDING'
+  if v_finding.verification_status <> 'not_requested' then
+    raise exception 'ASSURANCE_FINDING_VERIFICATION_NOT_REQUESTABLE'
       using errcode = '55000';
   end if;
 
