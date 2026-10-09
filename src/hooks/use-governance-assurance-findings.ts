@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import {
+  actOnGovernanceAssuranceFindingAction,
   actOnGovernanceAssuranceFindingVerification,
   addGovernanceAssuranceFindingEvidence,
   classifyGovernanceAssuranceFinding,
@@ -11,6 +12,7 @@ import {
   saveGovernanceAssuranceFindingAction,
 } from "@/services/governance-assurance-findings.service";
 import type {
+  ActOnGovernanceAssuranceFindingActionInput,
   ActOnGovernanceAssuranceFindingVerificationInput,
   AddGovernanceAssuranceFindingEvidenceInput,
   ClassifyGovernanceAssuranceFindingInput,
@@ -148,6 +150,29 @@ export function useSaveGovernanceAssuranceFindingAction() {
         error instanceof Error
           ? error.message
           : "تعذر حفظ CAPA Action.",
+      ),
+  });
+}
+
+
+export function useActOnGovernanceAssuranceFindingAction() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ActOnGovernanceAssuranceFindingActionInput) =>
+      actOnGovernanceAssuranceFindingAction(input),
+    onSuccess: (action) => {
+      invalidateFindings(queryClient);
+      toast.success(
+        action.status === "completed"
+          ? "تم إكمال CAPA Action."
+          : "تم بدء CAPA Action.",
+      );
+    },
+    onError: (error) =>
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "تعذر تحديث CAPA Action.",
       ),
   });
 }
