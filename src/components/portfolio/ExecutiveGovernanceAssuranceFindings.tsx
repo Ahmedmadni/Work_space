@@ -306,6 +306,12 @@ export function ExecutiveGovernanceAssuranceFindings() {
   const [scopeFilter, setScopeFilter] = useState<"all" | "assigned_to_me">(
     "all",
   );
+  const [categoryFilter, setCategoryFilter] = useState<
+    GovernanceAssuranceFindingCategory | "all" | "unclassified"
+  >("all");
+  const [recurrenceFilter, setRecurrenceFilter] = useState<
+    "all" | "recurring" | "original"
+  >("all");
 
   if (findings.isLoading || archives.isLoading) {
     return (
@@ -353,6 +359,31 @@ export function ExecutiveGovernanceAssuranceFindings() {
       return false;
     }
     if (scopeFilter === "assigned_to_me" && !row.is_responsible) {
+      return false;
+    }
+    if (
+      categoryFilter === "unclassified" &&
+      row.finding.finding_category
+    ) {
+      return false;
+    }
+    if (
+      categoryFilter !== "all" &&
+      categoryFilter !== "unclassified" &&
+      row.finding.finding_category !== categoryFilter
+    ) {
+      return false;
+    }
+    if (
+      recurrenceFilter === "recurring" &&
+      !row.finding.recurrence_parent_finding_id
+    ) {
+      return false;
+    }
+    if (
+      recurrenceFilter === "original" &&
+      row.finding.recurrence_parent_finding_id
+    ) {
       return false;
     }
     return true;
@@ -493,7 +524,7 @@ export function ExecutiveGovernanceAssuranceFindings() {
         })}
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
         <label className="text-[9px] text-muted-foreground">
           Archive
           <select
@@ -543,6 +574,50 @@ export function ExecutiveGovernanceAssuranceFindings() {
           >
             <option value="all">كل Findings المرئية</option>
             <option value="assigned_to_me">Assigned to Me</option>
+          </select>
+        </label>
+
+        <label className="text-[9px] text-muted-foreground">
+          Category
+          <select
+            value={categoryFilter}
+            onChange={(event) =>
+              setCategoryFilter(
+                event.target.value as
+                  | GovernanceAssuranceFindingCategory
+                  | "all"
+                  | "unclassified",
+              )
+            }
+            className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+          >
+            <option value="all">كل Categories</option>
+            <option value="unclassified">Unclassified</option>
+            {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="text-[9px] text-muted-foreground">
+          Recurrence
+          <select
+            value={recurrenceFilter}
+            onChange={(event) =>
+              setRecurrenceFilter(
+                event.target.value as
+                  | "all"
+                  | "recurring"
+                  | "original",
+              )
+            }
+            className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+          >
+            <option value="all">كل Findings</option>
+            <option value="recurring">Recurring فقط</option>
+            <option value="original">غير مرتبطة كسجل متكرر</option>
           </select>
         </label>
       </div>
