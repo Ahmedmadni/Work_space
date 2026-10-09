@@ -6,8 +6,10 @@ import {
   Clock3,
   Download,
   Gauge,
+  GitBranch,
   RefreshCw,
   ShieldAlert,
+  Tags,
 } from "lucide-react";
 import { useMemo } from "react";
 
@@ -17,7 +19,43 @@ import {
   buildGovernanceAssuranceRemediationAnalytics,
   downloadGovernanceAssuranceRemediationAnalyticsCsv,
 } from "@/services/governance-assurance-findings.service";
-import type { GovernanceAssuranceFindingSeverity } from "@/types/governance-assurance-findings";
+import type {
+  GovernanceAssuranceFindingCategory,
+  GovernanceAssuranceFindingSeverity,
+  GovernanceAssuranceRootCauseCategory,
+} from "@/types/governance-assurance-findings";
+
+const CATEGORY_LABELS: Record<
+  GovernanceAssuranceFindingCategory,
+  string
+> = {
+  control_design: "Control Design",
+  control_operation: "Control Operation",
+  process_gap: "Process Gap",
+  data_quality: "Data Quality",
+  compliance: "Compliance",
+  governance: "Governance",
+  security_access: "Security / Access",
+  documentation: "Documentation",
+  execution: "Execution",
+  third_party: "Third Party",
+  other: "Other",
+};
+
+const ROOT_CAUSE_LABELS: Record<
+  GovernanceAssuranceRootCauseCategory,
+  string
+> = {
+  people: "People",
+  process: "Process",
+  technology: "Technology",
+  data: "Data",
+  governance: "Governance",
+  third_party: "Third Party",
+  external: "External",
+  unknown: "Unknown",
+  other: "Other",
+};
 
 const SEVERITY_LABELS: Record<GovernanceAssuranceFindingSeverity, string> = {
   critical: "Critical",
@@ -91,7 +129,7 @@ export function ExecutiveGovernanceAssuranceRemediationAnalytics() {
         </button>
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
         {[
           {
             label: "Total Findings",
@@ -141,6 +179,30 @@ export function ExecutiveGovernanceAssuranceRemediationAnalytics() {
             className: "text-success",
             icon: Gauge,
             suffix: "%",
+          },
+          {
+            label: "Classified",
+            value: analytics.classified_findings,
+            className: "text-brand",
+            icon: Tags,
+          },
+          {
+            label: "Unclassified",
+            value: analytics.unclassified_findings,
+            className: "text-muted-foreground",
+            icon: Tags,
+          },
+          {
+            label: "Recurring",
+            value: analytics.recurring_findings,
+            className: "text-warning",
+            icon: GitBranch,
+          },
+          {
+            label: "Recurrence Chains",
+            value: analytics.recurrence_chains,
+            className: "text-warning",
+            icon: GitBranch,
           },
         ].map((card) => {
           const Icon = card.icon;
@@ -363,6 +425,142 @@ export function ExecutiveGovernanceAssuranceRemediationAnalytics() {
               </div>
             </div>
           ))}
+        </div>
+      </div>
+
+      <div className="grid gap-3 xl:grid-cols-2">
+        <div className="rounded-xl border border-border bg-background p-4">
+          <div className="flex items-center gap-2">
+            <Tags className="h-4 w-4 text-brand" />
+            <div>
+              <p className="text-xs font-semibold">Findings by Category</p>
+              <p className="text-[8px] text-muted-foreground">
+                Counts from explicit owner classification only.
+              </p>
+            </div>
+          </div>
+          {!analytics.by_category.length ? (
+            <p className="mt-3 text-[9px] text-muted-foreground">
+              لا توجد Findings مصنفة حتى الآن.
+            </p>
+          ) : (
+            <div className="mt-3 space-y-2">
+              {analytics.by_category.map((row) => (
+                <div
+                  key={row.key}
+                  className="rounded-lg border border-border p-3"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <strong className="text-[9px]">
+                      {CATEGORY_LABELS[
+                        row.key as GovernanceAssuranceFindingCategory
+                      ] ?? row.key}
+                    </strong>
+                    <span className="text-[8px] text-muted-foreground">
+                      {arabicNumber(row.total)} total
+                    </span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[8px] text-muted-foreground">
+                    <span>{arabicNumber(row.active)} active</span>
+                    <span className="text-warning">
+                      {arabicNumber(row.recurring)} recurring
+                    </span>
+                    <span className="text-success">
+                      {arabicNumber(row.effective)} effective
+                    </span>
+                    <span>
+                      {arabicNumber(row.partially_effective)} partial
+                    </span>
+                    <span className="text-danger">
+                      {arabicNumber(row.ineffective)} ineffective
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-xl border border-border bg-background p-4">
+          <div className="flex items-center gap-2">
+            <GitBranch className="h-4 w-4 text-brand" />
+            <div>
+              <p className="text-xs font-semibold">
+                Root Cause & Recurrence
+              </p>
+              <p className="text-[8px] text-muted-foreground">
+                Recurrence is manually linked to a prior Archive Finding.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            <div className="rounded-lg border border-border p-3">
+              <p className="text-[8px] text-muted-foreground">
+                Recurring Findings
+              </p>
+              <p className="mt-1 text-lg font-bold text-warning">
+                {arabicNumber(analytics.recurring_findings)}
+              </p>
+            </div>
+            <div className="rounded-lg border border-border p-3">
+              <p className="text-[8px] text-muted-foreground">
+                Recurring Active
+              </p>
+              <p className="mt-1 text-lg font-bold text-warning">
+                {arabicNumber(analytics.recurring_active)}
+              </p>
+            </div>
+            <div className="rounded-lg border border-border p-3">
+              <p className="text-[8px] text-muted-foreground">
+                Recurrence Chains
+              </p>
+              <p className="mt-1 text-lg font-bold">
+                {arabicNumber(analytics.recurrence_chains)}
+              </p>
+            </div>
+          </div>
+
+          {!analytics.by_root_cause.length ? (
+            <p className="mt-3 text-[9px] text-muted-foreground">
+              لا توجد Root Causes مصنفة حتى الآن.
+            </p>
+          ) : (
+            <div className="mt-3 space-y-2">
+              {analytics.by_root_cause.map((row) => (
+                <div
+                  key={row.key}
+                  className="rounded-lg border border-border p-3"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <strong className="text-[9px]">
+                      {ROOT_CAUSE_LABELS[
+                        row.key as GovernanceAssuranceRootCauseCategory
+                      ] ?? row.key}
+                    </strong>
+                    <span className="text-[8px] text-muted-foreground">
+                      {arabicNumber(row.total)} total
+                    </span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[8px] text-muted-foreground">
+                    <span>{arabicNumber(row.active)} active</span>
+                    <span className="text-warning">
+                      {arabicNumber(row.recurring)} recurring
+                    </span>
+                    <span className="text-success">
+                      {arabicNumber(row.effective)} effective
+                    </span>
+                    <span>
+                      {arabicNumber(row.partially_effective)} partial
+                    </span>
+                    <span className="text-danger">
+                      {arabicNumber(row.ineffective)} ineffective
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
