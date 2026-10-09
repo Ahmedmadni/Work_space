@@ -9,7 +9,10 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
-import { useSaveGovernanceAssuranceFindingAction } from "@/hooks/use-governance-assurance-findings";
+import {
+  useActOnGovernanceAssuranceFindingAction,
+  useSaveGovernanceAssuranceFindingAction,
+} from "@/hooks/use-governance-assurance-findings";
 import { arabicNumber } from "@/lib/format";
 import { buildGovernanceAssuranceFindingResponsibleCandidates } from "@/services/governance-assurance-findings.service";
 import type { GovernanceAssuranceArchive } from "@/types/governance-assurance";
@@ -18,6 +21,7 @@ import type {
   GovernanceAssuranceFindingAction,
   GovernanceAssuranceFindingActionStatus,
   GovernanceAssuranceFindingActionType,
+  GovernanceAssuranceFindingClosureReadiness,
 } from "@/types/governance-assurance-findings";
 
 interface Props {
@@ -25,6 +29,12 @@ interface Props {
   archive: GovernanceAssuranceArchive;
   canManage: boolean;
   actions: GovernanceAssuranceFindingAction[];
+  readiness: GovernanceAssuranceFindingClosureReadiness;
+}
+
+interface AssigneeActionDraft {
+  action_id: string;
+  outcome_note: string;
 }
 
 interface ActionDraft {
@@ -111,9 +121,13 @@ export function ExecutiveGovernanceAssuranceFindingCapa({
   archive,
   canManage,
   actions,
+  readiness,
 }: Props) {
   const saveAction = useSaveGovernanceAssuranceFindingAction();
+  const actAction = useActOnGovernanceAssuranceFindingAction();
   const [draft, setDraft] = useState<ActionDraft | null>(null);
+  const [assigneeDraft, setAssigneeDraft] =
+    useState<AssigneeActionDraft | null>(null);
   const responsibleCandidates =
     buildGovernanceAssuranceFindingResponsibleCandidates(archive);
   const active = actions.filter(
@@ -190,6 +204,44 @@ export function ExecutiveGovernanceAssuranceFindingCapa({
             {arabicNumber(preventive.length)}
           </p>
         </div>
+      </div>
+
+      <div
+        className={
+          readiness.ready
+            ? "mt-3 rounded-lg border border-success/20 bg-success/5 p-3"
+            : "mt-3 rounded-lg border border-warning/20 bg-warning/5 p-3"
+        }
+      >
+        <div className="flex items-center gap-2">
+          <ShieldCheck
+            className={
+              readiness.ready
+                ? "h-3.5 w-3.5 text-success"
+                : "h-3.5 w-3.5 text-warning"
+            }
+          />
+          <p className="text-[9px] font-semibold">
+            {readiness.ready
+              ? "CAPA Ready for Effectiveness Review"
+              : "CAPA Not Ready for Effectiveness Review"}
+          </p>
+        </div>
+        {!readiness.ready && (
+          <div className="mt-2 flex flex-wrap gap-2 text-[8px] text-muted-foreground">
+            {readiness.reasons.includes("evidence_required") && (
+              <span>Closure Evidence مطلوبة</span>
+            )}
+            {readiness.reasons.includes("active_capa_actions") && (
+              <span>
+                {arabicNumber(readiness.active_capa_actions)} CAPA Action نشطة
+              </span>
+            )}
+            {readiness.reasons.includes(
+              "completed_preventive_required",
+            ) && <span>Preventive Action مكتملة مطلوبة للتكرار</span>}
+          </div>
+        )}
       </div>
 
       {locked && (
@@ -449,7 +501,99 @@ export function ExecutiveGovernanceAssuranceFindingCapa({
                         {action.outcome_note}
                       </div>
                     )}
+
+                    {assigneeDraft?.action_id === action.id && (
+                      <div className="mt-3 rounded-lg border border-brand/20 bg-background p-2">
+                        <p className="text-[8px] font-semibold">
+                          Complete My CAPA Action
+                        </p>
+                        <textarea
+                          rows={3}
+                          maxLength={12000}
+                          value={assigneeDraft.outcome_note}
+                          onChange={(event) =>
+                            setAssigneeDraft({
+                              ...assigneeDraft,
+                              outcome_note: event.target.value,
+                            })
+                          }
+                          placeholder="Outcome Note — مطلوبة"
+                          className="mt-2 w-full resize-y rounded-lg border border-border bg-card px-3 py-2 text-[9px]"
+                        />
+                        <div className="mt-2 flex gap-2">
+                          <button
+                            type="button"
+                            disabled={
+                              actAction.isPending ||
+                              !assigneeDraft.outcome_note.trim()
+                            }
+                            onClick={() =>
+                              actAction.mutate(
+                                {
+                                  action_id: action.id,
+                                  expected_version: action.version,
+                                  status: "completed",
+                                  outcome_note:
+                                    assigneeDraft.outcome_note,
+                                },
+                                {
+                                  onSuccess: () =>
+                                    setAssigneeDraft(null),
+                                },
+                              )
+                            }
+                            className="rounded-lg bg-brand px-2 py-1.5 text-[8px] font-semibold text-primary-foreground disabled:opacity-40"
+                          >
+                            تأكيد الإكمال
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setAssigneeDraft(null)}
+                            className="rounded-lg border border-border px-2 py-1.5 text-[8px] hover:bg-muted"
+                          >
+                            إلغاء
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
+
+                  {action.is_responsible &&
+                    !locked &&
+                    (action.status === "open" ||
+                      action.status === "in_progress") && (
+                      <div className="flex shrink-0 flex-wrap gap-1">
+                        {action.status === "open" && (
+                          <button
+                            type="button"
+                            disabled={actAction.isPending}
+                            onClick={() =>
+                              actAction.mutate({
+                                action_id: action.id,
+                                expected_version: action.version,
+                                status: "in_progress",
+                                outcome_note: null,
+                              })
+                            }
+                            className="rounded-lg border border-border px-2 py-1.5 text-[8px] hover:bg-muted disabled:opacity-40"
+                          >
+                            بدء التنفيذ
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setAssigneeDraft({
+                              action_id: action.id,
+                              outcome_note: "",
+                            })
+                          }
+                          className="rounded-lg bg-brand px-2 py-1.5 text-[8px] font-semibold text-primary-foreground"
+                        >
+                          إكمال
+                        </button>
+                      </div>
+                    )}
 
                   {canManage && !locked && (
                     <button
