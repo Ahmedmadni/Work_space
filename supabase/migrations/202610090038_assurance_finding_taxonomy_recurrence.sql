@@ -279,6 +279,18 @@ begin
       using errcode = '55000';
   end if;
 
+  if p_recurrence_parent_finding_id is distinct from
+       v_finding.recurrence_parent_finding_id
+     and exists (
+       select 1
+       from public.executive_governance_assurance_findings child
+       where child.recurrence_parent_finding_id = v_finding.id
+     )
+  then
+    raise exception 'ASSURANCE_FINDING_RECURRENCE_CHAIN_HAS_DESCENDANTS'
+      using errcode = '55000';
+  end if;
+
   select * into v_archive
   from public.executive_governance_assurance_archives
   where id = v_finding.archive_id;
