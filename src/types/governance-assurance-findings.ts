@@ -32,6 +32,18 @@ export type GovernanceAssuranceFindingEvidenceType =
   | "link"
   | "reference";
 
+export type GovernanceAssuranceFindingActionType =
+  | "corrective"
+  | "preventive";
+
+export type GovernanceAssuranceFindingActionStatus =
+  | "open"
+  | "in_progress"
+  | "completed"
+  | "cancelled";
+
+
+
 export type GovernanceAssuranceFindingCategory =
   | "control_design"
   | "control_operation"
@@ -98,6 +110,28 @@ export interface GovernanceAssuranceFinding {
   updated_at: string;
 }
 
+export interface GovernanceAssuranceFindingAction {
+  id: string;
+  finding_id: string;
+  archive_id: string;
+  owner_user_id: string;
+  action_type: GovernanceAssuranceFindingActionType;
+  title: string;
+  description: string;
+  status: GovernanceAssuranceFindingActionStatus;
+  responsible_user_id: string | null;
+  responsible_name_snapshot: string | null;
+  responsible_email_snapshot: string | null;
+  due_date: string | null;
+  outcome_note: string | null;
+  version: number;
+  completed_at: string | null;
+  cancelled_at: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface GovernanceAssuranceFindingEvidence {
   id: string;
   finding_id: string;
@@ -118,6 +152,7 @@ export interface GovernanceAssuranceFindingRow {
   is_responsible: boolean;
   can_verify: boolean;
   evidence: GovernanceAssuranceFindingEvidence[];
+  actions: GovernanceAssuranceFindingAction[];
 }
 
 export interface GovernanceAssuranceFindingSummary {
@@ -168,6 +203,19 @@ export interface GovernanceAssuranceFindingSourceCandidate {
 export type GovernanceAssuranceFindingResponsibleCandidate =
   GovernanceAssuranceSignatoryCandidate;
 
+
+export interface SaveGovernanceAssuranceFindingActionInput {
+  id?: string | null;
+  expected_version?: number | null;
+  finding_id: string;
+  action_type: GovernanceAssuranceFindingActionType;
+  title: string;
+  description: string;
+  status: GovernanceAssuranceFindingActionStatus;
+  responsible_user_id?: string | null;
+  due_date?: string | null;
+  outcome_note?: string | null;
+}
 
 export interface AddGovernanceAssuranceFindingEvidenceInput {
   finding_id: string;
@@ -289,6 +337,13 @@ export interface GovernanceAssuranceRemediationAnalytics {
   recurring_findings: number;
   recurring_active: number;
   recurrence_chains: number;
+  total_capa_actions: number;
+  active_capa_actions: number;
+  overdue_capa_actions: number;
+  preventive_actions: number;
+  recurring_with_preventive_action: number;
+  recurring_without_preventive_action: number;
+  preventive_coverage_pct: number | null;
   active_aging: GovernanceAssuranceRemediationAgingBucket[];
   by_archive: GovernanceAssuranceArchiveRemediationSummary[];
   by_severity: GovernanceAssuranceSeverityEffectivenessSummary[];
