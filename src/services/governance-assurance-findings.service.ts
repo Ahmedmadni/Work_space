@@ -970,6 +970,17 @@ export async function classifyGovernanceAssuranceFinding(
       "Finding مقفلة أثناء Effectiveness Review.",
     );
   }
+  if (
+    (input.recurrence_parent_finding_id ?? null) !==
+      finding.recurrence_parent_finding_id &&
+    store.findings.some(
+      (row) => row.recurrence_parent_finding_id === finding.id,
+    )
+  ) {
+    throw new Error(
+      "لا يمكن تغيير Recurrence Parent لأن Finding لها عناصر لاحقة في السلسلة.",
+    );
+  }
 
   const archives = await listGovernanceAssuranceArchives();
   const archiveMap = new Map(
