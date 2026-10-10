@@ -891,7 +891,7 @@ export async function saveGovernanceAssuranceFinding(
   }
   if (
     existing &&
-    input.status === "resolved" &&
+    (input.status === "resolved" || input.status === "accepted") &&
     store.actions.some(
       (row) =>
         row.finding_id === existing.id &&
