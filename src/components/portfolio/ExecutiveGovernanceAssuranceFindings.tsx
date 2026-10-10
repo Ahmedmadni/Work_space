@@ -1126,8 +1126,7 @@ export function ExecutiveGovernanceAssuranceFindings() {
         </div>
       ) : (
         <div className="space-y-2">
-          {filteredRows.map(
-            ({ finding, archive, can_manage, can_verify, evidence, actions }) => {
+          {filteredRows.map(({ finding, archive, can_manage, can_verify, evidence, actions }) => {
             const active =
               finding.status === "open" ||
               finding.status === "in_progress";
@@ -2121,8 +2120,7 @@ export function ExecutiveGovernanceAssuranceFindings() {
                 </div>
               </div>
             );
-          },
-          )}
+          })}
         </div>
       )}
     </section>
