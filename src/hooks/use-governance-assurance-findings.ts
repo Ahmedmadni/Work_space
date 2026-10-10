@@ -5,6 +5,7 @@ import {
   actOnGovernanceAssuranceFindingVerification,
   addGovernanceAssuranceFindingEvidence,
   listGovernanceAssuranceFindings,
+  listGovernanceAssuranceRecurrenceGroups,
   requestGovernanceAssuranceFindingVerification,
   saveGovernanceAssuranceFinding,
 } from "@/services/governance-assurance-findings.service";
@@ -107,5 +108,14 @@ export function useActOnGovernanceAssuranceFindingVerification() {
           ? error.message
           : "تعذر تسجيل Effectiveness Review.",
       ),
+  });
+}
+
+
+export function useGovernanceAssuranceRecurrenceGroups() {
+  return useQuery({
+    queryKey: ["governance-assurance-recurrence"],
+    queryFn: listGovernanceAssuranceRecurrenceGroups,
+    refetchInterval: 20_000,
   });
 }
