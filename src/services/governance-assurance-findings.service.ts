@@ -17,12 +17,16 @@ import type {
   GovernanceAssuranceArchiveRemediationSummary,
   GovernanceAssuranceFindingResponsibleCandidate,
   GovernanceAssuranceFindingRow,
+  GovernanceAssuranceFindingRootCauseCategory,
   GovernanceAssuranceFindingSeverity,
   GovernanceAssuranceFindingSourceCandidate,
   GovernanceAssuranceFindingSourceType,
   GovernanceAssuranceFindingStatus,
   GovernanceAssuranceFindingSummary,
+  GovernanceAssuranceFindingTaxonomyCategory,
   GovernanceAssuranceFindingVerificationStatus,
+  GovernanceAssuranceRecurrenceGroup,
+  GovernanceAssuranceRecurrenceOccurrence,
   GovernanceAssuranceRemediationAnalytics,
   GovernanceAssuranceRemediationAgingBucket,
   GovernanceAssuranceSeverityEffectivenessSummary,
@@ -80,6 +84,39 @@ function status(
     value === "in_progress" ||
     value === "resolved" ||
     value === "accepted"
+    ? value
+    : null;
+}
+
+function taxonomyCategory(
+  value: unknown,
+): GovernanceAssuranceFindingTaxonomyCategory | null {
+  return value === "control_design" ||
+    value === "control_execution" ||
+    value === "process" ||
+    value === "data_quality" ||
+    value === "access_security" ||
+    value === "compliance" ||
+    value === "documentation" ||
+    value === "third_party" ||
+    value === "governance" ||
+    value === "other"
+    ? value
+    : null;
+}
+
+function rootCauseCategory(
+  value: unknown,
+): GovernanceAssuranceFindingRootCauseCategory | null {
+  return value === "people" ||
+    value === "process" ||
+    value === "system" ||
+    value === "data" ||
+    value === "governance" ||
+    value === "third_party" ||
+    value === "external" ||
+    value === "unknown" ||
+    value === "other"
     ? value
     : null;
 }
@@ -199,6 +236,16 @@ function normalizeFinding(value: unknown): GovernanceAssuranceFinding | null {
       typeof row.resolution_note === "string"
         ? row.resolution_note
         : null,
+    taxonomy_category: taxonomyCategory(row.taxonomy_category),
+    root_cause_category: rootCauseCategory(row.root_cause_category),
+    root_cause_note:
+      typeof row.root_cause_note === "string" ? row.root_cause_note : null,
+    control_reference:
+      typeof row.control_reference === "string"
+        ? row.control_reference
+        : null,
+    recurrence_key:
+      typeof row.recurrence_key === "string" ? row.recurrence_key : null,
     verification_status: findingVerificationStatus,
     verifier_user_id:
       typeof row.verifier_user_id === "string" ? row.verifier_user_id : null,
@@ -371,6 +418,23 @@ function validateInput(input: SaveGovernanceAssuranceFindingInput) {
     (!input.due_date || input.reminder_date > input.due_date)
   ) {
     throw new Error("Reminder Date تتطلب Due Date ولا يمكن أن تكون بعدها.");
+  }
+  if ((input.root_cause_note?.length ?? 0) > 12000) {
+    throw new Error("Root Cause Note طويلة جدًا.");
+  }
+  if ((input.control_reference?.length ?? 0) > 240) {
+    throw new Error("Control Reference طويلة جدًا.");
+  }
+  if ((input.recurrence_key?.trim().length ?? 0) > 160) {
+    throw new Error("Recurrence Key طويلة جدًا.");
+  }
+  if (
+    input.recurrence_key?.trim() &&
+    (!input.taxonomy_category || !input.root_cause_category)
+  ) {
+    throw new Error(
+      "Recurrence Key تتطلب Finding Category وRoot Cause Category.",
+    );
   }
   if (
     (input.status === "resolved" || input.status === "accepted") &&
@@ -609,6 +673,11 @@ export async function saveGovernanceAssuranceFinding(
           p_reminder_date: input.reminder_date ?? null,
           p_corrective_action: input.corrective_action ?? null,
           p_resolution_note: input.resolution_note ?? null,
+          p_taxonomy_category: input.taxonomy_category ?? null,
+          p_root_cause_category: input.root_cause_category ?? null,
+          p_root_cause_note: input.root_cause_note ?? null,
+          p_control_reference: input.control_reference ?? null,
+          p_recurrence_key: input.recurrence_key ?? null,
         },
       },
     );
@@ -719,6 +788,11 @@ export async function saveGovernanceAssuranceFinding(
     reminder_date: input.reminder_date || null,
     corrective_action: input.corrective_action?.trim() || null,
     resolution_note: input.resolution_note?.trim() || null,
+    taxonomy_category: input.taxonomy_category ?? null,
+    root_cause_category: input.root_cause_category ?? null,
+    root_cause_note: input.root_cause_note?.trim() || null,
+    control_reference: input.control_reference?.trim() || null,
+    recurrence_key: input.recurrence_key?.trim().toLowerCase() || null,
     verification_status:
       resolvingNewCycle || reopeningVerifiedFinding
         ? "not_requested"
@@ -973,6 +1047,157 @@ export async function refreshGovernanceAssuranceFindingNotifications() {
   return typeof raw === "number" ? raw : Number(raw ?? 0) || 0;
 }
 
+
+function normalizeRecurrenceOccurrence(
+  value: unknown,
+): GovernanceAssuranceRecurrenceOccurrence | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const findingSeverity = severity(row.severity);
+  const findingStatus = status(row.status);
+  if (
+    typeof row.finding_id !== "string" ||
+    typeof row.archive_id !== "string" ||
+    typeof row.certificate_code !== "string" ||
+    typeof row.period_label !== "string" ||
+    typeof row.title !== "string" ||
+    typeof row.created_at !== "string" ||
+    !findingSeverity ||
+    !findingStatus
+  ) {
+    return null;
+  }
+  return {
+    finding_id: row.finding_id,
+    archive_id: row.archive_id,
+    certificate_code: row.certificate_code,
+    period_label: row.period_label,
+    title: row.title,
+    severity: findingSeverity,
+    status: findingStatus,
+    taxonomy_category: taxonomyCategory(row.taxonomy_category),
+    root_cause_category: rootCauseCategory(row.root_cause_category),
+    control_reference:
+      typeof row.control_reference === "string"
+        ? row.control_reference
+        : null,
+    created_at: row.created_at,
+  };
+}
+
+function normalizeRecurrenceGroup(
+  value: unknown,
+): GovernanceAssuranceRecurrenceGroup | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  if (
+    typeof row.recurrence_key !== "string" ||
+    typeof row.first_seen_at !== "string" ||
+    typeof row.last_seen_at !== "string"
+  ) {
+    return null;
+  }
+  return {
+    recurrence_key: row.recurrence_key,
+    finding_count: intOrNull(row.finding_count) ?? 0,
+    archive_count: intOrNull(row.archive_count) ?? 0,
+    active_count: intOrNull(row.active_count) ?? 0,
+    critical_high_active: intOrNull(row.critical_high_active) ?? 0,
+    first_seen_at: row.first_seen_at,
+    last_seen_at: row.last_seen_at,
+    taxonomy_consistent: row.taxonomy_consistent === true,
+    root_cause_consistent: row.root_cause_consistent === true,
+    occurrences: Array.isArray(row.occurrences)
+      ? row.occurrences
+          .map(normalizeRecurrenceOccurrence)
+          .filter(
+            (item): item is GovernanceAssuranceRecurrenceOccurrence => !!item,
+          )
+      : [],
+  };
+}
+
+export async function listGovernanceAssuranceRecurrenceGroups(): Promise<
+  GovernanceAssuranceRecurrenceGroup[]
+> {
+  if (isSupabaseBackend()) {
+    const raw = await supabaseRest<unknown>(
+      "rpc/list_executive_governance_assurance_recurrence",
+      { method: "POST", body: {} },
+    );
+    return Array.isArray(raw)
+      ? raw
+          .map(normalizeRecurrenceGroup)
+          .filter(
+            (item): item is GovernanceAssuranceRecurrenceGroup => !!item,
+          )
+      : [];
+  }
+
+  const data = await listGovernanceAssuranceFindings();
+  const groups = new Map<string, GovernanceAssuranceFindingRow[]>();
+  for (const row of data.findings) {
+    const key = row.finding.recurrence_key?.trim().toLowerCase();
+    if (!key) continue;
+    const bucket = groups.get(key) ?? [];
+    bucket.push(row);
+    groups.set(key, bucket);
+  }
+
+  return [...groups.entries()]
+    .flatMap(([key, rows]) => {
+      const archiveIds = new Set(rows.map((row) => row.finding.archive_id));
+      if (archiveIds.size < 2) return [];
+      const occurrences: GovernanceAssuranceRecurrenceOccurrence[] = rows
+        .map((row) => ({
+          finding_id: row.finding.id,
+          archive_id: row.finding.archive_id,
+          certificate_code: row.archive.certificate_code,
+          period_label: row.archive.snapshot.review.period_label,
+          title: row.finding.title,
+          severity: row.finding.severity,
+          status: row.finding.status,
+          taxonomy_category: row.finding.taxonomy_category,
+          root_cause_category: row.finding.root_cause_category,
+          control_reference: row.finding.control_reference,
+          created_at: row.finding.created_at,
+        }))
+        .sort((a, b) => b.created_at.localeCompare(a.created_at));
+
+      return [{
+        recurrence_key: key,
+        finding_count: rows.length,
+        archive_count: archiveIds.size,
+        active_count: rows.filter((row) => findingIsActive(row.finding)).length,
+        critical_high_active: rows.filter(
+          (row) =>
+            findingIsActive(row.finding) &&
+            (row.finding.severity === "critical" ||
+              row.finding.severity === "high"),
+        ).length,
+        first_seen_at: [...occurrences]
+          .sort((a, b) => a.created_at.localeCompare(b.created_at))[0]
+          .created_at,
+        last_seen_at: occurrences[0].created_at,
+        taxonomy_consistent:
+          new Set(
+            rows.map((row) => row.finding.taxonomy_category).filter(Boolean),
+          ).size <= 1,
+        root_cause_consistent:
+          new Set(
+            rows.map((row) => row.finding.root_cause_category).filter(Boolean),
+          ).size <= 1,
+        occurrences,
+      }];
+    })
+    .sort(
+      (a, b) =>
+        b.critical_high_active - a.critical_high_active ||
+        b.active_count - a.active_count ||
+        b.archive_count - a.archive_count ||
+        b.last_seen_at.localeCompare(a.last_seen_at),
+    );
+}
 
 function dateDiffDays(start: string, end: string) {
   const startMs = new Date(start).getTime();

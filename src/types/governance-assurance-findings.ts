@@ -32,6 +32,29 @@ export type GovernanceAssuranceFindingEvidenceType =
   | "link"
   | "reference";
 
+export type GovernanceAssuranceFindingTaxonomyCategory =
+  | "control_design"
+  | "control_execution"
+  | "process"
+  | "data_quality"
+  | "access_security"
+  | "compliance"
+  | "documentation"
+  | "third_party"
+  | "governance"
+  | "other";
+
+export type GovernanceAssuranceFindingRootCauseCategory =
+  | "people"
+  | "process"
+  | "system"
+  | "data"
+  | "governance"
+  | "third_party"
+  | "external"
+  | "unknown"
+  | "other";
+
 export interface GovernanceAssuranceFinding {
   id: string;
   archive_id: string;
@@ -49,6 +72,11 @@ export interface GovernanceAssuranceFinding {
   reminder_date: string | null;
   corrective_action: string | null;
   resolution_note: string | null;
+  taxonomy_category: GovernanceAssuranceFindingTaxonomyCategory | null;
+  root_cause_category: GovernanceAssuranceFindingRootCauseCategory | null;
+  root_cause_note: string | null;
+  control_reference: string | null;
+  recurrence_key: string | null;
   verification_status: GovernanceAssuranceFindingVerificationStatus;
   verifier_user_id: string | null;
   verifier_name_snapshot: string | null;
@@ -122,6 +150,11 @@ export interface SaveGovernanceAssuranceFindingInput {
   reminder_date?: string | null;
   corrective_action?: string | null;
   resolution_note?: string | null;
+  taxonomy_category?: GovernanceAssuranceFindingTaxonomyCategory | null;
+  root_cause_category?: GovernanceAssuranceFindingRootCauseCategory | null;
+  root_cause_note?: string | null;
+  control_reference?: string | null;
+  recurrence_key?: string | null;
 }
 
 export interface GovernanceAssuranceFindingSourceCandidate {
@@ -213,4 +246,32 @@ export interface GovernanceAssuranceRemediationAnalytics {
   active_aging: GovernanceAssuranceRemediationAgingBucket[];
   by_archive: GovernanceAssuranceArchiveRemediationSummary[];
   by_severity: GovernanceAssuranceSeverityEffectivenessSummary[];
+}
+
+
+export interface GovernanceAssuranceRecurrenceOccurrence {
+  finding_id: string;
+  archive_id: string;
+  certificate_code: string;
+  period_label: string;
+  title: string;
+  severity: GovernanceAssuranceFindingSeverity;
+  status: GovernanceAssuranceFindingStatus;
+  taxonomy_category: GovernanceAssuranceFindingTaxonomyCategory | null;
+  root_cause_category: GovernanceAssuranceFindingRootCauseCategory | null;
+  control_reference: string | null;
+  created_at: string;
+}
+
+export interface GovernanceAssuranceRecurrenceGroup {
+  recurrence_key: string;
+  finding_count: number;
+  archive_count: number;
+  active_count: number;
+  critical_high_active: number;
+  first_seen_at: string;
+  last_seen_at: string;
+  taxonomy_consistent: boolean;
+  root_cause_consistent: boolean;
+  occurrences: GovernanceAssuranceRecurrenceOccurrence[];
 }

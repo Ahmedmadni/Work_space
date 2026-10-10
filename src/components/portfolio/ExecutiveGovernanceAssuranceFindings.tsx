@@ -38,9 +38,11 @@ import type {
 import type {
   GovernanceAssuranceFinding,
   GovernanceAssuranceFindingEvidenceType,
+  GovernanceAssuranceFindingRootCauseCategory,
   GovernanceAssuranceFindingSeverity,
   GovernanceAssuranceFindingSourceType,
   GovernanceAssuranceFindingStatus,
+  GovernanceAssuranceFindingTaxonomyCategory,
   GovernanceAssuranceFindingVerificationStatus,
 } from "@/types/governance-assurance-findings";
 
@@ -79,6 +81,11 @@ interface FindingDraft {
   responsible_user_id: string;
   due_date: string;
   reminder_date: string;
+  taxonomy_category: GovernanceAssuranceFindingTaxonomyCategory | "";
+  root_cause_category: GovernanceAssuranceFindingRootCauseCategory | "";
+  root_cause_note: string;
+  control_reference: string;
+  recurrence_key: string;
   corrective_action: string;
   resolution_note: string;
 }
@@ -153,6 +160,37 @@ const VERIFICATION_META: Record<
   },
 };
 
+const TAXONOMY_LABELS: Record<
+  GovernanceAssuranceFindingTaxonomyCategory,
+  string
+> = {
+  control_design: "Control Design",
+  control_execution: "Control Execution",
+  process: "Process",
+  data_quality: "Data Quality",
+  access_security: "Access & Security",
+  compliance: "Compliance",
+  documentation: "Documentation",
+  third_party: "Third Party",
+  governance: "Governance",
+  other: "Other",
+};
+
+const ROOT_CAUSE_LABELS: Record<
+  GovernanceAssuranceFindingRootCauseCategory,
+  string
+> = {
+  people: "People",
+  process: "Process",
+  system: "System",
+  data: "Data",
+  governance: "Governance",
+  third_party: "Third Party",
+  external: "External",
+  unknown: "Unknown",
+  other: "Other",
+};
+
 const SOURCE_LABELS: Record<
   GovernanceAssuranceFindingSourceType,
   string
@@ -193,6 +231,11 @@ function emptyDraft(archiveId: string): FindingDraft {
     responsible_user_id: "",
     due_date: "",
     reminder_date: "",
+    taxonomy_category: "",
+    root_cause_category: "",
+    root_cause_note: "",
+    control_reference: "",
+    recurrence_key: "",
     corrective_action: "",
     resolution_note: "",
   };
@@ -212,6 +255,11 @@ function editDraft(finding: GovernanceAssuranceFinding): FindingDraft {
     responsible_user_id: finding.responsible_user_id ?? "",
     due_date: finding.due_date ?? "",
     reminder_date: finding.reminder_date ?? "",
+    taxonomy_category: finding.taxonomy_category ?? "",
+    root_cause_category: finding.root_cause_category ?? "",
+    root_cause_note: finding.root_cause_note ?? "",
+    control_reference: finding.control_reference ?? "",
+    recurrence_key: finding.recurrence_key ?? "",
     corrective_action: finding.corrective_action ?? "",
     resolution_note: finding.resolution_note ?? "",
   };
@@ -318,6 +366,32 @@ export function ExecutiveGovernanceAssuranceFindings() {
   const selectedSource = draft
     ? sourceDetail(draftArchive, draft)
     : null;
+  const recurrenceKeys = [
+    ...new Set(
+      data.findings
+        .map((row) => row.finding.recurrence_key)
+        .filter((value): value is string => !!value),
+    ),
+  ].sort((a, b) => a.localeCompare(b, "ar"));
+  const normalizedDraftRecurrenceKey =
+    draft?.recurrence_key.trim().toLowerCase() ?? "";
+  const matchingRecurrenceRows = normalizedDraftRecurrenceKey
+    ? data.findings.filter(
+        (row) =>
+          row.finding.id !== draft?.id &&
+          row.finding.recurrence_key?.trim().toLowerCase() ===
+            normalizedDraftRecurrenceKey,
+      )
+    : [];
+  const recurrenceClassificationConflict =
+    !!draft &&
+    matchingRecurrenceRows.some(
+      (row) =>
+        row.finding.taxonomy_category !==
+          (draft.taxonomy_category || null) ||
+        row.finding.root_cause_category !==
+          (draft.root_cause_category || null),
+    );
 
   const draftRow = draft?.id
     ? data.findings.find((row) => row.finding.id === draft.id) ?? null
@@ -334,6 +408,10 @@ export function ExecutiveGovernanceAssuranceFindings() {
     (
       !draft.reminder_date ||
       (!!draft.due_date && draft.reminder_date <= draft.due_date)
+    ) &&
+    (
+      !draft.recurrence_key.trim() ||
+      (!!draft.taxonomy_category && !!draft.root_cause_category)
     ) &&
     (
       (draft.status !== "resolved" && draft.status !== "accepted") ||
@@ -725,6 +803,135 @@ export function ExecutiveGovernanceAssuranceFindings() {
               </span>
             </label>
 
+            <label className="text-[9px] text-muted-foreground">
+              Finding Category
+              <select
+                value={draft.taxonomy_category}
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    taxonomy_category:
+                      event.target.value as
+                        | GovernanceAssuranceFindingTaxonomyCategory
+                        | "",
+                    recurrence_key:
+                      event.target.value && draft.root_cause_category
+                        ? draft.recurrence_key
+                        : "",
+                  })
+                }
+                className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs"
+              >
+                <option value="">غير مصنّف</option>
+                {Object.entries(TAXONOMY_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="text-[9px] text-muted-foreground">
+              Root Cause Category
+              <select
+                value={draft.root_cause_category}
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    root_cause_category:
+                      event.target.value as
+                        | GovernanceAssuranceFindingRootCauseCategory
+                        | "",
+                    recurrence_key:
+                      event.target.value && draft.taxonomy_category
+                        ? draft.recurrence_key
+                        : "",
+                  })
+                }
+                className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs"
+              >
+                <option value="">غير محدد</option>
+                {Object.entries(ROOT_CAUSE_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="text-[9px] text-muted-foreground md:col-span-2">
+              Root Cause Note
+              <textarea
+                rows={3}
+                maxLength={12000}
+                value={draft.root_cause_note}
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    root_cause_note: event.target.value,
+                  })
+                }
+                className="mt-1 w-full resize-y rounded-lg border border-border bg-card px-3 py-2 text-xs"
+              />
+            </label>
+
+            <label className="text-[9px] text-muted-foreground">
+              Control / Requirement Reference
+              <input
+                maxLength={240}
+                value={draft.control_reference}
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    control_reference: event.target.value,
+                  })
+                }
+                placeholder="مثال: AC-04 / Policy 7.2"
+                className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs"
+              />
+            </label>
+
+            <label className="text-[9px] text-muted-foreground">
+              Recurrence Key
+              <input
+                maxLength={160}
+                list="assurance-recurrence-keys"
+                value={draft.recurrence_key}
+                disabled={
+                  !draft.taxonomy_category || !draft.root_cause_category
+                }
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    recurrence_key: event.target.value,
+                  })
+                }
+                placeholder="مثال: access-review-missing"
+                className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs disabled:opacity-50"
+              />
+              <datalist id="assurance-recurrence-keys">
+                {recurrenceKeys.map((key) => (
+                  <option key={key} value={key} />
+                ))}
+              </datalist>
+              <span className="mt-1 block text-[8px]">
+                نفس المفتاح عبر Archiveين مختلفين = Recurrence مؤكدة. لا يوجد
+                fuzzy matching.
+              </span>
+              {!!matchingRecurrenceRows.length && (
+                <span className="mt-1 block text-[8px] text-brand">
+                  هذا المفتاح مستخدم في{" "}
+                  {arabicNumber(matchingRecurrenceRows.length)} Finding أخرى.
+                </span>
+              )}
+              {recurrenceClassificationConflict && (
+                <span className="mt-1 block text-[8px] font-semibold text-danger">
+                  تحذير: نفس المفتاح مستخدم بتصنيف أو Root Cause مختلف. راجع
+                  التصنيف قبل الحفظ.
+                </span>
+              )}
+            </label>
+
             <label className="text-[9px] text-muted-foreground md:col-span-2">
               Corrective Action
               <textarea
@@ -789,6 +996,11 @@ export function ExecutiveGovernanceAssuranceFindings() {
                     draft.responsible_user_id || null,
                   due_date: draft.due_date || null,
                   reminder_date: draft.reminder_date || null,
+                  taxonomy_category: draft.taxonomy_category || null,
+                  root_cause_category: draft.root_cause_category || null,
+                  root_cause_note: draft.root_cause_note || null,
+                  control_reference: draft.control_reference || null,
+                  recurrence_key: draft.recurrence_key || null,
                   corrective_action: draft.corrective_action || null,
                   resolution_note: draft.resolution_note || null,
                 },
@@ -904,6 +1116,21 @@ export function ExecutiveGovernanceAssuranceFindings() {
                         Reminder: {formatDate(finding.reminder_date)}
                       </span>
                       <span>
+                        Category:{" "}
+                        {finding.taxonomy_category
+                          ? TAXONOMY_LABELS[finding.taxonomy_category]
+                          : "—"}
+                      </span>
+                      <span>
+                        Root Cause:{" "}
+                        {finding.root_cause_category
+                          ? ROOT_CAUSE_LABELS[finding.root_cause_category]
+                          : "—"}
+                      </span>
+                      {finding.recurrence_key && (
+                        <span>Recurrence: {finding.recurrence_key}</span>
+                      )}
+                      <span>
                         Evidence: {arabicNumber(evidence.length)}
                       </span>
                       <span>
@@ -911,6 +1138,20 @@ export function ExecutiveGovernanceAssuranceFindings() {
                       </span>
                       <span>v{arabicNumber(finding.version)}</span>
                     </div>
+
+                    {finding.root_cause_note && (
+                      <div className="mt-3 rounded-lg border border-border p-3 text-[8px] leading-4 text-muted-foreground">
+                        <strong className="text-foreground">
+                          Root Cause:
+                        </strong>{" "}
+                        {finding.root_cause_note}
+                        {finding.control_reference && (
+                          <span className="mt-1 block">
+                            Reference: {finding.control_reference}
+                          </span>
+                        )}
+                      </div>
+                    )}
 
                     {finding.corrective_action && (
                       <div className="mt-3 rounded-lg border border-border p-3 text-[8px] leading-4 text-muted-foreground">

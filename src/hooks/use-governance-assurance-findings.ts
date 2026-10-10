@@ -5,6 +5,7 @@ import {
   actOnGovernanceAssuranceFindingVerification,
   addGovernanceAssuranceFindingEvidence,
   listGovernanceAssuranceFindings,
+  listGovernanceAssuranceRecurrenceGroups,
   requestGovernanceAssuranceFindingVerification,
   saveGovernanceAssuranceFinding,
 } from "@/services/governance-assurance-findings.service";
@@ -29,9 +30,7 @@ export function useSaveGovernanceAssuranceFinding() {
     mutationFn: (input: SaveGovernanceAssuranceFindingInput) =>
       saveGovernanceAssuranceFinding(input),
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: ["governance-assurance-findings"],
-      });
+      invalidateFindings(queryClient);
       toast.success("تم حفظ Assurance Finding.");
     },
     onError: (error) =>
@@ -47,6 +46,9 @@ export function useSaveGovernanceAssuranceFinding() {
 function invalidateFindings(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({
     queryKey: ["governance-assurance-findings"],
+  });
+  void queryClient.invalidateQueries({
+    queryKey: ["governance-assurance-recurrence"],
   });
 }
 
@@ -107,5 +109,14 @@ export function useActOnGovernanceAssuranceFindingVerification() {
           ? error.message
           : "تعذر تسجيل Effectiveness Review.",
       ),
+  });
+}
+
+
+export function useGovernanceAssuranceRecurrenceGroups() {
+  return useQuery({
+    queryKey: ["governance-assurance-recurrence"],
+    queryFn: listGovernanceAssuranceRecurrenceGroups,
+    refetchInterval: 20_000,
   });
 }
