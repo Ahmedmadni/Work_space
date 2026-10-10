@@ -366,6 +366,32 @@ export function ExecutiveGovernanceAssuranceFindings() {
   const selectedSource = draft
     ? sourceDetail(draftArchive, draft)
     : null;
+  const recurrenceKeys = [
+    ...new Set(
+      data.findings
+        .map((row) => row.finding.recurrence_key)
+        .filter((value): value is string => !!value),
+    ),
+  ].sort((a, b) => a.localeCompare(b, "ar"));
+  const normalizedDraftRecurrenceKey =
+    draft?.recurrence_key.trim().toLowerCase() ?? "";
+  const matchingRecurrenceRows = normalizedDraftRecurrenceKey
+    ? data.findings.filter(
+        (row) =>
+          row.finding.id !== draft?.id &&
+          row.finding.recurrence_key?.trim().toLowerCase() ===
+            normalizedDraftRecurrenceKey,
+      )
+    : [];
+  const recurrenceClassificationConflict =
+    !!draft &&
+    matchingRecurrenceRows.some(
+      (row) =>
+        row.finding.taxonomy_category !==
+          (draft.taxonomy_category || null) ||
+        row.finding.root_cause_category !==
+          (draft.root_cause_category || null),
+    );
 
   const draftRow = draft?.id
     ? data.findings.find((row) => row.finding.id === draft.id) ?? null
@@ -869,6 +895,7 @@ export function ExecutiveGovernanceAssuranceFindings() {
               Recurrence Key
               <input
                 maxLength={160}
+                list="assurance-recurrence-keys"
                 value={draft.recurrence_key}
                 disabled={
                   !draft.taxonomy_category || !draft.root_cause_category
@@ -882,10 +909,27 @@ export function ExecutiveGovernanceAssuranceFindings() {
                 placeholder="مثال: access-review-missing"
                 className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs disabled:opacity-50"
               />
+              <datalist id="assurance-recurrence-keys">
+                {recurrenceKeys.map((key) => (
+                  <option key={key} value={key} />
+                ))}
+              </datalist>
               <span className="mt-1 block text-[8px]">
                 نفس المفتاح عبر Archiveين مختلفين = Recurrence مؤكدة. لا يوجد
                 fuzzy matching.
               </span>
+              {!!matchingRecurrenceRows.length && (
+                <span className="mt-1 block text-[8px] text-brand">
+                  هذا المفتاح مستخدم في{" "}
+                  {arabicNumber(matchingRecurrenceRows.length)} Finding أخرى.
+                </span>
+              )}
+              {recurrenceClassificationConflict && (
+                <span className="mt-1 block text-[8px] font-semibold text-danger">
+                  تحذير: نفس المفتاح مستخدم بتصنيف أو Root Cause مختلف. راجع
+                  التصنيف قبل الحفظ.
+                </span>
+              )}
             </label>
 
             <label className="text-[9px] text-muted-foreground md:col-span-2">
