@@ -8,9 +8,13 @@ import type {
   GovernanceAssuranceSignatoryCandidate,
 } from "@/types/governance-assurance";
 import type {
+  ActOnGovernanceAssuranceFindingActionInput,
   ActOnGovernanceAssuranceFindingVerificationInput,
   AddGovernanceAssuranceFindingEvidenceInput,
   GovernanceAssuranceFinding,
+  GovernanceAssuranceFindingAction,
+  GovernanceAssuranceFindingActionRow,
+  GovernanceAssuranceFindingActionStatus,
   GovernanceAssuranceFindingData,
   GovernanceAssuranceFindingEvidence,
   GovernanceAssuranceFindingEvidenceType,
@@ -31,6 +35,7 @@ import type {
   GovernanceAssuranceRemediationAgingBucket,
   GovernanceAssuranceSeverityEffectivenessSummary,
   RequestGovernanceAssuranceFindingVerificationInput,
+  SaveGovernanceAssuranceFindingActionInput,
   SaveGovernanceAssuranceFindingInput,
 } from "@/types/governance-assurance-findings";
 
@@ -40,6 +45,7 @@ interface LocalStore {
   version: 1;
   findings: GovernanceAssuranceFinding[];
   evidence: GovernanceAssuranceFindingEvidence[];
+  actions: GovernanceAssuranceFindingAction[];
 }
 
 function intOrNull(value: unknown) {
@@ -175,6 +181,73 @@ function normalizeEvidence(
   };
 }
 
+function actionStatus(
+  value: unknown,
+): GovernanceAssuranceFindingActionStatus | null {
+  return value === "planned" ||
+    value === "in_progress" ||
+    value === "completed" ||
+    value === "cancelled"
+    ? value
+    : null;
+}
+
+function normalizeFindingAction(
+  value: unknown,
+): GovernanceAssuranceFindingAction | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const findingActionStatus = actionStatus(row.status);
+  const version = intOrNull(row.version);
+  if (
+    typeof row.id !== "string" ||
+    typeof row.finding_id !== "string" ||
+    typeof row.archive_id !== "string" ||
+    typeof row.finding_owner_user_id !== "string" ||
+    typeof row.title !== "string" ||
+    typeof row.description !== "string" ||
+    typeof row.action_owner_user_id !== "string" ||
+    typeof row.created_by !== "string" ||
+    typeof row.created_at !== "string" ||
+    typeof row.updated_at !== "string" ||
+    !findingActionStatus ||
+    version == null
+  ) {
+    return null;
+  }
+  return {
+    id: row.id,
+    finding_id: row.finding_id,
+    archive_id: row.archive_id,
+    finding_owner_user_id: row.finding_owner_user_id,
+    title: row.title,
+    description: row.description,
+    action_owner_user_id: row.action_owner_user_id,
+    action_owner_name_snapshot:
+      typeof row.action_owner_name_snapshot === "string"
+        ? row.action_owner_name_snapshot
+        : null,
+    action_owner_email_snapshot:
+      typeof row.action_owner_email_snapshot === "string"
+        ? row.action_owner_email_snapshot
+        : null,
+    status: findingActionStatus,
+    due_date: typeof row.due_date === "string" ? row.due_date : null,
+    reminder_date:
+      typeof row.reminder_date === "string" ? row.reminder_date : null,
+    closure_note:
+      typeof row.closure_note === "string" ? row.closure_note : null,
+    version,
+    completed_at:
+      typeof row.completed_at === "string" ? row.completed_at : null,
+    cancelled_at:
+      typeof row.cancelled_at === "string" ? row.cancelled_at : null,
+    created_by: row.created_by,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
 function normalizeFinding(value: unknown): GovernanceAssuranceFinding | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const row = value as Record<string, unknown>;
@@ -291,6 +364,9 @@ function emptySummary(): GovernanceAssuranceFindingSummary {
     assigned_to_me_active: 0,
     verification_pending: 0,
     ineffective_active: 0,
+    open_actions: 0,
+    overdue_actions: 0,
+    actions_assigned_to_me: 0,
   };
 }
 
@@ -314,12 +390,15 @@ function normalizeSummary(value: unknown): GovernanceAssuranceFindingSummary {
     assigned_to_me_active: read("assigned_to_me_active"),
     verification_pending: read("verification_pending"),
     ineffective_active: read("ineffective_active"),
+    open_actions: read("open_actions"),
+    overdue_actions: read("overdue_actions"),
+    actions_assigned_to_me: read("actions_assigned_to_me"),
   };
 }
 
 function readLocal(): LocalStore {
   if (typeof window === "undefined") {
-    return { version: 1, findings: [], evidence: [] };
+    return { version: 1, findings: [], evidence: [], actions: [] };
   }
   try {
     const parsed = JSON.parse(
@@ -341,9 +420,16 @@ function readLocal(): LocalStore {
               (item): item is GovernanceAssuranceFindingEvidence => !!item,
             )
         : [],
+      actions: Array.isArray(parsed.actions)
+        ? parsed.actions
+            .map(normalizeFindingAction)
+            .filter(
+              (item): item is GovernanceAssuranceFindingAction => !!item,
+            )
+        : [],
     };
   } catch {
-    return { version: 1, findings: [], evidence: [] };
+    return { version: 1, findings: [], evidence: [], actions: [] };
   }
 }
 
@@ -604,6 +690,25 @@ export async function listGovernanceAssuranceFindings(): Promise<GovernanceAssur
                         !!item,
                     )
                 : [],
+              actions: Array.isArray(row.actions)
+                ? row.actions.flatMap((value) => {
+                    if (
+                      !value ||
+                      typeof value !== "object" ||
+                      Array.isArray(value)
+                    ) {
+                      return [];
+                    }
+                    const actionRow = value as Record<string, unknown>;
+                    const action = normalizeFindingAction(actionRow.action);
+                    if (!action) return [];
+                    return [{
+                      action,
+                      can_manage: actionRow.can_manage === true,
+                      is_action_owner: actionRow.is_action_owner === true,
+                    }];
+                  })
+                : [],
             },
           ];
         })
@@ -639,12 +744,37 @@ export async function listGovernanceAssuranceFindings(): Promise<GovernanceAssur
       evidence: localStore.evidence.filter(
         (row) => row.finding_id === finding.id,
       ),
+      actions: localStore.actions
+        .filter((row) => row.finding_id === finding.id)
+        .map((action) => ({
+          action,
+          can_manage: true,
+          is_action_owner: action.action_owner_user_id === "local-user",
+        })),
     }));
+
+  const summary = buildSummary(findings.map((row) => row.finding));
+  const today = todayKey();
+  const actions = findings.flatMap((row) => row.actions.map((item) => item.action));
+  summary.open_actions = actions.filter(
+    (row) => row.status === "planned" || row.status === "in_progress",
+  ).length;
+  summary.overdue_actions = actions.filter(
+    (row) =>
+      (row.status === "planned" || row.status === "in_progress") &&
+      !!row.due_date &&
+      row.due_date < today,
+  ).length;
+  summary.actions_assigned_to_me = actions.filter(
+    (row) =>
+      (row.status === "planned" || row.status === "in_progress") &&
+      row.action_owner_user_id === "local-user",
+  ).length;
 
   return {
     findings,
     manageable_archive_ids: archives.archives.map((archive) => archive.id),
-    summary: buildSummary(findings.map((row) => row.finding)),
+    summary,
   };
 }
 
@@ -756,6 +886,19 @@ export async function saveGovernanceAssuranceFinding(
   ) {
     throw new Error("أضف Closure Evidence قبل تحويل Finding إلى Resolved.");
   }
+  if (
+    existing &&
+    input.status === "resolved" &&
+    store.actions.some(
+      (row) =>
+        row.finding_id === existing.id &&
+        (row.status === "planned" || row.status === "in_progress"),
+    )
+  ) {
+    throw new Error(
+      "لا يمكن تحويل Finding إلى Resolved مع وجود Corrective Actions مفتوحة.",
+    );
+  }
 
   const now = new Date().toISOString();
   const reopeningVerifiedFinding =
@@ -843,6 +986,215 @@ export async function saveGovernanceAssuranceFinding(
   return finding;
 }
 
+
+function validateActionInput(
+  input: SaveGovernanceAssuranceFindingActionInput,
+) {
+  if (!input.finding_id) throw new Error("Finding مطلوبة.");
+  if (!input.title.trim() || input.title.trim().length > 240) {
+    throw new Error("Action Title مطلوبة وبحد أقصى 240 حرفًا.");
+  }
+  if ((input.description?.length ?? 0) > 12000) {
+    throw new Error("Action Description طويلة جدًا.");
+  }
+  if (!input.action_owner_user_id) {
+    throw new Error("Action Owner مطلوبة.");
+  }
+  if ((input.closure_note?.length ?? 0) > 12000) {
+    throw new Error("Closure Note طويلة جدًا.");
+  }
+  if (
+    (input.status === "completed" || input.status === "cancelled") &&
+    !input.closure_note?.trim()
+  ) {
+    throw new Error("Closure Note مطلوبة لإغلاق Action.");
+  }
+  if (
+    input.reminder_date &&
+    (!input.due_date || input.reminder_date > input.due_date)
+  ) {
+    throw new Error("Action Reminder تتطلب Due Date ولا يمكن أن تكون بعدها.");
+  }
+}
+
+export async function saveGovernanceAssuranceFindingAction(
+  input: SaveGovernanceAssuranceFindingActionInput,
+): Promise<GovernanceAssuranceFindingAction> {
+  validateActionInput(input);
+
+  if (isSupabaseBackend()) {
+    const raw = await supabaseRest<unknown>(
+      "rpc/save_executive_governance_assurance_finding_action",
+      {
+        method: "POST",
+        body: {
+          p_action_id: input.id ?? null,
+          p_expected_version: input.expected_version ?? null,
+          p_finding_id: input.finding_id,
+          p_title: input.title,
+          p_description: input.description ?? "",
+          p_action_owner_user_id: input.action_owner_user_id,
+          p_status: input.status,
+          p_due_date: input.due_date ?? null,
+          p_reminder_date: input.reminder_date ?? null,
+          p_closure_note: input.closure_note ?? null,
+        },
+      },
+    );
+    const action = normalizeFindingAction(raw);
+    if (!action) throw new Error("عاد الخادم بـCorrective Action غير صالح.");
+    return action;
+  }
+
+  const store = readLocal();
+  const finding = store.findings.find((row) => row.id === input.finding_id);
+  if (
+    !finding ||
+    (finding.status !== "open" && finding.status !== "in_progress") ||
+    finding.verification_status === "pending"
+  ) {
+    throw new Error("Finding غير متاحة لتعديل Corrective Actions.");
+  }
+  const archives = await listGovernanceAssuranceArchives();
+  const archive = archives.archives.find((row) => row.id === finding.archive_id);
+  if (!archive) throw new Error("Archive Certificate غير موجودة.");
+  const owner = buildGovernanceAssuranceFindingResponsibleCandidates(
+    archive,
+  ).find((row) => row.user_id === input.action_owner_user_id);
+  if (!owner) throw new Error("Action Owner ليست ضمن دورة الـArchive.");
+
+  const existing = input.id
+    ? store.actions.find((row) => row.id === input.id)
+    : null;
+  if (input.id && !existing) throw new Error("Corrective Action غير موجودة.");
+  if (
+    existing &&
+    (
+      existing.version !== input.expected_version ||
+      existing.finding_id !== finding.id
+    )
+  ) {
+    throw new Error("تم تعديل Corrective Action. حدّث البيانات وأعد المحاولة.");
+  }
+  if (!existing && input.expected_version != null) {
+    throw new Error("تم تعديل Corrective Action. حدّث البيانات وأعد المحاولة.");
+  }
+
+  const now = new Date().toISOString();
+  const action: GovernanceAssuranceFindingAction = {
+    id: existing?.id ?? crypto.randomUUID(),
+    finding_id: finding.id,
+    archive_id: finding.archive_id,
+    finding_owner_user_id: finding.owner_user_id,
+    title: input.title.trim(),
+    description: input.description?.trim() ?? "",
+    action_owner_user_id: owner.user_id,
+    action_owner_name_snapshot: owner.display_name,
+    action_owner_email_snapshot: owner.email,
+    status: input.status,
+    due_date: input.due_date || null,
+    reminder_date: input.reminder_date || null,
+    closure_note: input.closure_note?.trim() || null,
+    version: existing ? existing.version + 1 : 1,
+    completed_at:
+      input.status === "completed"
+        ? existing?.completed_at ?? now
+        : null,
+    cancelled_at:
+      input.status === "cancelled"
+        ? existing?.cancelled_at ?? now
+        : null,
+    created_by: existing?.created_by ?? finding.owner_user_id,
+    created_at: existing?.created_at ?? now,
+    updated_at: now,
+  };
+  store.actions = [
+    action,
+    ...store.actions.filter((row) => row.id !== action.id),
+  ];
+  writeLocal(store);
+  return action;
+}
+
+export async function actOnGovernanceAssuranceFindingAction(
+  input: ActOnGovernanceAssuranceFindingActionInput,
+): Promise<GovernanceAssuranceFindingAction> {
+  if (
+    input.status === "completed" &&
+    !input.closure_note?.trim()
+  ) {
+    throw new Error("Closure Note مطلوبة عند إكمال Action.");
+  }
+  if ((input.closure_note?.length ?? 0) > 12000) {
+    throw new Error("Closure Note طويلة جدًا.");
+  }
+
+  if (isSupabaseBackend()) {
+    const raw = await supabaseRest<unknown>(
+      "rpc/act_on_executive_governance_assurance_finding_action",
+      {
+        method: "POST",
+        body: {
+          p_action_id: input.action_id,
+          p_expected_version: input.expected_version,
+          p_status: input.status,
+          p_closure_note: input.closure_note ?? null,
+        },
+      },
+    );
+    const action = normalizeFindingAction(raw);
+    if (!action) throw new Error("تعذر قراءة Corrective Action.");
+    return action;
+  }
+
+  const store = readLocal();
+  const action = store.actions.find((row) => row.id === input.action_id);
+  if (
+    !action ||
+    action.action_owner_user_id !== "local-user" ||
+    action.version !== input.expected_version ||
+    action.status === "completed" ||
+    action.status === "cancelled"
+  ) {
+    throw new Error("Corrective Action ليست جاهزة لهذا المستخدم.");
+  }
+  const finding = store.findings.find((row) => row.id === action.finding_id);
+  if (
+    !finding ||
+    (finding.status !== "open" && finding.status !== "in_progress") ||
+    finding.verification_status === "pending"
+  ) {
+    throw new Error("Finding غير متاحة لتحديث Corrective Action.");
+  }
+
+  const now = new Date().toISOString();
+  const updated: GovernanceAssuranceFindingAction = {
+    ...action,
+    status: input.status,
+    closure_note:
+      input.status === "completed"
+        ? input.closure_note?.trim() || null
+        : action.closure_note,
+    completed_at: input.status === "completed" ? now : null,
+    cancelled_at: null,
+    version: action.version + 1,
+    updated_at: now,
+  };
+  store.actions = store.actions.map((row) =>
+    row.id === updated.id ? updated : row,
+  );
+  writeLocal(store);
+  return updated;
+}
+
+export async function refreshGovernanceAssuranceFindingActionNotifications() {
+  if (!isSupabaseBackend()) return 0;
+  const raw = await supabaseRest<unknown>(
+    "rpc/refresh_assurance_finding_action_notifications",
+    { method: "POST", body: {} },
+  );
+  return typeof raw === "number" ? raw : Number(raw ?? 0) || 0;
+}
 
 export async function addGovernanceAssuranceFindingEvidence(
   input: AddGovernanceAssuranceFindingEvidenceInput,
