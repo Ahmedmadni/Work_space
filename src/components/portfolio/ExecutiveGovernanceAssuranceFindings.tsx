@@ -21,11 +21,13 @@ import {
   useGovernanceAssuranceArchives,
 } from "@/hooks/use-governance-assurance";
 import {
+  useActOnGovernanceAssuranceFindingAction,
   useActOnGovernanceAssuranceFindingVerification,
   useAddGovernanceAssuranceFindingEvidence,
   useGovernanceAssuranceFindings,
   useRequestGovernanceAssuranceFindingVerification,
   useSaveGovernanceAssuranceFinding,
+  useSaveGovernanceAssuranceFindingAction,
 } from "@/hooks/use-governance-assurance-findings";
 import { arabicNumber } from "@/lib/format";
 import {
@@ -37,6 +39,8 @@ import type {
 } from "@/types/governance-assurance";
 import type {
   GovernanceAssuranceFinding,
+  GovernanceAssuranceFindingAction,
+  GovernanceAssuranceFindingActionStatus,
   GovernanceAssuranceFindingEvidenceType,
   GovernanceAssuranceFindingRootCauseCategory,
   GovernanceAssuranceFindingSeverity,
@@ -45,6 +49,25 @@ import type {
   GovernanceAssuranceFindingTaxonomyCategory,
   GovernanceAssuranceFindingVerificationStatus,
 } from "@/types/governance-assurance-findings";
+
+interface ActionDraft {
+  id: string | null;
+  expected_version: number | null;
+  finding_id: string;
+  title: string;
+  description: string;
+  action_owner_user_id: string;
+  status: GovernanceAssuranceFindingActionStatus;
+  due_date: string;
+  reminder_date: string;
+  closure_note: string;
+}
+
+interface ActionProgressDraft {
+  action_id: string;
+  mode: "start" | "complete";
+  closure_note: string;
+}
 
 interface EvidenceDraft {
   finding_id: string;
@@ -265,6 +288,41 @@ function editDraft(finding: GovernanceAssuranceFinding): FindingDraft {
   };
 }
 
+function emptyActionDraft(
+  findingId: string,
+  defaultOwnerUserId: string,
+): ActionDraft {
+  return {
+    id: null,
+    expected_version: null,
+    finding_id: findingId,
+    title: "",
+    description: "",
+    action_owner_user_id: defaultOwnerUserId,
+    status: "planned",
+    due_date: "",
+    reminder_date: "",
+    closure_note: "",
+  };
+}
+
+function editActionDraft(
+  action: GovernanceAssuranceFindingAction,
+): ActionDraft {
+  return {
+    id: action.id,
+    expected_version: action.version,
+    finding_id: action.finding_id,
+    title: action.title,
+    description: action.description,
+    action_owner_user_id: action.action_owner_user_id,
+    status: action.status,
+    due_date: action.due_date ?? "",
+    reminder_date: action.reminder_date ?? "",
+    closure_note: action.closure_note ?? "",
+  };
+}
+
 function sourceDetail(
   archive: GovernanceAssuranceArchive | null,
   draft: FindingDraft,
@@ -285,12 +343,17 @@ export function ExecutiveGovernanceAssuranceFindings() {
   const findings = useGovernanceAssuranceFindings();
   const archives = useGovernanceAssuranceArchives();
   const saveFinding = useSaveGovernanceAssuranceFinding();
+  const saveAction = useSaveGovernanceAssuranceFindingAction();
+  const actAction = useActOnGovernanceAssuranceFindingAction();
   const addEvidence = useAddGovernanceAssuranceFindingEvidence();
   const requestVerification =
     useRequestGovernanceAssuranceFindingVerification();
   const actVerification =
     useActOnGovernanceAssuranceFindingVerification();
   const [draft, setDraft] = useState<FindingDraft | null>(null);
+  const [actionDraft, setActionDraft] = useState<ActionDraft | null>(null);
+  const [actionProgress, setActionProgress] =
+    useState<ActionProgressDraft | null>(null);
   const [evidenceDraft, setEvidenceDraft] =
     useState<EvidenceDraft | null>(null);
   const [verificationRequest, setVerificationRequest] =
@@ -332,6 +395,9 @@ export function ExecutiveGovernanceAssuranceFindings() {
       assigned_to_me_active: 0,
       verification_pending: 0,
       ineffective_active: 0,
+      open_actions: 0,
+      overdue_actions: 0,
+      actions_assigned_to_me: 0,
     },
   };
   const archiveRows = archives.data?.archives ?? [];
@@ -397,6 +463,11 @@ export function ExecutiveGovernanceAssuranceFindings() {
     ? data.findings.find((row) => row.finding.id === draft.id) ?? null
     : null;
   const draftHasEvidence = (draftRow?.evidence.length ?? 0) > 0;
+  const draftHasOpenActions =
+    draftRow?.actions.some(
+      ({ action }) =>
+        action.status === "planned" || action.status === "in_progress",
+    ) ?? false;
 
   const canSave =
     !!draft &&
@@ -420,6 +491,10 @@ export function ExecutiveGovernanceAssuranceFindings() {
     (
       draft.status !== "resolved" ||
       (!!draft.id && draftHasEvidence)
+    ) &&
+    (
+      (draft.status !== "resolved" && draft.status !== "accepted") ||
+      !draftHasOpenActions
     );
 
   const summaryCards = [
@@ -466,6 +541,24 @@ export function ExecutiveGovernanceAssuranceFindings() {
       icon: ShieldAlert,
     },
     {
+      label: "Open Actions",
+      value: data.summary.open_actions,
+      className: "text-warning",
+      icon: ClipboardList,
+    },
+    {
+      label: "Overdue Actions",
+      value: data.summary.overdue_actions,
+      className: "text-danger",
+      icon: CalendarClock,
+    },
+    {
+      label: "Actions Assigned to Me",
+      value: data.summary.actions_assigned_to_me,
+      className: "text-brand",
+      icon: UserCheck,
+    },
+    {
       label: "Resolved",
       value: data.summary.resolved,
       className: "text-success",
@@ -499,7 +592,7 @@ export function ExecutiveGovernanceAssuranceFindings() {
         )}
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
         {summaryCards.map((card) => {
           const Icon = card.icon;
           return (
@@ -969,6 +1062,11 @@ export function ExecutiveGovernanceAssuranceFindings() {
                   {draft.status === "resolved" && !draftHasEvidence
                     ? " أضف Closure Evidence أولًا."
                     : ""}
+                  {(draft.status === "resolved" ||
+                    draft.status === "accepted") &&
+                  draftHasOpenActions
+                    ? " أكمل أو ألغِ كل Corrective Actions المفتوحة أولًا."
+                    : ""}
                 </span>
               </label>
             )}
@@ -1028,7 +1126,7 @@ export function ExecutiveGovernanceAssuranceFindings() {
         </div>
       ) : (
         <div className="space-y-2">
-          {filteredRows.map(({ finding, archive, can_manage, can_verify, evidence }) => {
+          {filteredRows.map(({ finding, archive, can_manage, can_verify, evidence, actions }) => {
             const active =
               finding.status === "open" ||
               finding.status === "in_progress";
@@ -1040,13 +1138,21 @@ export function ExecutiveGovernanceAssuranceFindings() {
             const statusMeta = STATUS_META[finding.status];
             const verificationMeta =
               VERIFICATION_META[finding.verification_status];
-            const verifierCandidates =
-              buildGovernanceAssuranceFindingResponsibleCandidates(
-                archive,
-              ).filter(
-                (candidate) =>
-                  candidate.user_id !== finding.responsible_user_id,
-              );
+            const lifecycleCandidates =
+              buildGovernanceAssuranceFindingResponsibleCandidates(archive);
+            const verifierCandidates = lifecycleCandidates.filter(
+              (candidate) =>
+                candidate.user_id !== finding.responsible_user_id,
+            );
+            const openActions = actions.filter(
+              ({ action }) =>
+                action.status === "planned" ||
+                action.status === "in_progress",
+            );
+            const overdueActions = openActions.filter(
+              ({ action }) =>
+                !!action.due_date && action.due_date < todayKey(),
+            );
 
             return (
               <div
@@ -1131,6 +1237,15 @@ export function ExecutiveGovernanceAssuranceFindings() {
                         <span>Recurrence: {finding.recurrence_key}</span>
                       )}
                       <span>
+                        Actions: {arabicNumber(actions.length)}
+                        {openActions.length
+                          ? " · " + arabicNumber(openActions.length) + " open"
+                          : ""}
+                        {overdueActions.length
+                          ? " · " + arabicNumber(overdueActions.length) + " overdue"
+                          : ""}
+                      </span>
+                      <span>
                         Evidence: {arabicNumber(evidence.length)}
                       </span>
                       <span>
@@ -1168,6 +1283,418 @@ export function ExecutiveGovernanceAssuranceFindings() {
                           Resolution:
                         </strong>{" "}
                         {finding.resolution_note}
+                      </div>
+                    )}
+
+                    {!!actions.length && (
+                      <div className="mt-3 rounded-xl border border-border p-3">
+                        <p className="text-[9px] font-semibold">
+                          Corrective Action Plan
+                        </p>
+                        <div className="mt-2 space-y-2">
+                          {actions.map(
+                            ({ action, can_manage: canManageAction, is_action_owner }) => {
+                              const actionOverdue =
+                                (action.status === "planned" ||
+                                  action.status === "in_progress") &&
+                                !!action.due_date &&
+                                action.due_date < todayKey();
+                              return (
+                                <div
+                                  key={action.id}
+                                  className={
+                                    actionOverdue
+                                      ? "rounded-lg border border-danger/30 bg-danger/[0.03] p-3"
+                                      : "rounded-lg border border-border bg-card p-3"
+                                  }
+                                >
+                                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                    <div>
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <strong className="text-[9px]">
+                                          {action.title}
+                                        </strong>
+                                        <span className="rounded-full bg-muted px-2 py-0.5 text-[8px]">
+                                          {action.status}
+                                        </span>
+                                        {actionOverdue && (
+                                          <span className="rounded-full bg-danger/10 px-2 py-0.5 text-[8px] font-semibold text-danger">
+                                            Overdue
+                                          </span>
+                                        )}
+                                      </div>
+                                      {action.description && (
+                                        <p className="mt-1 whitespace-pre-wrap text-[8px] leading-4 text-muted-foreground">
+                                          {action.description}
+                                        </p>
+                                      )}
+                                      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[8px] text-muted-foreground">
+                                        <span>
+                                          Owner:{" "}
+                                          {action.action_owner_name_snapshot ??
+                                            action.action_owner_user_id}
+                                        </span>
+                                        <span>
+                                          Due: {formatDate(action.due_date)}
+                                        </span>
+                                        <span>
+                                          Reminder:{" "}
+                                          {formatDate(action.reminder_date)}
+                                        </span>
+                                        <span>v{arabicNumber(action.version)}</span>
+                                      </div>
+                                      {action.closure_note && (
+                                        <p className="mt-2 text-[8px] leading-4 text-muted-foreground">
+                                          Closure: {action.closure_note}
+                                        </p>
+                                      )}
+                                    </div>
+
+                                    <div className="flex shrink-0 flex-wrap gap-2">
+                                      {canManageAction &&
+                                        finding.verification_status !== "pending" &&
+                                        finding.status !== "resolved" &&
+                                        finding.status !== "accepted" && (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setActionDraft(
+                                                editActionDraft(action),
+                                              )
+                                            }
+                                            className="rounded-lg border border-border px-2 py-1.5 text-[8px] hover:bg-muted"
+                                          >
+                                            تعديل
+                                          </button>
+                                        )}
+                                      {is_action_owner &&
+                                        action.status === "planned" &&
+                                        finding.verification_status !== "pending" &&
+                                        (
+                                          <button
+                                            type="button"
+                                            disabled={actAction.isPending}
+                                            onClick={() =>
+                                              actAction.mutate({
+                                                action_id: action.id,
+                                                expected_version:
+                                                  action.version,
+                                                status: "in_progress",
+                                                closure_note: null,
+                                              })
+                                            }
+                                            className="rounded-lg border border-border px-2 py-1.5 text-[8px] hover:bg-muted disabled:opacity-40"
+                                          >
+                                            Start
+                                          </button>
+                                        )}
+                                      {is_action_owner &&
+                                        action.status === "in_progress" &&
+                                        finding.verification_status !== "pending" &&
+                                        (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setActionProgress({
+                                                action_id: action.id,
+                                                mode: "complete",
+                                                closure_note: "",
+                                              })
+                                            }
+                                            className="rounded-lg bg-brand px-2 py-1.5 text-[8px] font-semibold text-primary-foreground"
+                                          >
+                                            Complete
+                                          </button>
+                                        )}
+                                    </div>
+                                  </div>
+
+                                  {actionProgress?.action_id === action.id &&
+                                    actionProgress.mode === "complete" && (
+                                      <div className="mt-3 rounded-lg border border-brand/20 bg-background p-3">
+                                        <textarea
+                                          rows={3}
+                                          maxLength={12000}
+                                          value={actionProgress.closure_note}
+                                          onChange={(event) =>
+                                            setActionProgress({
+                                              ...actionProgress,
+                                              closure_note:
+                                                event.target.value,
+                                            })
+                                          }
+                                          placeholder="Closure Note — مطلوبة"
+                                          className="w-full resize-y rounded-lg border border-border bg-card px-3 py-2 text-[9px]"
+                                        />
+                                        <div className="mt-2 flex gap-2">
+                                          <button
+                                            type="button"
+                                            disabled={
+                                              actAction.isPending ||
+                                              !actionProgress.closure_note.trim()
+                                            }
+                                            onClick={() =>
+                                              actAction.mutate(
+                                                {
+                                                  action_id: action.id,
+                                                  expected_version:
+                                                    action.version,
+                                                  status: "completed",
+                                                  closure_note:
+                                                    actionProgress.closure_note,
+                                                },
+                                                {
+                                                  onSuccess: () =>
+                                                    setActionProgress(null),
+                                                },
+                                              )
+                                            }
+                                            className="rounded-lg bg-brand px-3 py-2 text-[8px] font-semibold text-primary-foreground disabled:opacity-40"
+                                          >
+                                            تأكيد الإكمال
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setActionProgress(null)
+                                            }
+                                            className="rounded-lg border border-border px-3 py-2 text-[8px]"
+                                          >
+                                            إلغاء
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+                                </div>
+                              );
+                            },
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {can_manage &&
+                      finding.status !== "resolved" &&
+                      finding.status !== "accepted" &&
+                      finding.verification_status !== "pending" && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setActionDraft(
+                              emptyActionDraft(
+                                finding.id,
+                                finding.responsible_user_id ??
+                                  lifecycleCandidates[0]?.user_id ??
+                                  "",
+                              ),
+                            )
+                          }
+                          className="mt-3 inline-flex items-center gap-1 rounded-lg border border-border px-3 py-2 text-[9px] hover:bg-muted"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          Add Corrective Action
+                        </button>
+                      )}
+
+                    {actionDraft?.finding_id === finding.id && (
+                      <div className="mt-3 rounded-xl border border-brand/20 bg-card p-3">
+                        <p className="text-[9px] font-semibold">
+                          {actionDraft.id
+                            ? "تحرير Corrective Action"
+                            : "Corrective Action جديد"}
+                        </p>
+                        <div className="mt-3 grid gap-2 md:grid-cols-2">
+                          <label className="text-[8px] text-muted-foreground md:col-span-2">
+                            Action Title
+                            <input
+                              maxLength={240}
+                              value={actionDraft.title}
+                              onChange={(event) =>
+                                setActionDraft({
+                                  ...actionDraft,
+                                  title: event.target.value,
+                                })
+                              }
+                              className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-[10px]"
+                            />
+                          </label>
+                          <label className="text-[8px] text-muted-foreground md:col-span-2">
+                            Description
+                            <textarea
+                              rows={3}
+                              maxLength={12000}
+                              value={actionDraft.description}
+                              onChange={(event) =>
+                                setActionDraft({
+                                  ...actionDraft,
+                                  description: event.target.value,
+                                })
+                              }
+                              className="mt-1 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-[10px]"
+                            />
+                          </label>
+                          <label className="text-[8px] text-muted-foreground">
+                            Action Owner
+                            <select
+                              value={actionDraft.action_owner_user_id}
+                              onChange={(event) =>
+                                setActionDraft({
+                                  ...actionDraft,
+                                  action_owner_user_id:
+                                    event.target.value,
+                                })
+                              }
+                              className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-[10px]"
+                            >
+                              <option value="">اختر Owner</option>
+                              {lifecycleCandidates.map((candidate) => (
+                                <option
+                                  key={candidate.user_id}
+                                  value={candidate.user_id}
+                                >
+                                  {candidate.display_name}
+                                  {candidate.email
+                                    ? " · " + candidate.email
+                                    : ""}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="text-[8px] text-muted-foreground">
+                            Status
+                            <select
+                              value={actionDraft.status}
+                              onChange={(event) =>
+                                setActionDraft({
+                                  ...actionDraft,
+                                  status:
+                                    event.target
+                                      .value as GovernanceAssuranceFindingActionStatus,
+                                })
+                              }
+                              className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-[10px]"
+                            >
+                              <option value="planned">Planned</option>
+                              <option value="in_progress">In Progress</option>
+                              <option value="completed">Completed</option>
+                              <option value="cancelled">Cancelled</option>
+                            </select>
+                          </label>
+                          <label className="text-[8px] text-muted-foreground">
+                            Due Date
+                            <input
+                              type="date"
+                              value={actionDraft.due_date}
+                              onChange={(event) =>
+                                setActionDraft({
+                                  ...actionDraft,
+                                  due_date: event.target.value,
+                                  reminder_date:
+                                    actionDraft.reminder_date &&
+                                    event.target.value &&
+                                    actionDraft.reminder_date >
+                                      event.target.value
+                                      ? ""
+                                      : actionDraft.reminder_date,
+                                })
+                              }
+                              className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-[10px]"
+                            />
+                          </label>
+                          <label className="text-[8px] text-muted-foreground">
+                            Reminder Date
+                            <input
+                              type="date"
+                              disabled={!actionDraft.due_date}
+                              max={actionDraft.due_date || undefined}
+                              value={actionDraft.reminder_date}
+                              onChange={(event) =>
+                                setActionDraft({
+                                  ...actionDraft,
+                                  reminder_date: event.target.value,
+                                })
+                              }
+                              className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-[10px] disabled:opacity-50"
+                            />
+                          </label>
+                          {(actionDraft.status === "completed" ||
+                            actionDraft.status === "cancelled") && (
+                            <label className="text-[8px] text-muted-foreground md:col-span-2">
+                              Closure Note
+                              <textarea
+                                rows={3}
+                                maxLength={12000}
+                                value={actionDraft.closure_note}
+                                onChange={(event) =>
+                                  setActionDraft({
+                                    ...actionDraft,
+                                    closure_note: event.target.value,
+                                  })
+                                }
+                                className="mt-1 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-[10px]"
+                              />
+                            </label>
+                          )}
+                        </div>
+                        <div className="mt-3 flex gap-2">
+                          <button
+                            type="button"
+                            disabled={
+                              saveAction.isPending ||
+                              !actionDraft.title.trim() ||
+                              !actionDraft.action_owner_user_id ||
+                              (
+                                !!actionDraft.reminder_date &&
+                                (
+                                  !actionDraft.due_date ||
+                                  actionDraft.reminder_date >
+                                    actionDraft.due_date
+                                )
+                              ) ||
+                              (
+                                (actionDraft.status === "completed" ||
+                                  actionDraft.status === "cancelled") &&
+                                !actionDraft.closure_note.trim()
+                              )
+                            }
+                            onClick={() =>
+                              saveAction.mutate(
+                                {
+                                  id: actionDraft.id,
+                                  expected_version:
+                                    actionDraft.expected_version,
+                                  finding_id: finding.id,
+                                  title: actionDraft.title,
+                                  description:
+                                    actionDraft.description,
+                                  action_owner_user_id:
+                                    actionDraft.action_owner_user_id,
+                                  status: actionDraft.status,
+                                  due_date:
+                                    actionDraft.due_date || null,
+                                  reminder_date:
+                                    actionDraft.reminder_date || null,
+                                  closure_note:
+                                    actionDraft.closure_note || null,
+                                },
+                                {
+                                  onSuccess: () =>
+                                    setActionDraft(null),
+                                },
+                              )
+                            }
+                            className="rounded-lg bg-brand px-3 py-2 text-[8px] font-semibold text-primary-foreground disabled:opacity-40"
+                          >
+                            حفظ Action
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setActionDraft(null)}
+                            className="rounded-lg border border-border px-3 py-2 text-[8px]"
+                          >
+                            إلغاء
+                          </button>
+                        </div>
                       </div>
                     )}
 
