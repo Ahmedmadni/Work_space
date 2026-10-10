@@ -175,6 +175,27 @@ function notificationTitle(notification: UserNotification) {
     if (event === "exception_due_soon") {
       return `اقترب استحقاق Governance Exception «${title}»`;
     }
+    if (event === "assurance_finding_action_overdue") {
+      const actionTitle =
+        typeof notification.metadata.title === "string"
+          ? notification.metadata.title
+          : "Corrective Action";
+      return `تأخر Corrective Action: «${actionTitle}»`;
+    }
+    if (event === "assurance_finding_action_reminder") {
+      const actionTitle =
+        typeof notification.metadata.title === "string"
+          ? notification.metadata.title
+          : "Corrective Action";
+      return `حان تذكير Corrective Action: «${actionTitle}»`;
+    }
+    if (event === "assurance_finding_action_assigned") {
+      const actionTitle =
+        typeof notification.metadata.title === "string"
+          ? notification.metadata.title
+          : "Corrective Action";
+      return `تم إسناد Corrective Action: «${actionTitle}»`;
+    }
     if (event === "assurance_finding_verification_requested") {
       const findingTitle =
         typeof notification.metadata.title === "string"
@@ -301,6 +322,9 @@ function notificationContext(notification: UserNotification) {
         : "";
     if (
       event === "assurance_finding_assigned" ||
+      event === "assurance_finding_action_assigned" ||
+      event === "assurance_finding_action_reminder" ||
+      event === "assurance_finding_action_overdue" ||
       event === "assurance_finding_reminder" ||
       event === "assurance_finding_overdue" ||
       event === "assurance_finding_verification_requested" ||
