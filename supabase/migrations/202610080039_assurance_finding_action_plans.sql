@@ -51,6 +51,27 @@ create table if not exists public.executive_governance_assurance_finding_actions
   )
 );
 
+create table if not exists public.executive_governance_assurance_finding_action_history (
+  id bigserial primary key,
+  action_id uuid not null,
+  finding_id uuid not null,
+  archive_id uuid not null,
+  finding_owner_user_id uuid not null,
+  version bigint not null,
+  event text not null
+    check (event in ('created','updated','owner_progress')),
+  actor_user_id uuid not null references auth.users(id) on delete cascade,
+  snapshot jsonb not null,
+  created_at timestamptz not null default now(),
+  unique (action_id, version)
+);
+
+alter table public.executive_governance_assurance_finding_action_history
+  enable row level security;
+
+revoke all on table public.executive_governance_assurance_finding_action_history
+  from anon, authenticated;
+
 create index if not exists executive_governance_assurance_finding_actions_finding_idx
   on public.executive_governance_assurance_finding_actions(
     finding_id,
@@ -132,6 +153,7 @@ declare
   v_owner_name text;
   v_owner_email text;
   v_project_id text;
+  v_event text;
   v_notify_assignment boolean := false;
 begin
   if auth.uid() is null then
@@ -213,6 +235,7 @@ begin
         using errcode = '40001';
     end if;
 
+    v_event := 'created';
     v_notify_assignment := true;
 
     insert into public.executive_governance_assurance_finding_actions (
@@ -270,6 +293,7 @@ begin
         using errcode = '40001';
     end if;
 
+    v_event := 'updated';
     v_notify_assignment :=
       p_action_owner_user_id is distinct from v_existing.action_owner_user_id;
 
@@ -297,6 +321,27 @@ begin
     where id = v_existing.id
     returning * into v_saved;
   end if;
+
+  insert into public.executive_governance_assurance_finding_action_history (
+    action_id,
+    finding_id,
+    archive_id,
+    finding_owner_user_id,
+    version,
+    event,
+    actor_user_id,
+    snapshot
+  )
+  values (
+    v_saved.id,
+    v_saved.finding_id,
+    v_saved.archive_id,
+    v_saved.finding_owner_user_id,
+    v_saved.version,
+    v_event,
+    auth.uid(),
+    public.projectflow_governance_assurance_finding_action_json(v_saved)
+  );
 
   if v_notify_assignment
      and v_saved.action_owner_user_id <> auth.uid()
@@ -433,6 +478,27 @@ begin
     updated_at = now()
   where id = v_action.id
   returning * into v_action;
+
+  insert into public.executive_governance_assurance_finding_action_history (
+    action_id,
+    finding_id,
+    archive_id,
+    finding_owner_user_id,
+    version,
+    event,
+    actor_user_id,
+    snapshot
+  )
+  values (
+    v_action.id,
+    v_action.finding_id,
+    v_action.archive_id,
+    v_action.finding_owner_user_id,
+    v_action.version,
+    'owner_progress',
+    auth.uid(),
+    public.projectflow_governance_assurance_finding_action_json(v_action)
+  );
 
   return public.projectflow_governance_assurance_finding_action_json(v_action);
 end;
