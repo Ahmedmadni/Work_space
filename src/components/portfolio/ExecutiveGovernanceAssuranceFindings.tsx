@@ -490,7 +490,11 @@ export function ExecutiveGovernanceAssuranceFindings() {
     ) &&
     (
       draft.status !== "resolved" ||
-      (!!draft.id && draftHasEvidence && !draftHasOpenActions)
+      (!!draft.id && draftHasEvidence)
+    ) &&
+    (
+      (draft.status !== "resolved" && draft.status !== "accepted") ||
+      !draftHasOpenActions
     );
 
   const summaryCards = [
@@ -1058,7 +1062,9 @@ export function ExecutiveGovernanceAssuranceFindings() {
                   {draft.status === "resolved" && !draftHasEvidence
                     ? " أضف Closure Evidence أولًا."
                     : ""}
-                  {draft.status === "resolved" && draftHasOpenActions
+                  {(draft.status === "resolved" ||
+                    draft.status === "accepted") &&
+                  draftHasOpenActions
                     ? " أكمل أو ألغِ كل Corrective Actions المفتوحة أولًا."
                     : ""}
                 </span>
