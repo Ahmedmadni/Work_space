@@ -482,6 +482,18 @@ begin
     end if;
   end if;
 
+  if new.status in ('resolved','accepted') then
+    if exists (
+      select 1
+      from public.executive_governance_assurance_finding_actions a
+      where a.finding_id = new.id
+        and a.status in ('planned','in_progress')
+    ) then
+      raise exception 'ASSURANCE_FINDING_OPEN_ACTIONS'
+        using errcode = '55000';
+    end if;
+  end if;
+
   if new.status = 'resolved' then
     if tg_op = 'INSERT' then
       raise exception 'ASSURANCE_FINDING_EVIDENCE_REQUIRED_BEFORE_RESOLUTION'
@@ -494,16 +506,6 @@ begin
       where e.finding_id = new.id
     ) then
       raise exception 'ASSURANCE_FINDING_EVIDENCE_REQUIRED_BEFORE_RESOLUTION'
-        using errcode = '55000';
-    end if;
-
-    if exists (
-      select 1
-      from public.executive_governance_assurance_finding_actions a
-      where a.finding_id = new.id
-        and a.status in ('planned','in_progress')
-    ) then
-      raise exception 'ASSURANCE_FINDING_OPEN_ACTIONS'
         using errcode = '55000';
     end if;
 
