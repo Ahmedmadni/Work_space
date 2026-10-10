@@ -2,17 +2,21 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import {
+  actOnGovernanceAssuranceFindingAction,
   actOnGovernanceAssuranceFindingVerification,
   addGovernanceAssuranceFindingEvidence,
   listGovernanceAssuranceFindings,
   listGovernanceAssuranceRecurrenceGroups,
   requestGovernanceAssuranceFindingVerification,
   saveGovernanceAssuranceFinding,
+  saveGovernanceAssuranceFindingAction,
 } from "@/services/governance-assurance-findings.service";
 import type {
+  ActOnGovernanceAssuranceFindingActionInput,
   ActOnGovernanceAssuranceFindingVerificationInput,
   AddGovernanceAssuranceFindingEvidenceInput,
   RequestGovernanceAssuranceFindingVerificationInput,
+  SaveGovernanceAssuranceFindingActionInput,
   SaveGovernanceAssuranceFindingInput,
 } from "@/types/governance-assurance-findings";
 
@@ -118,5 +122,46 @@ export function useGovernanceAssuranceRecurrenceGroups() {
     queryKey: ["governance-assurance-recurrence"],
     queryFn: listGovernanceAssuranceRecurrenceGroups,
     refetchInterval: 20_000,
+  });
+}
+
+
+export function useSaveGovernanceAssuranceFindingAction() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: SaveGovernanceAssuranceFindingActionInput) =>
+      saveGovernanceAssuranceFindingAction(input),
+    onSuccess: () => {
+      invalidateFindings(queryClient);
+      toast.success("تم حفظ Corrective Action.");
+    },
+    onError: (error) =>
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "تعذر حفظ Corrective Action.",
+      ),
+  });
+}
+
+export function useActOnGovernanceAssuranceFindingAction() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ActOnGovernanceAssuranceFindingActionInput) =>
+      actOnGovernanceAssuranceFindingAction(input),
+    onSuccess: (action) => {
+      invalidateFindings(queryClient);
+      toast.success(
+        action.status === "completed"
+          ? "تم إكمال Corrective Action."
+          : "تم بدء Corrective Action.",
+      );
+    },
+    onError: (error) =>
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "تعذر تحديث Corrective Action.",
+      ),
   });
 }
