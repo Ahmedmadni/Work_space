@@ -7,7 +7,10 @@ import { refreshStrategyScheduleNotifications } from "@/services/strategy-calend
 import { refreshExecutiveActionNotifications } from "@/services/executive-meetings.service";
 import { refreshGovernanceAlertNotifications } from "@/services/governance-exceptions.service";
 import { refreshGovernanceAssuranceNotifications } from "@/services/governance-assurance.service";
-import { refreshGovernanceAssuranceFindingNotifications } from "@/services/governance-assurance-findings.service";
+import {
+  refreshGovernanceAssuranceFindingActionNotifications,
+  refreshGovernanceAssuranceFindingNotifications,
+} from "@/services/governance-assurance-findings.service";
 import type {
   NotificationFilter,
   NotificationKind,
@@ -68,6 +71,12 @@ async function refreshScheduledWorkIfNeeded() {
     refreshGovernanceAssuranceFindingNotifications().catch((error) => {
       if (import.meta.env.DEV) {
         console.warn("[notifications] تعذر تحديث تنبيهات Assurance Findings.", error);
+      }
+      return 0;
+    }),
+    refreshGovernanceAssuranceFindingActionNotifications().catch((error) => {
+      if (import.meta.env.DEV) {
+        console.warn("[notifications] تعذر تحديث تنبيهات Corrective Actions.", error);
       }
       return 0;
     }),
