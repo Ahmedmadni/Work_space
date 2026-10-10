@@ -480,6 +480,9 @@ function buildSummary(
         row.verification_status === "partially_effective" ||
         row.verification_status === "ineffective",
     ).length,
+    open_actions: 0,
+    overdue_actions: 0,
+    actions_assigned_to_me: 0,
   };
 }
 
