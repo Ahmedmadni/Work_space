@@ -30,9 +30,7 @@ export function useSaveGovernanceAssuranceFinding() {
     mutationFn: (input: SaveGovernanceAssuranceFindingInput) =>
       saveGovernanceAssuranceFinding(input),
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: ["governance-assurance-findings"],
-      });
+      invalidateFindings(queryClient);
       toast.success("تم حفظ Assurance Finding.");
     },
     onError: (error) =>
@@ -48,6 +46,9 @@ export function useSaveGovernanceAssuranceFinding() {
 function invalidateFindings(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({
     queryKey: ["governance-assurance-findings"],
+  });
+  void queryClient.invalidateQueries({
+    queryKey: ["governance-assurance-recurrence"],
   });
 }
 
