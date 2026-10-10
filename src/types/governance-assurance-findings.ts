@@ -32,6 +32,12 @@ export type GovernanceAssuranceFindingEvidenceType =
   | "link"
   | "reference";
 
+export type GovernanceAssuranceFindingActionStatus =
+  | "planned"
+  | "in_progress"
+  | "completed"
+  | "cancelled";
+
 export type GovernanceAssuranceFindingTaxonomyCategory =
   | "control_design"
   | "control_execution"
@@ -105,6 +111,34 @@ export interface GovernanceAssuranceFindingEvidence {
   created_at: string;
 }
 
+export interface GovernanceAssuranceFindingAction {
+  id: string;
+  finding_id: string;
+  archive_id: string;
+  finding_owner_user_id: string;
+  title: string;
+  description: string;
+  action_owner_user_id: string;
+  action_owner_name_snapshot: string | null;
+  action_owner_email_snapshot: string | null;
+  status: GovernanceAssuranceFindingActionStatus;
+  due_date: string | null;
+  reminder_date: string | null;
+  closure_note: string | null;
+  version: number;
+  completed_at: string | null;
+  cancelled_at: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GovernanceAssuranceFindingActionRow {
+  action: GovernanceAssuranceFindingAction;
+  can_manage: boolean;
+  is_action_owner: boolean;
+}
+
 export interface GovernanceAssuranceFindingRow {
   finding: GovernanceAssuranceFinding;
   archive: GovernanceAssuranceArchive;
@@ -112,6 +146,7 @@ export interface GovernanceAssuranceFindingRow {
   is_responsible: boolean;
   can_verify: boolean;
   evidence: GovernanceAssuranceFindingEvidence[];
+  actions: GovernanceAssuranceFindingActionRow[];
 }
 
 export interface GovernanceAssuranceFindingSummary {
@@ -127,6 +162,9 @@ export interface GovernanceAssuranceFindingSummary {
   assigned_to_me_active: number;
   verification_pending: number;
   ineffective_active: number;
+  open_actions: number;
+  overdue_actions: number;
+  actions_assigned_to_me: number;
 }
 
 export interface GovernanceAssuranceFindingData {
@@ -274,4 +312,28 @@ export interface GovernanceAssuranceRecurrenceGroup {
   taxonomy_consistent: boolean;
   root_cause_consistent: boolean;
   occurrences: GovernanceAssuranceRecurrenceOccurrence[];
+}
+
+
+export interface SaveGovernanceAssuranceFindingActionInput {
+  id?: string | null;
+  expected_version?: number | null;
+  finding_id: string;
+  title: string;
+  description?: string;
+  action_owner_user_id: string;
+  status: GovernanceAssuranceFindingActionStatus;
+  due_date?: string | null;
+  reminder_date?: string | null;
+  closure_note?: string | null;
+}
+
+export interface ActOnGovernanceAssuranceFindingActionInput {
+  action_id: string;
+  expected_version: number;
+  status: Extract<
+    GovernanceAssuranceFindingActionStatus,
+    "in_progress" | "completed"
+  >;
+  closure_note?: string | null;
 }
