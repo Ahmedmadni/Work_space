@@ -6,7 +6,10 @@ import {
   ShieldAlert,
 } from "lucide-react";
 
-import { useGovernanceAssuranceRecurrenceGroups } from "@/hooks/use-governance-assurance-findings";
+import {
+  useGovernanceAssuranceFindings,
+  useGovernanceAssuranceRecurrenceGroups,
+} from "@/hooks/use-governance-assurance-findings";
 import { arabicNumber } from "@/lib/format";
 import type {
   GovernanceAssuranceFindingRootCauseCategory,
@@ -53,8 +56,9 @@ function formatDate(value: string) {
 
 export function ExecutiveGovernanceAssuranceRecurrenceRadar() {
   const recurrence = useGovernanceAssuranceRecurrenceGroups();
+  const findings = useGovernanceAssuranceFindings();
 
-  if (recurrence.isLoading) {
+  if (recurrence.isLoading || findings.isLoading) {
     return (
       <section className="rounded-2xl border border-border bg-card p-5 shadow-[var(--shadow-frost)]">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -66,6 +70,25 @@ export function ExecutiveGovernanceAssuranceRecurrenceRadar() {
   }
 
   const groups = recurrence.data ?? [];
+  const findingRows = findings.data?.findings ?? [];
+  const totalFindings = findingRows.length;
+  const categorized = findingRows.filter(
+    (row) => !!row.finding.taxonomy_category,
+  ).length;
+  const rootCaused = findingRows.filter(
+    (row) => !!row.finding.root_cause_category,
+  ).length;
+  const recurrenceTagged = findingRows.filter(
+    (row) => !!row.finding.recurrence_key,
+  ).length;
+  const taxonomyCoverage =
+    totalFindings > 0
+      ? Math.round((categorized / totalFindings) * 1000) / 10
+      : null;
+  const rootCauseCoverage =
+    totalFindings > 0
+      ? Math.round((rootCaused / totalFindings) * 1000) / 10
+      : null;
   const archives = new Set(
     groups.flatMap((group) =>
       group.occurrences.map((occurrence) => occurrence.archive_id),
@@ -93,6 +116,57 @@ export function ExecutiveGovernanceAssuranceRecurrenceRadar() {
           Archive Certificates مختلفة. لا يوجد fuzzy matching أو مقارنة
           تلقائية للنصوص والعناوين.
         </p>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-xl border border-border bg-background p-3">
+          <p className="text-[8px] text-muted-foreground">
+            Taxonomy Coverage
+          </p>
+          <p className="mt-1 text-xl font-bold">
+            {taxonomyCoverage == null
+              ? "—"
+              : arabicNumber(taxonomyCoverage) + "%"}
+          </p>
+          <p className="mt-1 text-[8px] text-muted-foreground">
+            {arabicNumber(categorized)} / {arabicNumber(totalFindings)} Findings
+          </p>
+        </div>
+        <div className="rounded-xl border border-border bg-background p-3">
+          <p className="text-[8px] text-muted-foreground">
+            Root Cause Coverage
+          </p>
+          <p className="mt-1 text-xl font-bold">
+            {rootCauseCoverage == null
+              ? "—"
+              : arabicNumber(rootCauseCoverage) + "%"}
+          </p>
+          <p className="mt-1 text-[8px] text-muted-foreground">
+            {arabicNumber(rootCaused)} / {arabicNumber(totalFindings)} Findings
+          </p>
+        </div>
+        <div className="rounded-xl border border-border bg-background p-3">
+          <p className="text-[8px] text-muted-foreground">
+            Recurrence Tagged
+          </p>
+          <p className="mt-1 text-xl font-bold text-brand">
+            {arabicNumber(recurrenceTagged)}
+          </p>
+          <p className="mt-1 text-[8px] text-muted-foreground">
+            Explicit keys فقط
+          </p>
+        </div>
+        <div className="rounded-xl border border-border bg-background p-3">
+          <p className="text-[8px] text-muted-foreground">
+            Confirmed Recurring Keys
+          </p>
+          <p className="mt-1 text-xl font-bold text-brand">
+            {arabicNumber(groups.length)}
+          </p>
+          <p className="mt-1 text-[8px] text-muted-foreground">
+            موجودة في Archiveين مختلفين على الأقل
+          </p>
+        </div>
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
