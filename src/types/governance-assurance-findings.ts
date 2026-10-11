@@ -375,3 +375,59 @@ export interface GovernanceAssuranceRemediationAnalytics {
   by_category: GovernanceAssuranceTaxonomyAnalyticsRow[];
   by_root_cause: GovernanceAssuranceTaxonomyAnalyticsRow[];
 }
+
+
+export type GovernanceAssuranceWorkItemKind =
+  | "finding_assignment"
+  | "capa_assignment"
+  | "verification"
+  | "owner_attention";
+
+export type GovernanceAssuranceWorkItemUrgency =
+  | "overdue"
+  | "critical"
+  | "attention"
+  | "normal";
+
+export type GovernanceAssuranceWorkItemReason =
+  | "finding_assigned"
+  | "capa_assigned"
+  | "verification_required"
+  | "capa_overdue"
+  | "finding_overdue"
+  | "critical_high_active"
+  | "effectiveness_failed"
+  | "recurrence_preventive_gap"
+  | "verification_pending";
+
+export interface GovernanceAssuranceWorkItem {
+  id: string;
+  kind: GovernanceAssuranceWorkItemKind;
+  reason: GovernanceAssuranceWorkItemReason;
+  urgency: GovernanceAssuranceWorkItemUrgency;
+  archive_id: string;
+  certificate_code: string;
+  period_label: string;
+  finding_id: string;
+  action_id: string | null;
+  title: string;
+  context: string;
+  due_date: string | null;
+  severity: GovernanceAssuranceFindingSeverity | null;
+  anchor_id: string;
+}
+
+export interface GovernanceAssuranceWorkQueue {
+  generated_at: string;
+  my_work: GovernanceAssuranceWorkItem[];
+  owner_attention: GovernanceAssuranceWorkItem[];
+  summary: {
+    my_total: number;
+    my_overdue: number;
+    my_findings: number;
+    my_capa: number;
+    my_verifications: number;
+    owner_attention: number;
+    owner_overdue: number;
+  };
+}

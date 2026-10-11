@@ -36,6 +36,9 @@ import type {
   GovernanceAssuranceRootCauseCategory,
   GovernanceAssuranceSeverityEffectivenessSummary,
   GovernanceAssuranceTaxonomyAnalyticsRow,
+  GovernanceAssuranceWorkItem,
+  GovernanceAssuranceWorkItemUrgency,
+  GovernanceAssuranceWorkQueue,
   RequestGovernanceAssuranceFindingVerificationInput,
   SaveGovernanceAssuranceFindingActionInput,
   SaveGovernanceAssuranceFindingInput,
@@ -1876,7 +1879,8 @@ export function buildGovernanceAssuranceRemediationAnalytics(
         action.action_type === "preventive" &&
         action.status !== "cancelled",
     ),
-  ).length; = findings.flatMap((row) => {
+  ).length;
+  const resolutionDays = findings.flatMap((row) => {
     if (!row.resolved_at) return [];
     const days = dateDiffDays(row.created_at, row.resolved_at);
     return days == null ? [] : [days];
@@ -2136,4 +2140,261 @@ export function downloadGovernanceAssuranceRemediationAnalyticsCsv(
   anchor.click();
   anchor.remove();
   URL.revokeObjectURL(href);
+}
+
+
+function workUrgencyRank(value: GovernanceAssuranceWorkItemUrgency) {
+  return value === "overdue"
+    ? 0
+    : value === "critical"
+      ? 1
+      : value === "attention"
+        ? 2
+        : 3;
+}
+
+function sortAssuranceWorkItems(
+  items: GovernanceAssuranceWorkItem[],
+) {
+  return [...items].sort(
+    (a, b) =>
+      workUrgencyRank(a.urgency) - workUrgencyRank(b.urgency) ||
+      (a.due_date ?? "9999-12-31").localeCompare(
+        b.due_date ?? "9999-12-31",
+      ) ||
+      a.title.localeCompare(b.title, "ar"),
+  );
+}
+
+export function buildGovernanceAssuranceWorkQueue(
+  data: GovernanceAssuranceFindingData,
+  now = new Date(),
+): GovernanceAssuranceWorkQueue {
+  const today = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0"),
+  ].join("-");
+  const myWork: GovernanceAssuranceWorkItem[] = [];
+  const ownerAttention: GovernanceAssuranceWorkItem[] = [];
+
+  for (const row of data.findings) {
+    const finding = row.finding;
+    const activeFinding = findingIsActive(finding);
+    const findingOverdue =
+      activeFinding &&
+      !!finding.due_date &&
+      finding.due_date < today;
+    const highCritical =
+      activeFinding &&
+      (finding.severity === "critical" ||
+        finding.severity === "high");
+    const effectivenessFailed =
+      activeFinding &&
+      (
+        finding.verification_status === "partially_effective" ||
+        finding.verification_status === "ineffective"
+      );
+    const recurrencePreventiveGap =
+      activeFinding &&
+      !!finding.recurrence_parent_finding_id &&
+      !row.actions.some(
+        (action) =>
+          action.action_type === "preventive" &&
+          action.status === "completed",
+      );
+
+    if (row.is_responsible && activeFinding) {
+      myWork.push({
+        id: "finding:" + finding.id,
+        kind: "finding_assignment",
+        reason: "finding_assigned",
+        urgency: findingOverdue
+          ? "overdue"
+          : highCritical
+            ? "critical"
+            : "normal",
+        archive_id: row.archive.id,
+        certificate_code: row.archive.certificate_code,
+        period_label: row.archive.snapshot.review.period_label,
+        finding_id: finding.id,
+        action_id: null,
+        title: finding.title,
+        context: "Assurance Finding assigned to me",
+        due_date: finding.due_date,
+        severity: finding.severity,
+        anchor_id: "assurance-finding-" + finding.id,
+      });
+    }
+
+    if (row.can_verify) {
+      myWork.push({
+        id: "verification:" + finding.id,
+        kind: "verification",
+        reason: "verification_required",
+        urgency: "attention",
+        archive_id: row.archive.id,
+        certificate_code: row.archive.certificate_code,
+        period_label: row.archive.snapshot.review.period_label,
+        finding_id: finding.id,
+        action_id: null,
+        title: finding.title,
+        context: "Effectiveness Review assigned to me",
+        due_date: null,
+        severity: finding.severity,
+        anchor_id: "assurance-finding-" + finding.id,
+      });
+    }
+
+    for (const action of row.actions) {
+      const actionActive =
+        action.status === "open" || action.status === "in_progress";
+      if (!action.is_responsible || !actionActive) continue;
+      const actionOverdue =
+        !!action.due_date && action.due_date < today;
+      myWork.push({
+        id: "capa:" + action.id,
+        kind: "capa_assignment",
+        reason: actionOverdue ? "capa_overdue" : "capa_assigned",
+        urgency: actionOverdue ? "overdue" : "normal",
+        archive_id: row.archive.id,
+        certificate_code: row.archive.certificate_code,
+        period_label: row.archive.snapshot.review.period_label,
+        finding_id: finding.id,
+        action_id: action.id,
+        title: action.title,
+        context:
+          (action.action_type === "preventive"
+            ? "Preventive"
+            : "Corrective") +
+          " CAPA · " +
+          finding.title,
+        due_date: action.due_date,
+        severity: finding.severity,
+        anchor_id: "assurance-finding-" + finding.id,
+      });
+    }
+
+    if (!row.can_manage) continue;
+
+    for (const action of row.actions) {
+      const actionOverdue =
+        (action.status === "open" ||
+          action.status === "in_progress") &&
+        !!action.due_date &&
+        action.due_date < today;
+      if (!actionOverdue) continue;
+      ownerAttention.push({
+        id: "owner-capa-overdue:" + action.id,
+        kind: "owner_attention",
+        reason: "capa_overdue",
+        urgency: "overdue",
+        archive_id: row.archive.id,
+        certificate_code: row.archive.certificate_code,
+        period_label: row.archive.snapshot.review.period_label,
+        finding_id: finding.id,
+        action_id: action.id,
+        title: action.title,
+        context: "Overdue CAPA · " + finding.title,
+        due_date: action.due_date,
+        severity: finding.severity,
+        anchor_id: "assurance-finding-" + finding.id,
+      });
+    }
+
+    if (!activeFinding && finding.verification_status !== "pending") {
+      continue;
+    }
+
+    const addOwnerAttention = (
+      reason: GovernanceAssuranceWorkItem["reason"],
+      urgency: GovernanceAssuranceWorkItemUrgency,
+      context: string,
+    ) => {
+      ownerAttention.push({
+        id: "owner-finding:" + finding.id + ":" + reason,
+        kind: "owner_attention",
+        reason,
+        urgency,
+        archive_id: row.archive.id,
+        certificate_code: row.archive.certificate_code,
+        period_label: row.archive.snapshot.review.period_label,
+        finding_id: finding.id,
+        action_id: null,
+        title: finding.title,
+        context,
+        due_date: finding.due_date,
+        severity: finding.severity,
+        anchor_id: "assurance-finding-" + finding.id,
+      });
+    };
+
+    if (findingOverdue) {
+      addOwnerAttention(
+        "finding_overdue",
+        "overdue",
+        "Finding overdue",
+      );
+    }
+    if (highCritical) {
+      addOwnerAttention(
+        "critical_high_active",
+        "critical",
+        finding.severity === "critical"
+          ? "Critical active Finding"
+          : "High active Finding",
+      );
+    }
+    if (effectivenessFailed) {
+      addOwnerAttention(
+        "effectiveness_failed",
+        "critical",
+        finding.verification_status === "ineffective"
+          ? "Ineffective remediation reopened"
+          : "Partially effective remediation reopened",
+      );
+    }
+    if (recurrencePreventiveGap) {
+      addOwnerAttention(
+        "recurrence_preventive_gap",
+        "attention",
+        "Recurring Finding without completed Preventive Action",
+      );
+    }
+    if (finding.verification_status === "pending") {
+      addOwnerAttention(
+        "verification_pending",
+        "attention",
+        "Effectiveness Review pending",
+      );
+    }
+  }
+
+  const sortedMyWork = sortAssuranceWorkItems(myWork);
+  const sortedOwner = sortAssuranceWorkItems(ownerAttention);
+
+  return {
+    generated_at: now.toISOString(),
+    my_work: sortedMyWork,
+    owner_attention: sortedOwner,
+    summary: {
+      my_total: sortedMyWork.length,
+      my_overdue: sortedMyWork.filter(
+        (item) => item.urgency === "overdue",
+      ).length,
+      my_findings: sortedMyWork.filter(
+        (item) => item.kind === "finding_assignment",
+      ).length,
+      my_capa: sortedMyWork.filter(
+        (item) => item.kind === "capa_assignment",
+      ).length,
+      my_verifications: sortedMyWork.filter(
+        (item) => item.kind === "verification",
+      ).length,
+      owner_attention: sortedOwner.length,
+      owner_overdue: sortedOwner.filter(
+        (item) => item.urgency === "overdue",
+      ).length,
+    },
+  };
 }

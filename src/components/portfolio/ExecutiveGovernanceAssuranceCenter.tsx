@@ -35,6 +35,7 @@ import { ExecutiveGovernanceAssuranceDistribution } from "@/components/portfolio
 import { ExecutiveGovernanceAssuranceArchiveVault } from "@/components/portfolio/ExecutiveGovernanceAssuranceArchiveVault";
 import { ExecutiveGovernanceAssuranceFindings } from "@/components/portfolio/ExecutiveGovernanceAssuranceFindings";
 import { ExecutiveGovernanceAssuranceRemediationAnalytics } from "@/components/portfolio/ExecutiveGovernanceAssuranceRemediationAnalytics";
+import { ExecutiveGovernanceAssuranceWorkQueue } from "@/components/portfolio/ExecutiveGovernanceAssuranceWorkQueue";
 import { downloadGovernanceAssuranceReviewCsv } from "@/services/governance-assurance.service";
 import { buildExecutiveGovernanceTrends } from "@/services/governance-trends.service";
 import { evaluateExecutiveGovernanceTargets } from "@/services/governance-targets.service";
@@ -1295,6 +1296,8 @@ export function ExecutiveGovernanceAssuranceCenter({
       />
 
       <ExecutiveGovernanceAssuranceArchiveVault />
+
+      <ExecutiveGovernanceAssuranceWorkQueue />
 
       <ExecutiveGovernanceAssuranceRemediationAnalytics />
 
