@@ -994,6 +994,7 @@ export function ExecutiveGovernanceAssuranceFindings() {
             return (
               <div
                 key={finding.id}
+                id={"assurance-finding-" + finding.id}
                 className={
                   overdue
                     ? "rounded-xl border border-danger/30 bg-danger/[0.03] p-4"
