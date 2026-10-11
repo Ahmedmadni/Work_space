@@ -2306,46 +2306,16 @@ export function buildGovernanceAssuranceWorkQueue(
       continue;
     }
 
-    let ownerReason:
-      | GovernanceAssuranceWorkItem["reason"]
-      | null = null;
-    let ownerUrgency: GovernanceAssuranceWorkItemUrgency = "normal";
-    let context = "";
-
-    if (findingOverdue) {
-      ownerReason = "finding_overdue";
-      ownerUrgency = "overdue";
-      context = "Finding overdue";
-    } else if (highCritical) {
-      ownerReason = "critical_high_active";
-      ownerUrgency = "critical";
-      context =
-        finding.severity === "critical"
-          ? "Critical active Finding"
-          : "High active Finding";
-    } else if (effectivenessFailed) {
-      ownerReason = "effectiveness_failed";
-      ownerUrgency = "critical";
-      context =
-        finding.verification_status === "ineffective"
-          ? "Ineffective remediation reopened"
-          : "Partially effective remediation reopened";
-    } else if (recurrencePreventiveGap) {
-      ownerReason = "recurrence_preventive_gap";
-      ownerUrgency = "attention";
-      context = "Recurring Finding without completed Preventive Action";
-    } else if (finding.verification_status === "pending") {
-      ownerReason = "verification_pending";
-      ownerUrgency = "attention";
-      context = "Effectiveness Review pending";
-    }
-
-    if (ownerReason) {
+    const addOwnerAttention = (
+      reason: GovernanceAssuranceWorkItem["reason"],
+      urgency: GovernanceAssuranceWorkItemUrgency,
+      context: string,
+    ) => {
       ownerAttention.push({
-        id: "owner-finding:" + finding.id + ":" + ownerReason,
+        id: "owner-finding:" + finding.id + ":" + reason,
         kind: "owner_attention",
-        reason: ownerReason,
-        urgency: ownerUrgency,
+        reason,
+        urgency,
         archive_id: row.archive.id,
         certificate_code: row.archive.certificate_code,
         period_label: row.archive.snapshot.review.period_label,
@@ -2357,6 +2327,46 @@ export function buildGovernanceAssuranceWorkQueue(
         severity: finding.severity,
         anchor_id: "assurance-finding-" + finding.id,
       });
+    };
+
+    if (findingOverdue) {
+      addOwnerAttention(
+        "finding_overdue",
+        "overdue",
+        "Finding overdue",
+      );
+    }
+    if (highCritical) {
+      addOwnerAttention(
+        "critical_high_active",
+        "critical",
+        finding.severity === "critical"
+          ? "Critical active Finding"
+          : "High active Finding",
+      );
+    }
+    if (effectivenessFailed) {
+      addOwnerAttention(
+        "effectiveness_failed",
+        "critical",
+        finding.verification_status === "ineffective"
+          ? "Ineffective remediation reopened"
+          : "Partially effective remediation reopened",
+      );
+    }
+    if (recurrencePreventiveGap) {
+      addOwnerAttention(
+        "recurrence_preventive_gap",
+        "attention",
+        "Recurring Finding without completed Preventive Action",
+      );
+    }
+    if (finding.verification_status === "pending") {
+      addOwnerAttention(
+        "verification_pending",
+        "attention",
+        "Effectiveness Review pending",
+      );
     }
   }
 
