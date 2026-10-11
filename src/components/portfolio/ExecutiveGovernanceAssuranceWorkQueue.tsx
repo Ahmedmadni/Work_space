@@ -163,28 +163,63 @@ export function ExecutiveGovernanceAssuranceWorkQueue() {
 
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-7">
         {[
-          ["My Work", queue.summary.my_total, UserCheck, "text-brand"],
-          ["My Overdue", queue.summary.my_overdue, AlertTriangle, "text-danger"],
-          ["My Findings", queue.summary.my_findings, ClipboardList, "text-foreground"],
-          ["My CAPA", queue.summary.my_capa, Wrench, "text-warning"],
-          ["My Verifications", queue.summary.my_verifications, CheckCircle2, "text-info"],
-          ["Owner Attention", queue.summary.owner_attention, ShieldAlert, "text-warning"],
-          ["Owner Overdue", queue.summary.owner_overdue, Clock3, "text-danger"],
-        ].map(([label, value, Icon, className]) => {
-          const IconComponent = Icon as typeof UserCheck;
+          {
+            label: "My Work",
+            value: queue.summary.my_total,
+            icon: UserCheck,
+            className: "text-brand",
+          },
+          {
+            label: "My Overdue",
+            value: queue.summary.my_overdue,
+            icon: AlertTriangle,
+            className: "text-danger",
+          },
+          {
+            label: "My Findings",
+            value: queue.summary.my_findings,
+            icon: ClipboardList,
+            className: "text-foreground",
+          },
+          {
+            label: "My CAPA",
+            value: queue.summary.my_capa,
+            icon: Wrench,
+            className: "text-warning",
+          },
+          {
+            label: "My Verifications",
+            value: queue.summary.my_verifications,
+            icon: CheckCircle2,
+            className: "text-info",
+          },
+          {
+            label: "Owner Attention",
+            value: queue.summary.owner_attention,
+            icon: ShieldAlert,
+            className: "text-warning",
+          },
+          {
+            label: "Owner Overdue",
+            value: queue.summary.owner_overdue,
+            icon: Clock3,
+            className: "text-danger",
+          },
+        ].map((card) => {
+          const Icon = card.icon;
           return (
             <div
-              key={String(label)}
+              key={card.label}
               className="rounded-xl border border-border bg-background p-3"
             >
               <div className="flex items-center gap-2">
-                <IconComponent className={"h-3.5 w-3.5 " + className} />
+                <Icon className={"h-3.5 w-3.5 " + card.className} />
                 <p className="text-[8px] text-muted-foreground">
-                  {String(label)}
+                  {card.label}
                 </p>
               </div>
-              <p className={"mt-1 text-lg font-bold " + className}>
-                {arabicNumber(Number(value))}
+              <p className={"mt-1 text-lg font-bold " + card.className}>
+                {arabicNumber(card.value)}
               </p>
             </div>
           );
