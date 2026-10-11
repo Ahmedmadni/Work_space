@@ -1879,7 +1879,8 @@ export function buildGovernanceAssuranceRemediationAnalytics(
         action.action_type === "preventive" &&
         action.status !== "cancelled",
     ),
-  ).length; = findings.flatMap((row) => {
+  ).length;
+  const resolutionDays = findings.flatMap((row) => {
     if (!row.resolved_at) return [];
     const days = dateDiffDays(row.created_at, row.resolved_at);
     return days == null ? [] : [days];
