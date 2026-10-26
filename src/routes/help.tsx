@@ -8,6 +8,8 @@ export const Route = createFileRoute("/help")({
       { title: "المساعدة — ProjectFlow" },
       { name: "description", content: "كيف تبدأ مع ProjectFlow." },
       { property: "og:title", content: "المساعدة — ProjectFlow" },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
       { property: "og:description", content: "كيف تبدأ مع ProjectFlow." },
     ],
   }),

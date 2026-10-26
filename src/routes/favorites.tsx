@@ -9,6 +9,8 @@ export const Route = createFileRoute("/favorites")({
       { title: "المفضلة — ProjectFlow" },
       { name: "description", content: "اللوحات التي ميّزتها بنجمة." },
       { property: "og:title", content: "المفضلة — ProjectFlow" },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
       { property: "og:description", content: "اللوحات التي ميّزتها بنجمة." },
     ],
   }),

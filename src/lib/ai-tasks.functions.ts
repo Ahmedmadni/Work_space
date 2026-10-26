@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { notesToTasks } from "./ai-tasks.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
@@ -14,7 +15,9 @@ export const generateTasksFromNotes = createServerFn({ method: "POST" })
       .parse(data),
   )
   .handler(async ({ data, context }) => {
-    const { data: allowed, error } = await context.supabase.rpc("can_edit_project", { p_project_id: data.projectId });
+    // The generated schema is empty until the existing application migrations are applied.
+    const client: SupabaseClient = context.supabase;
+    const { data: allowed, error } = await client.rpc("can_edit_project", { p_project_id: data.projectId });
     if (error || allowed !== true) {
       return { ok: false as const, status: 403, message: "هذه الميزة متاحة للأعضاء الذين يمكنهم تعديل المشروع فقط." };
     }
