@@ -36,8 +36,6 @@ export function NotesToTasksPanel({
   const [boardId, setBoardId] = useState("");
   const [addedCount, setAddedCount] = useState(0);
   const targetBoard = boards.some((board) => board.id === boardId) ? boardId : boards[0]?.id || "";
-  const busy = suggestPending();
-  function suggestPending() { return false; }
 
   const suggest = useMutation({
     mutationFn: () => suggestTasksFromNotes(notes.trim(), projectId),
