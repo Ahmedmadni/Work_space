@@ -1,6 +1,6 @@
 import { createOpenAI } from "@ai-sdk/openai";
 import { APICallError, Output, streamText } from "ai";
-import { normalizeTasks, taskSuggestionsSchema, type SuggestedTask } from "./ai-tasks-data";
+import { normalizeTasks, taskSuggestionsSchema } from "./ai-tasks-data";
 import { createLovableAiGatewayRunIdFetch } from "./ai-gateway-run-id.server";
 
 const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1";
