@@ -118,7 +118,7 @@ function parseActions(
   if (!Array.isArray(value)) return [];
 
   return value
-    .flatMap((raw) => {
+    .flatMap<CopilotAction>((raw) => {
       if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
       const row = raw as Record<string, unknown>;
       const type = row.type;
