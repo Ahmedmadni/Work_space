@@ -38,6 +38,10 @@ export const Route = createFileRoute("/project/$projectId/board/$boardId")({
   head: () => ({
     meta: [
       { title: "اللوحة — ProjectFlow" },
+      { property: "og:title", content: "اللوحة — ProjectFlow" },
+      { property: "og:description", content: "مساحة التخطيط البصري للوحة." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
       { name: "description", content: "مساحة التخطيط البصري للوحة." },
     ],
   }),

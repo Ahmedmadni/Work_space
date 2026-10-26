@@ -10,6 +10,8 @@ export const Route = createFileRoute("/templates")({
       { title: "القوالب — ProjectFlow" },
       { name: "description", content: "قوالب جاهزة للخرائط الذهنية وخطط المشاريع وخرائط الطريق." },
       { property: "og:title", content: "القوالب — ProjectFlow" },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
       { property: "og:description", content: "قوالب جاهزة لبدء التخطيط بسرعة." },
     ],
   }),

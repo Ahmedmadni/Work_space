@@ -39,6 +39,10 @@ export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "الرئيسية — ProjectFlow" },
+      { property: "og:title", content: "الرئيسية — ProjectFlow" },
+      { property: "og:description", content: "محفظة المشاريع والتنفيذ واللوحات في مكان واحد." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
       {
         name: "description",
         content:

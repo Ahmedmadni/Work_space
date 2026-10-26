@@ -11,6 +11,8 @@ export const Route = createFileRoute("/recent")({
       { title: "آخر اللوحات — ProjectFlow" },
       { name: "description", content: "اللوحات التي عُدّلت مؤخرًا." },
       { property: "og:title", content: "آخر اللوحات — ProjectFlow" },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
       { property: "og:description", content: "اللوحات التي عُدّلت مؤخرًا." },
     ],
   }),

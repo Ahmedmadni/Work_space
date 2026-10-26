@@ -13,6 +13,8 @@ export const Route = createFileRoute("/settings")({
       { title: "الإعدادات — ProjectFlow" },
       { name: "description", content: "إعدادات الحساب والتفضيلات." },
       { property: "og:title", content: "الإعدادات — ProjectFlow" },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
       { property: "og:description", content: "إعدادات الحساب والتفضيلات." },
     ],
   }),

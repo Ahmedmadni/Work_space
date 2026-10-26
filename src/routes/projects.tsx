@@ -18,6 +18,10 @@ export const Route = createFileRoute("/projects")({
   head: () => ({
     meta: [
       { title: "المشاريع — ProjectFlow" },
+      { property: "og:title", content: "المشاريع — ProjectFlow" },
+      { property: "og:description", content: "كل مشاريعك ولوحات العمل التابعة لها." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
       { name: "description", content: "كل مشاريعك ولوحات العمل التابعة لها." },
     ],
   }),

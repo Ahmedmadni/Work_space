@@ -30,6 +30,7 @@ import { ProjectShareDialog } from "@/components/collaboration/ProjectShareDialo
 import { ProjectAutomationCenter } from "@/components/automations/ProjectAutomationCenter";
 import { ProjectExecutionCenter } from "@/components/execution/ProjectExecutionCenter";
 import { ProjectCopilotPanel } from "@/components/ai/ProjectCopilotPanel";
+import { NotesToTasksPanel } from "@/components/ai/NotesToTasksPanel";
 import { ProjectGovernanceCenter } from "@/components/governance/ProjectGovernanceCenter";
 import { ProjectExecutiveDashboard } from "@/components/reports/ProjectExecutiveDashboard";
 import { ProjectPlanningCenter } from "@/components/planning/ProjectPlanningCenter";
@@ -63,6 +64,10 @@ export const Route = createFileRoute("/project/$projectId/")({
     meta: [
       { title: "المشروع — ProjectFlow" },
       { name: "description", content: "لوحات العمل الخاصة بالمشروع." },
+      { property: "og:title", content: "المشروع — ProjectFlow" },
+      { property: "og:description", content: "لوحات المشروع وملاحظاته ومهامه المنظمة." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: ProjectDetail,
@@ -545,6 +550,8 @@ function ProjectDetail() {
           </>
         }
       />
+
+      <NotesToTasksPanel projectId={projectId} boards={boards.data ?? []} canEdit={!!access.data?.can_edit} />
 
       <ProjectStrategicAlignment
         projectId={projectId}

@@ -19,6 +19,10 @@ export const Route = createFileRoute("/archive")({
   head: () => ({
     meta: [
       { title: "الأرشيف — ProjectFlow" },
+      { property: "og:title", content: "الأرشيف — ProjectFlow" },
+      { property: "og:description", content: "استعد أو احذف المشاريع واللوحات المؤرشفة." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
       {
         name: "description",
         content: "استعد أو احذف المشاريع واللوحات المؤرشفة.",

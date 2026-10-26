@@ -16,6 +16,10 @@ export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
       { title: "تسجيل الدخول — ProjectFlow" },
+      { property: "og:title", content: "تسجيل الدخول — ProjectFlow" },
+      { property: "og:description", content: "تسجيل الدخول إلى حسابك في ProjectFlow." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
       { name: "description", content: "تسجيل الدخول إلى ProjectFlow." },
     ],
   }),
