@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
-import { normalizeTasks, validateTaskDrafts, type SuggestedTask } from "./ai-tasks-data";
+import { normalizeTasks, validateTaskDrafts } from "./ai-tasks-data";
 
-const task = (title: string, priority: SuggestedTask["priority"] = "medium"): SuggestedTask => ({ title, description: "", priority, reason: "" });
+const task = (title, priority = "medium") => ({ title, description: "", priority, reason: "" });
 describe("notes task review", () => {
   it("rejects empty task titles before saving", () => {
     expect(() => validateTaskDrafts([task("  ")])).toThrow();
