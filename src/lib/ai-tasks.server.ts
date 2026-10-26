@@ -1,5 +1,7 @@
 import { createOpenAI } from "@ai-sdk/openai";
-import { APICallError, streamText } from "ai";
+import { APICallError, Output, streamText } from "ai";
+import { normalizeTasks, taskSuggestionsSchema, type SuggestedTask } from "./ai-tasks-data";
+import { createLovableAiGatewayRunIdFetch } from "./ai-gateway-run-id.server";
 
 const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1";
 const MODEL = "openai/gpt-6-astra";
@@ -64,17 +66,21 @@ export async function notesToTasks(notes: string, projectName: string): Promise<
   const apiKey = process.env.LOVABLE_API_KEY;
   if (!apiKey) return { ok: false, status: 401, message: "خدمة الذكاء الاصطناعي غير مهيأة." };
 
+  const runIdFetch = createLovableAiGatewayRunIdFetch();
   const provider = createOpenAI({
     baseURL: GATEWAY_URL,
     apiKey,
     headers: { "Lovable-API-Key": apiKey, "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
+    fetch: runIdFetch.fetch,
   });
 
   try {
     let streamError: unknown = null;
     const result = streamText({
       model: provider.responses(MODEL),
-      system: SYSTEM,
+      instructions: SYSTEM,
+      output: Output.object({ schema: taskSuggestionsSchema }),
+      maxRetries: 0,
       prompt: `المشروع: ${projectName}\n\nالملاحظات:\n${notes}`,
       onError: ({ error }) => {
         streamError = error;
@@ -89,9 +95,9 @@ export async function notesToTasks(notes: string, projectName: string): Promise<
         },
       },
     });
-    const text = await result.text;
+    const output = await result.output;
     if (streamError) throw streamError;
-    const tasks = parseTasks(text);
+    const tasks = normalizeTasks(output.tasks);
     if (!tasks.length) {
       return { ok: false, status: 422, message: "لم يتمكن الذكاء الاصطناعي من استخراج مهام من هذه الملاحظات." };
     }
@@ -106,7 +112,7 @@ export async function notesToTasks(notes: string, projectName: string): Promise<
           : status === 403
             ? "تم رفض الطلب من خدمة الذكاء الاصطناعي."
             : "تعذر توليد المهام حاليًا. حاول لاحقًا.";
-    console.error("[ai-tasks]", status, error);
+    console.error("[ai-tasks]", status);
     return { ok: false, status, message };
   }
 }
