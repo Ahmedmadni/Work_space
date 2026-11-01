@@ -12,3 +12,4 @@
 - Nested URLs /workspace/$id/project/$id/board/$id; board page renders without AppShell (root checks "/board/"). Why: full-screen canvas.
 - tsconfig keeps noPropertyAccessFromIndexSignature and exactOptionalPropertyTypes off. Why: they produced ~450 false-positive errors on JSON/RPC payload parsing.
 - Notes-to-tasks uses an authenticated server function with the existing project-edit RPC and shared draft validation; AI credentials remain server-only and suggestions require review before saving.
+- Personal planning edits existing canvas task nodes through BoardCanvas's commit/autosave path; calendar-day overdue rules live in a client-safe helper. Why: preserve canvas undo, local persistence and permissions without a separate task store.

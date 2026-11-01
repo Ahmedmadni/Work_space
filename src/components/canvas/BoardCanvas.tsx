@@ -16,6 +16,7 @@ import {
   Hand,
   Link2,
   ListTree,
+  ListChecks,
   Maximize,
   MessageSquare,
   Milestone,
@@ -46,6 +47,8 @@ import {
 import { toast } from "sonner";
 
 import { BoardHistoryPanel } from "@/components/canvas/BoardHistoryPanel";
+import { PersonalTaskList } from "@/components/canvas/PersonalTaskList";
+import { Button } from "@/components/ui/button";
 import { NodeReviewPanel } from "@/components/collaboration/NodeReviewPanel";
 import { NodeExecutionControls } from "@/components/collaboration/NodeExecutionControls";
 import { useBoardCanvas, useSaveBoardCanvas } from "@/hooks/use-canvas";
@@ -72,7 +75,7 @@ import type {
 import type { CanvasRemoteCursor } from "@/types/realtime-canvas";
 import type { RealtimeStatus } from "@/services/canvas-realtime.service";
 
-type ViewMode = "canvas" | "kanban" | "outline" | "roadmap";
+type ViewMode = "canvas" | "tasks" | "kanban" | "outline" | "roadmap";
 type SaveState = "saved" | "saving" | "error" | "conflict";
 
 type Tool =
@@ -1285,7 +1288,7 @@ export function BoardCanvas({
         <History className="h-4 w-4" />
       </button>
       )}
-      <BoardFilterBar
+      {viewMode !== "tasks" && <BoardFilterBar
         query={searchQuery}
         status={statusFilter}
         priority={priorityFilter}
@@ -1308,7 +1311,7 @@ export function BoardCanvas({
           setOwnerFilter("all");
           setTagFilter("all");
         }}
-      />
+      />}
 
       {viewMode === "canvas" && !readOnly && (
       <CanvasToolbar
@@ -1795,6 +1798,19 @@ export function BoardCanvas({
           onRedo={redo}
         />
       </div>
+      ) : viewMode === "tasks" ? (
+        <PersonalTaskList
+          nodes={snapshot.nodes}
+          readOnly={readOnly}
+          saveState={saveState}
+          onChange={(nodeId, patch) => updateNode(nodeId, patch)}
+          onAdd={(title) => {
+            if (readOnly) return;
+            const bottom = Math.max(0, ...snapshot.nodes.map((node) => node.y + node.height));
+            const node = { ...createCanvasNode(boardId, { x: 80, y: bottom + 40 }, "task"), title };
+            commit({ ...snapshot, nodes: [...snapshot.nodes, node] });
+          }}
+        />
       ) : viewMode === "kanban" ? (
         <KanbanView
           snapshot={filteredSnapshot ?? snapshot}
@@ -2117,6 +2133,7 @@ function ViewSwitcher({
     icon: typeof MousePointer2;
   }> = [
     { value: "canvas", label: "اللوحة", icon: MousePointer2 },
+    { value: "tasks", label: "مهامي", icon: ListChecks },
     { value: "kanban", label: "كانبان", icon: Columns3 },
     { value: "outline", label: "المخطط", icon: ListTree },
     { value: "roadmap", label: "الخط الزمني", icon: CalendarRange },
@@ -2129,9 +2146,12 @@ function ViewSwitcher({
       aria-label="طريقة عرض اللوحة"
     >
       {options.map(({ value: mode, label, icon: Icon }) => (
-        <button
+        <Button
           key={mode}
+          variant="ghost"
           type="button"
+          title={label}
+          aria-label={label}
           role="tab"
           aria-selected={value === mode}
           onClick={() => onChange(mode)}
@@ -2144,7 +2164,7 @@ function ViewSwitcher({
         >
           <Icon className="h-4 w-4" />
           <span className="hidden sm:inline">{label}</span>
-        </button>
+        </Button>
       ))}
     </div>
   );
