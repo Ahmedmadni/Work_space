@@ -1807,7 +1807,7 @@ export function BoardCanvas({
           onAdd={(title) => {
             if (readOnly) return;
             const bottom = Math.max(0, ...snapshot.nodes.map((node) => node.y + node.height));
-            const node = createCanvasNode(boardId, "task", 80, bottom + 40, { title });
+            const node = { ...createCanvasNode(boardId, { x: 80, y: bottom + 40 }, "task"), title };
             commit({ ...snapshot, nodes: [...snapshot.nodes, node] });
           }}
         />
