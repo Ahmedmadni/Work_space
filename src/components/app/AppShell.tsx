@@ -37,13 +37,13 @@ import {
 } from "@/components/ui/tooltip";
 import { useProject, useProjects } from "@/hooks/use-projects";
 import { useProjectAccess } from "@/hooks/use-collaboration";
-import { useCurrentUser } from "@/hooks/use-auth";
-import type { Profile } from "@/types";
+
+
 import { cn } from "@/lib/utils";
-import { isSupabaseBackend } from "@/lib/backend-config";
+
 import { Glyph } from "./shared";
 import { CreateBoardDialog, CreateProjectDialog } from "./dialogs";
-import { NotificationCenterButton } from "@/components/notifications/NotificationCenterButton";
+
 
 const NAV = [
   { to: "/", label: "الرئيسية", icon: Home },
@@ -117,11 +117,9 @@ function NavItem({
 function SidebarBody({
   collapsed,
   onNavigate,
-  user,
 }: {
   collapsed: boolean;
   onNavigate?: (() => void) | undefined;
-  user: Profile | null;
 }) {
   const { data: projects } = useProjects();
   return (
@@ -173,17 +171,7 @@ function SidebarBody({
         {FOOT.map((n) => (
           <NavItem key={n.to} {...n} collapsed={collapsed} onNavigate={onNavigate} />
         ))}
-        <div className={cn("mt-2 flex items-center gap-3 rounded-xl p-2", collapsed && "justify-center")}>
-          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-muted text-xs font-bold">
-            {user?.initials ?? "…"}
-          </span>
-          {!collapsed && (
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{user?.full_name ?? "جارٍ تحميل الحساب"}</p>
-              <p className="truncate text-xs text-muted-foreground">{user?.email ?? ""}</p>
-            </div>
-          )}
-        </div>
+
       </div>
     </div>
   );
@@ -197,7 +185,7 @@ function Breadcrumbs() {
   return (
     <nav
       aria-label="مسار التنقل"
-      className="hidden min-w-0 items-center gap-1.5 text-sm md:flex"
+      className="flex min-w-0 items-center gap-1.5 text-xs sm:text-sm"
     >
       <Link to="/" className="text-muted-foreground hover:text-foreground">
         الرئيسية
@@ -280,7 +268,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobile, setMobile] = useState(false);
   const [dark, toggleDark] = useTheme();
-  const { user, signOut } = useCurrentUser();
+
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -291,27 +279,27 @@ export function AppShell({ children }: { children: ReactNode }) {
             collapsed ? "w-[68px]" : "w-64",
           )}
         >
-          <SidebarBody collapsed={collapsed} user={user} />
+          <SidebarBody collapsed={collapsed} />
         </aside>
 
         <Sheet open={mobile} onOpenChange={setMobile}>
           <SheetContent side="right" className="w-72 bg-sidebar p-0">
             <SheetTitle className="sr-only">القائمة</SheetTitle>
-            <SidebarBody collapsed={false} user={user} onNavigate={() => setMobile(false)} />
+            <SidebarBody collapsed={false} onNavigate={() => setMobile(false)} />
           </SheetContent>
         </Sheet>
 
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="frost hairline-b sticky top-0 z-20 flex h-16 items-center gap-3 px-4 sm:px-6">
-            <button
+            <Button variant="ghost" size="icon"
               className="grid h-9 w-9 place-items-center rounded-lg hover:bg-muted md:hidden"
               aria-label="فتح القائمة"
               onClick={() => setMobile(true)}
             >
               <Menu className="h-5 w-5" />
-            </button>
+            </Button>
 
-            <button
+            <Button variant="ghost" size="icon"
               className="hidden h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted md:grid"
               aria-label={collapsed ? "توسيع الشريط" : "طي الشريط"}
               onClick={() => setCollapsed((c) => !c)}
@@ -321,79 +309,23 @@ export function AppShell({ children }: { children: ReactNode }) {
               ) : (
                 <PanelRightClose className="h-4 w-4" />
               )}
-            </button>
+            </Button>
 
             <Breadcrumbs />
 
             <div className="ms-auto flex items-center gap-2">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="relative hidden lg:block">
-                    <Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <input
-                      disabled
-                      placeholder="البحث الشامل — قريبًا"
-                      className="h-9 w-56 cursor-not-allowed rounded-xl border border-border bg-background/60 ps-9 pe-3 text-sm opacity-70"
-                    />
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
-                  البحث الشامل سيتوفر لاحقًا؛ استخدم البحث داخل كل صفحة.
-                </TooltipContent>
-              </Tooltip>
-
               <QuickCreate />
 
-              <NotificationCenterButton />
 
-              <button
+              <Button variant="ghost" size="icon"
                 onClick={toggleDark}
                 aria-label="تبديل الوضع الليلي"
                 className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
               >
                 {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-              </button>
+              </Button>
 
-              <DropdownMenu dir="rtl">
-                <DropdownMenuTrigger asChild>
-                  <button
-                    aria-label="حسابي"
-                    className="grid h-9 w-9 place-items-center rounded-full bg-muted text-xs font-bold"
-                  >
-                    {user?.initials ?? "…"}
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-52">
-                  <DropdownMenuLabel>
-                    <p>{user?.full_name ?? "جارٍ تحميل الحساب"}</p>
-                    <p className="text-xs font-normal text-muted-foreground">
-                      {user?.email ?? ""}
-                    </p>
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
-                    <Link to="/settings">الإعدادات</Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/help">المساعدة</Link>
-                  </DropdownMenuItem>
-                  {isSupabaseBackend() && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onSelect={() => {
-                          void signOut().then(() => {
-                            window.location.replace("/login");
-                          });
-                        }}
-                        className="text-danger focus:text-danger"
-                      >
-                        تسجيل الخروج
-                      </DropdownMenuItem>
-                    </>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
+
             </div>
           </header>
 

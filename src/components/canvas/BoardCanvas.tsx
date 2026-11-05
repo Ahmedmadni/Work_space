@@ -49,8 +49,8 @@ import { toast } from "sonner";
 import { BoardHistoryPanel } from "@/components/canvas/BoardHistoryPanel";
 import { PersonalTaskList } from "@/components/canvas/PersonalTaskList";
 import { Button } from "@/components/ui/button";
-import { NodeReviewPanel } from "@/components/collaboration/NodeReviewPanel";
-import { NodeExecutionControls } from "@/components/collaboration/NodeExecutionControls";
+
+
 import { useBoardCanvas, useSaveBoardCanvas } from "@/hooks/use-canvas";
 import { useBoardNodeReviewSummary } from "@/hooks/use-live-collaboration";
 import { useCanvasRealtime } from "@/hooks/use-canvas-realtime";
@@ -291,15 +291,15 @@ export function BoardCanvas({
 }) {
   const { data: loadedCanvas, isLoading } = useBoardCanvas(boardId);
   const saveCanvas = useSaveBoardCanvas(boardId, projectId);
-  const realtime = useCanvasRealtime(boardId, true);
+  const realtime = useCanvasRealtime(boardId, false);
   const reviewSummary = useBoardNodeReviewSummary(
     projectId ?? "",
     boardId,
-    !!projectId,
+    false,
   );
 
   const [snapshot, setSnapshot] = useState<BoardCanvasSnapshot | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>("canvas");
+  const [viewMode, setViewMode] = useState<ViewMode>(initialFocusNodeId ? "canvas" : "tasks");
   const [focusNodeId, setFocusNodeId] = useState<string | null>(null);
   const [tool, setTool] = useState<Tool>("select");
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
@@ -1238,10 +1238,6 @@ export function BoardCanvas({
           عرض فقط
         </div>
       )}
-      <RealtimeCanvasBadge
-        status={realtime.status}
-        remoteCount={realtime.remoteCursors.length}
-      />
       {saveState === "conflict" && conflictSnapshot && (
         <div className="frost-strong absolute bottom-16 start-1/2 z-50 w-[min(520px,calc(100%-2rem))] -translate-x-1/2 rounded-2xl border border-warning/30 p-4 shadow-lift">
           <p className="text-sm font-semibold">يوجد تعارض في تعديلات اللوحة</p>
@@ -1368,24 +1364,6 @@ export function BoardCanvas({
           setSaveState("saved");
         }}
       />
-
-      {projectId && (
-        <NodeReviewPanel
-          open={!!reviewNode}
-          projectId={projectId}
-          boardId={boardId}
-          node={reviewNode}
-          readOnly={readOnly}
-          focusCommentId={
-            reviewNode?.id === initialFocusNodeId
-              ? initialFocusCommentId
-              : undefined
-          }
-          onOpenChange={(open) => {
-            if (!open) setReviewNodeId(null);
-          }}
-        />
-      )}
 
       <input
         ref={imageInputRef}
@@ -2134,9 +2112,7 @@ function ViewSwitcher({
   }> = [
     { value: "canvas", label: "اللوحة", icon: MousePointer2 },
     { value: "tasks", label: "مهامي", icon: ListChecks },
-    { value: "kanban", label: "كانبان", icon: Columns3 },
-    { value: "outline", label: "المخطط", icon: ListTree },
-    { value: "roadmap", label: "الخط الزمني", icon: CalendarRange },
+    
   ];
 
   return (
@@ -2163,7 +2139,7 @@ function ViewSwitcher({
           )}
         >
           <Icon className="h-4 w-4" />
-          <span className="hidden sm:inline">{label}</span>
+          <span>{label}</span>
         </Button>
       ))}
     </div>
@@ -3329,19 +3305,7 @@ function NodeInspector({
     <div>
       <div className="flex items-center justify-between gap-2">
         <h3 className="font-semibold">خصائص العنصر</h3>
-        <button
-          type="button"
-          onClick={onOpenReview}
-          className="relative inline-flex items-center gap-1.5 rounded-lg border border-border px-2 py-1.5 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
-        >
-          <MessageSquare className="h-3.5 w-3.5" />
-          مراجعة
-          {reviewOpenCount > 0 && (
-            <span className="rounded-full bg-brand/10 px-1.5 text-[9px] font-semibold text-brand">
-              {reviewOpenCount}
-            </span>
-          )}
-        </button>
+
       </div>
       <div className="mt-5 space-y-4">
         <label className="block text-sm">
@@ -3487,29 +3451,6 @@ function NodeInspector({
               />
             </label>
 
-            {projectId ? (
-              <NodeExecutionControls
-                projectId={projectId}
-                boardId={boardId}
-                node={node}
-                onAssignmentChange={(assignment) =>
-                  onNodeAssignmentChange(node.id, assignment)
-                }
-              />
-            ) : (
-              <label className="block">
-                <span className="mb-1.5 flex items-center gap-1 text-xs text-muted-foreground">
-                  <UserRound className="h-3.5 w-3.5" /> المالك
-                </span>
-                <input
-                  value={owner}
-                  placeholder="مثال: أحمد"
-                  onChange={(event) => setOwner(event.target.value)}
-                  onBlur={() => onChange({ owner: owner.trim() || null })}
-                  className="w-full rounded-lg border border-border bg-background px-2.5 py-2 text-xs"
-                />
-              </label>
-            )}
 
             <div>
               <span className="mb-2 flex items-center gap-1 text-xs text-muted-foreground">
@@ -4054,16 +3995,6 @@ function CanvasContextMenu({
       className="frost-strong fixed z-50 min-w-52 rounded-2xl p-1.5 shadow-lift"
       style={{ left: Math.min(state.x, window.innerWidth - 230), top: Math.min(state.y, window.innerHeight - 310) }}
     >
-      {state.nodeId && (
-        <>
-          <ContextItem
-            icon={MessageSquare}
-            label="مراجعات وتعليقات العنصر"
-            onClick={onReview}
-          />
-          <div className="my-1 h-px bg-border" />
-        </>
-      )}
       {!state.nodeId && (
         <>
           <ContextItem icon={Circle} label="إضافة فكرة" onClick={() => onAdd("idea")} />

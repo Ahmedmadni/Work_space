@@ -1,11 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ChevronRight, Share2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { ChevronRight } from "lucide-react";
+import { useEffect, useRef } from "react";
 
-import { ProjectWorkbench } from "@/components/workbench/ProjectWorkbench";
-import { ProjectShareDialog } from "@/components/collaboration/ProjectShareDialog";
-import { ProjectCollaborationDock } from "@/components/collaboration/ProjectCollaborationDock";
-import { NotificationCenterButton } from "@/components/notifications/NotificationCenterButton";
+import { BoardCanvas } from "@/components/canvas/BoardCanvas";
 import { useBoard, useMarkBoardOpened } from "@/hooks/use-boards";
 import { useProject } from "@/hooks/use-projects";
 import { useProjectAccess } from "@/hooks/use-collaboration";
@@ -50,17 +47,11 @@ export const Route = createFileRoute("/project/$projectId/board/$boardId")({
 
 function BoardPage() {
   const { boardId, projectId } = Route.useParams();
-  const { node, doc, page, comment } = Route.useSearch();
+  const { node } = Route.useSearch();
   const { data: board, isLoading } = useBoard(boardId);
   const project = useProject(projectId);
   const markOpened = useMarkBoardOpened();
   const access = useProjectAccess(projectId);
-  const [shareOpen, setShareOpen] = useState(false);
-  const [liveContext, setLiveContext] = useState<{
-    type: "board" | "document";
-    id: string;
-    pageNumber?: number;
-  }>({ type: "board", id: boardId });
   const marked = useRef<string | null>(null);
 
   const valid = !!board && board.project_id === projectId && !!project.data;
@@ -77,8 +68,8 @@ function BoardPage() {
   }
 
   return (
-    <div className="flex h-screen flex-col bg-background">
-      <header className="frost hairline-b z-40 flex h-14 items-center gap-2 px-3">
+    <div className="flex h-dvh flex-col bg-background">
+      <header className="frost hairline-b z-40 flex h-14 shrink-0 items-center gap-2 px-3">
         <Link
           to="/project/$projectId"
           params={{ projectId }}
@@ -91,71 +82,19 @@ function BoardPage() {
         <div className="min-w-0">
           <p className="truncate font-semibold">{board?.name ?? "…"}</p>
           {board && (
-            <nav
-              aria-label="مسار التنقل"
-              className="flex min-w-0 items-center gap-1 truncate text-xs text-muted-foreground"
-            >
-              <Link to="/" className="hover:text-foreground">الرئيسية</Link>
+            <nav aria-label="مسار التنقل" className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+              <Link to="/">الرئيسية</Link>
               <span>/</span>
-              <Link
-                to="/project/$projectId"
-                params={{ projectId }}
-                className="truncate hover:text-foreground"
-              >
-                {project.data?.name ?? board.project_name}
-              </Link>
+              <Link to="/project/$projectId" params={{ projectId }} className="truncate">{project.data?.name ?? board.project_name}</Link>
               <span className="hidden sm:inline">· {BOARD_TYPE_LABELS[board.board_type]}</span>
             </nav>
           )}
         </div>
-
-        <div className="ms-auto flex items-center gap-2">
-          <NotificationCenterButton />
-          <ProjectCollaborationDock
-            projectId={projectId}
-            boardId={boardId}
-            presenceContextType={liveContext.type}
-            presenceContextId={liveContext.id}
-            documentPageNumber={liveContext.pageNumber}
-            focusCommentId={node ? undefined : comment}
-          />
-          {access.data?.role === "viewer" && (
-            <span className="hidden rounded-lg bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground sm:inline">
-              عرض فقط
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={() => setShareOpen(true)}
-            title="مشاركة المشروع وإدارة الأعضاء"
-            aria-label="مشاركة المشروع"
-            className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <Share2 className="h-4 w-4" />
-          </button>
-        </div>
       </header>
-
       {board && (
-        <ProjectWorkbench
-          projectId={projectId}
-          boardId={boardId}
-          boardName={board.name}
-          initialFocusNodeId={node}
-          initialFocusCommentId={comment}
-          initialDocumentId={doc}
-          initialDocumentPage={page}
-          canEdit={access.data?.can_edit ?? false}
-          onContextChange={setLiveContext}
-        />
+        <BoardCanvas boardId={boardId} projectId={projectId} initialFocusNodeId={node} readOnly={!(access.data?.can_edit ?? false)} />
       )}
 
-      <ProjectShareDialog
-        projectId={projectId}
-        projectName={project.data?.name ?? board?.project_name ?? "المشروع"}
-        open={shareOpen}
-        onOpenChange={setShareOpen}
-      />
     </div>
   );
 }

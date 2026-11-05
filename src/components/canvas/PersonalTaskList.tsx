@@ -73,8 +73,6 @@ function PersonalTaskRow({ node, overdue, readOnly, onChange }: {
   readOnly: boolean;
   onChange: (patch: Partial<CanvasNode>) => void;
 }) {
-  const [owner, setOwner] = useState(node.owner ?? "");
-  useEffect(() => setOwner(node.owner ?? ""), [node.owner]);
   return <li className="py-4" aria-label={node.title}>
     <div className="mb-3 flex items-center gap-2">
       <Button variant="ghost" size="icon" disabled={readOnly} aria-label={node.status === "done" ? `إعادة فتح ${node.title}` : `إكمال ${node.title}`} title={node.status === "done" ? "إعادة فتح المهمة" : "إكمال المهمة"} onClick={() => onChange(planningStatusPatch(node, node.status === "done" ? "planned" : "done"))} className={cn("shrink-0", node.status === "done" && "text-success")}>
@@ -83,7 +81,7 @@ function PersonalTaskRow({ node, overdue, readOnly, onChange }: {
       <h3 className={cn("min-w-0 flex-1 break-words text-sm font-medium", node.status === "done" && "text-muted-foreground line-through")}>{node.title}</h3>
       {overdue && <span className="shrink-0 text-xs font-medium text-danger">متأخرة</span>}
     </div>
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:ps-11">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:ps-11">
       <label className="grid min-w-0 gap-1 text-xs text-muted-foreground">الحالة
         <select aria-label={`حالة ${node.title}`} disabled={readOnly} value={node.status} onChange={(event) => onChange(planningStatusPatch(node, event.target.value as CanvasNodeStatus))} className="h-9 min-w-0 rounded-md border border-input bg-background px-2 text-sm text-foreground">
           {statuses.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
@@ -95,9 +93,7 @@ function PersonalTaskRow({ node, overdue, readOnly, onChange }: {
       <label className="grid min-w-0 gap-1 text-xs text-muted-foreground">الموعد النهائي
         <input type="date" aria-label={`موعد ${node.title}`} disabled={readOnly} value={node.due_date ?? ""} onChange={(event) => onChange({ due_date: event.target.value || null })} className={cn("h-9 w-full min-w-0 rounded-md border border-input bg-background px-2 text-sm text-foreground", overdue && "border-danger")} />
       </label>
-      <label className="grid min-w-0 gap-1 text-xs text-muted-foreground">المسؤول (اختياري)
-        <input aria-label={`مسؤول ${node.title}`} disabled={readOnly} placeholder="أنا" maxLength={80} value={owner} onChange={(event) => setOwner(event.target.value)} onBlur={() => onChange({ owner: owner.trim() || null })} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} className="h-9 w-full min-w-0 rounded-md border border-input bg-background px-2 text-sm text-foreground" />
-      </label>
+
     </div>
   </li>;
 }
