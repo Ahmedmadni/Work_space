@@ -8,6 +8,6 @@
 - [x] Test date rules and verify edits persist on the board.
 
 # Personal-only simplification
-- [ ] Remove team, executive and Cloud setup controls from the everyday screens, preserving saved data.
-- [ ] Keep projects, boards and personal task planning accessible on desktop and 390px.
-- [ ] Verify navigation, task persistence and preview diagnostics.
+- [x] Remove team, executive and Cloud setup controls from the everyday screens, preserving saved data.
+- [x] Keep projects, boards and personal task planning accessible on desktop and 390px.
+- [x] Verify navigation, task persistence and preview diagnostics.
